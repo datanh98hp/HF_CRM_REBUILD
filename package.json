@@ -1,0 +1,34 @@
+{
+  "name": "finance-crm",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace @finance-crm/api",
+    "dev:worker": "npm run start:worker --workspace @finance-crm/api",
+    "dev:web": "npm run dev --workspace @finance-crm/web",
+    "db:generate": "npm run db:generate --workspace @finance-crm/api",
+    "db:validate": "npm run db:validate --workspace @finance-crm/api",
+    "db:seed": "npm run db:seed --workspace @finance-crm/api",
+    "db:migrate:dev": "npm run db:migrate:dev --workspace @finance-crm/api",
+    "db:migrate:deploy": "npm run db:migrate:deploy --workspace @finance-crm/api",
+    "docker:dev:up": "docker-compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up --build -d",
+    "docker:dev:down": "docker-compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml down",
+    "docker:dev:ps": "docker-compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml ps",
+    "docker:dev:logs": "docker-compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml logs --follow",
+    "docker:test:up": "docker-compose --env-file .env.test -f docker-compose.yml -f docker-compose.test.yml up --build -d",
+    "docker:test:down": "docker-compose --env-file .env.test -f docker-compose.yml -f docker-compose.test.yml down",
+    "docker:test:ps": "docker-compose --env-file .env.test -f docker-compose.yml -f docker-compose.test.yml ps",
+    "docker:test:logs": "docker-compose --env-file .env.test -f docker-compose.yml -f docker-compose.test.yml logs --follow",
+    "docker:prod:up": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up --build -d",
+    "docker:prod:down": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down",
+    "docker:prod:ps": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps",
+    "docker:prod:logs": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs --follow",
+    "typecheck": "npm run db:generate --workspace @finance-crm/api && npm run typecheck --workspace @finance-crm/api && npm run typecheck --workspace @finance-crm/web",
+    "test": "npm run test --workspace @finance-crm/api",
+    "build": "npm run db:generate --workspace @finance-crm/api && npm run build --workspace @finance-crm/api && npm run build --workspace @finance-crm/web"
+  }
+}

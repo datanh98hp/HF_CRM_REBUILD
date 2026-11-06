@@ -1,0 +1,15 @@
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  api:
+    ports: !reset []
+  web:
+    ports: !reset []
+
+volumes:
+  postgres_data:
+    name: hf_crm_prod_postgres_data
+  redis_data:
+    name: hf_crm_prod_redis_data

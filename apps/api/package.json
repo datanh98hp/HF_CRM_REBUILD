@@ -1,0 +1,48 @@
+{
+  "name": "@finance-crm/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start:dev": "nest start --watch",
+    "start:worker": "nest start --entryFile worker --watch",
+    "build": "nest build",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
+    "db:seed": "node scripts/run-seed.mjs",
+    "db:migrate:dev": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand",
+    "test:watch": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.8",
+    "@nestjs/core": "^11.2.8",
+    "@nestjs/platform-express": "^11.2.8",
+    "@nestjs/swagger": "^11.4.7",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "bullmq": "^6.6.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "dotenv": "^17.2.3",
+    "ioredis": "^5.11.1",
+    "pg": "^8.16.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/schematics": "^11.0.24",
+    "@nestjs/testing": "^11.2.8",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "jest": "^30.0.0",
+    "prisma": "^7.10.0",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.0"
+  }
+}

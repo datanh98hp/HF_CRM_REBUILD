@@ -1,0 +1,30 @@
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+  redis:
+    ports: !override
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+  migrate:
+    environment:
+      NODE_ENV: test
+  api:
+    environment:
+      NODE_ENV: test
+    ports: !override
+      - "127.0.0.1:${API_PORT:-3002}:3001"
+  worker:
+    environment:
+      NODE_ENV: test
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3002}
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-3002}:3000"
+
+volumes:
+  postgres_data:
+    name: hf_crm_test_postgres_data
+  redis_data:
+    name: hf_crm_test_redis_data

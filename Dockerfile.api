@@ -1,0 +1,25 @@
+FROM node:24-alpine AS dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+RUN npm ci
+
+FROM dependencies AS build
+COPY . .
+RUN npm run db:generate --workspace @finance-crm/api && npm run build --workspace @finance-crm/api
+
+FROM node:24-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup -S app && adduser -S app -G app
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
+COPY --from=build /app/apps/api/scripts ./apps/api/scripts
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+USER app
+EXPOSE 3001
+CMD ["node", "apps/api/dist/src/main.js"]

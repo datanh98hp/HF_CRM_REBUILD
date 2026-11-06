@@ -1,0 +1,18 @@
+[
+  { "key": "auth.me", "groupKey": "identity", "description": "Read current authenticated actor | Xem thông tin tài khoản đang đăng nhập." },
+  { "key": "branches.read", "groupKey": "organization", "description": "Read branches within granted scope | Xem chi nhánh trong phạm vi được cấp." },
+  { "key": "branches.manage", "groupKey": "organization", "description": "Create and manage branches within granted scope | Tạo và quản lý chi nhánh trong phạm vi được cấp." },
+  { "key": "users.read", "groupKey": "identity", "description": "Read users within granted scope | Xem người dùng trong phạm vi được cấp." },
+  { "key": "users.manage", "groupKey": "identity", "description": "Create, disable and manage users within granted scope | Tạo, vô hiệu hóa và quản lý người dùng trong phạm vi được cấp." },
+  { "key": "roles.read", "groupKey": "access-control", "description": "Read roles and permission catalog | Xem vai trò và danh mục quyền." },
+  { "key": "roles.manage", "groupKey": "access-control", "description": "Create custom roles and grant roles within delegated authority | Tạo vai trò tùy chỉnh và cấp vai trò trong giới hạn được ủy quyền." },
+  { "key": "permissions.read", "groupKey": "access-control", "description": "Read the stable permission catalog | Xem danh mục quyền chức năng của hệ thống." },
+  { "key": "permissions.delegate", "groupKey": "access-control", "description": "Delegate catalog permissions and scopes within the assigned authority | Ủy quyền quyền chức năng và phạm vi trong giới hạn thẩm quyền được giao." },
+  { "key": "audit.read", "groupKey": "audit", "description": "Read audit events within granted scope | Xem nhật ký hoạt động trong phạm vi được cấp." },
+  { "key": "customers.read", "groupKey": "customers", "description": "Read customer data within granted scope | Xem dữ liệu khách hàng trong phạm vi được cấp." },
+  { "key": "customers.assign", "groupKey": "customers", "description": "Assign customers within granted scope | Phân công khách hàng trong phạm vi được cấp." },
+  { "key": "loan-applications.read", "groupKey": "loans", "description": "Read loan applications within granted scope | Xem hồ sơ vay trong phạm vi được cấp." },
+  { "key": "loan-applications.assign", "groupKey": "loans", "description": "Assign loan applications within granted scope | Phân công hồ sơ vay trong phạm vi được cấp." },
+  { "key": "advising.message.send", "groupKey": "advising", "description": "Send advising messages within granted scope | Gửi tin nhắn tư vấn trong phạm vi được cấp." },
+  { "key": "reports.read", "groupKey": "reports", "description": "Read reports within granted scope | Xem báo cáo trong phạm vi được cấp." }
+]

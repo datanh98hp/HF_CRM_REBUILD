@@ -1,0 +1,21 @@
+services:
+  migrate:
+    environment:
+      NODE_ENV: development
+  api:
+    environment:
+      NODE_ENV: development
+    ports: !override
+      - "127.0.0.1:${API_PORT:-3001}:3001"
+  worker:
+    environment:
+      NODE_ENV: development
+  web:
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+
+volumes:
+  postgres_data:
+    name: hf_crm_dev_postgres_data
+  redis_data:
+    name: hf_crm_dev_redis_data

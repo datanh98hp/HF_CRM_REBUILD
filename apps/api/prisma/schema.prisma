@@ -1,0 +1,151 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AccessScope {
+  OWN
+  ASSIGNED
+  BRANCH
+  ALL
+}
+
+model Branch {
+  id        String       @id @default(uuid()) @db.Uuid
+  code      String       @unique @db.VarChar(64)
+  name      String       @db.VarChar(160)
+  parentId  String?      @db.Uuid
+  status    BranchStatus @default(ACTIVE)
+  parent    Branch?      @relation("BranchHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Branch[]     @relation("BranchHierarchy")
+  grants    UserRoleGrant[]
+  auditEvents AuditEvent[]
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([parentId, status])
+  @@index([name])
+}
+
+model User {
+  id                 String          @id @default(uuid()) @db.Uuid
+  username           String          @unique @db.VarChar(120)
+  displayName        String          @db.VarChar(160)
+  passwordHash       String          @db.VarChar(255)
+  status             UserStatus      @default(ACTIVE)
+  mustChangePassword Boolean         @default(false)
+  failedLoginCount   Int             @default(0)
+  lockedUntil        DateTime?       @db.Timestamptz(3)
+  passwordChangedAt  DateTime        @default(now()) @db.Timestamptz(3)
+  roleGrants         UserRoleGrant[]
+  sessions           AuthSession[]
+  grantsCreated      UserRoleGrant[] @relation("GrantCreator")
+  auditEvents        AuditEvent[]    @relation("AuditActor")
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([status, username])
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique @db.VarChar(80)
+  name        String           @db.VarChar(120)
+  description String?          @db.VarChar(500)
+  isSystem    Boolean          @default(false)
+  permissions RolePermission[]
+  userGrants  UserRoleGrant[]
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([isSystem, key])
+}
+
+model Permission {
+  key         String           @id @db.VarChar(120)
+  groupKey    String           @db.VarChar(80)
+  description String           @db.VarChar(300)
+  roleGrants  RolePermission[]
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([groupKey, key])
+}
+
+model RolePermission {
+  roleId       String      @db.Uuid
+  permissionKey String     @db.VarChar(120)
+  scope        AccessScope
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@id([roleId, permissionKey, scope])
+  @@index([permissionKey, scope])
+}
+
+model UserRoleGrant {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  roleId      String   @db.Uuid
+  branchId    String?  @db.Uuid
+  scopeAnchor String   @default("GLOBAL") @db.VarChar(40)
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  branch      Branch?  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy   User?    @relation("GrantCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, roleId, scopeAnchor])
+  @@index([userId, roleId])
+  @@index([branchId, roleId])
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String    @unique @db.Char(64)
+  expiresAt        DateTime  @db.Timestamptz(3)
+  revokedAt        DateTime? @db.Timestamptz(3)
+  replacedById     String?   @db.Uuid
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  lastUsedAt       DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String?  @db.Uuid
+  action      String   @db.VarChar(120)
+  targetType  String   @db.VarChar(80)
+  targetId    String?  @db.VarChar(120)
+  branchId    String?  @db.Uuid
+  reason      String?  @db.VarChar(1000)
+  beforeState Json?
+  afterState  Json?
+  requestId   String?  @db.VarChar(128)
+  actor       User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  branch      Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([actorId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@index([action, createdAt])
+}

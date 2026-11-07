@@ -19,6 +19,7 @@ import { RequirePermission } from '../common/auth-metadata.js';
 import { AccessAdminService } from './access-admin.service.js';
 import {
   CreateBranchDto,
+  AssignBranchManagerDto,
   CreateRoleDto,
   CreateRoleGrantDto,
   CreateUserDto,
@@ -80,6 +81,17 @@ export class AccessAdminController {
     @Req() request: ActorRequest,
   ) {
     return this.access.createBranch(actor, dto, request);
+  }
+
+  @RequirePermission('branches.manage', AccessScope.ALL)
+  @Put('branches/:branchId/manager')
+  assignBranchManager(
+    @CurrentActor() actor: ActorContext,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Body() dto: AssignBranchManagerDto,
+    @Req() request: ActorRequest,
+  ) {
+    return this.access.assignBranchManager(actor, branchId, dto.managerUserId, request);
   }
 
   @RequirePermission('users.read')

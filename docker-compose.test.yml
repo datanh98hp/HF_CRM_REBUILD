@@ -8,9 +8,14 @@ services:
   migrate:
     environment:
       NODE_ENV: test
+  seed:
+    environment:
+      NODE_ENV: test
   api:
     environment:
       NODE_ENV: test
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     ports: !override
       - "127.0.0.1:${API_PORT:-3002}:3001"
   worker:

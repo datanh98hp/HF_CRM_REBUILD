@@ -64,6 +64,11 @@ export class CreateBranchDto {
   parentId?: string;
 }
 
+export class AssignBranchManagerDto {
+  @IsUUID()
+  managerUserId!: string;
+}
+
 export class CreateUserDto {
   @IsString()
   @Matches(/^[A-Za-z0-9._-]{3,120}$/)

@@ -1,7 +1,7 @@
 # Finance CRM — Kế hoạch triển khai P0
 
-**Trạng thái:** P0-0 có code nền; P0-1 đang triển khai; module nghiệp vụ P0-2 trở đi chưa bắt đầu.
-**Ngày:** 2026-11-05
+**Trạng thái:** P0-0/P0-1 có nền code; backend P0-2 đã triển khai trên dev, còn các cổng nghiệm thu nêu trong tài liệu từng giai đoạn.
+**Cập nhật:** 2026-11-07
 **Phạm vi căn cứ:** `AGENT.md`, `mvp-scope.md`, `decision-log.md` và scaffold hiện tại.
 
 **Kế hoạch theo từng file:** [Mục lục các giai đoạn P0](p0/README.md).
@@ -10,9 +10,7 @@
 
 Phạm vi nghiệp vụ chính đã đủ rõ để bắt đầu P0 theo từng lát cắt: tổ chức chi nhánh cha-con và RBAC; vòng đời khách hàng/yêu cầu vay/hợp đồng; kế hoạch-task-KPI; import Excel nền theo batch atomic. P0 phải giữ các quyết định đã chốt và không mở rộng sang tính eligibility, phê duyệt khoản vay, tích hợp CRM ngoài hoặc app native.
 
-Repository ban đầu có scaffold NestJS/Next.js và PostgreSQL health probe. P0-0 hiện đã bổ sung Prisma/configuration, Redis/BullMQ và worker code; chưa có migration nghiệp vụ, auth/session, RBAC/audit hay module CRM. Cần xác nhận runtime DB/Redis trước khi đóng P0-0.
-
-Trang khởi tạo web hiện còn câu “Chat realtime và tích hợp CRM ngoài để giai đoạn sau”, không còn đúng vì chat thuộc MVP còn CRM ngoài mới để sau; cần sửa nội dung shell khi bắt đầu lát cắt UI.
+Backend đã có nền PostgreSQL/Redis, auth/RBAC/audit và lát cắt customer/loan P0-2. Migration P0-2 đã áp dụng trên PostgreSQL dev/test; 19 unit tests và 18 integration assertions đạt. Yêu cầu mới xác nhận một MANAGE/chi nhánh, OTP CUSTOMER khi hoàn thành hợp đồng và tiếp nhận hợp đồng ngoài có idempotency/20 bản ghi mỗi trang. P0-2 chưa đóng: các quy tắc này chưa triển khai; còn cần chốt matrix/grants chi tiết, quyền ghi parent-child, OTP provider, schema/allowlist và giao diện P0-6.
 
 ## 2. Phạm vi P0 đề xuất
 
@@ -51,7 +49,7 @@ Thứ tự này cho phép chốt hợp đồng API/schema theo từng module, nh
 ## 4. Quy tắc dữ liệu cần phản ánh trong schema
 
 - Tách `LoanRequest` khỏi `LoanContract`; request do CUSTOMER tạo hoặc ADVISING ghi nhận, contract được tạo/liên kết riêng khi thực sự phát sinh. Không suy diễn phê duyệt từ request.
-- Lịch sử trạng thái customer phải append-only hoặc lưu transition records với actor, from/to, reason và timestamp. Chuyển linh hoạt theo quyền; trạng thái `CONVERTED` luôn cần contract relation.
+- Lịch sử trạng thái customer phải append-only hoặc lưu transition records với actor, from/to, reason và timestamp. Trạng thái `CONVERTED` chỉ sau contract `COMPLETED` (OTP CUSTOMER hợp lệ).
 - Role assignment cần có node tổ chức/scope; role custom tham chiếu permission catalog, không nhận permission tự do từ client. Grant operation xác thực delegation boundary.
 - Kết quả task lưu `reportedValue` + unit, narrative và evidence relation riêng. Verification history phải giữ người xác minh, thời điểm, kết luận/lý do; không ghi đè bằng chứng/kết quả đã xác minh.
 - Plan target và task result phải kiểm tra unit/hạng mục/thời gian tương thích trước khi tổng hợp KPI.
@@ -62,7 +60,7 @@ Thứ tự này cho phép chốt hợp đồng API/schema theo từng module, nh
 Các việc này không ngăn tạo abstraction/schema cốt lõi, nhưng phải có trước khi mở chức năng tương ứng:
 
 - Cây chi nhánh thực tế, người dùng đầu tiên và grantable permission set.
-- Quốc gia mặc định cho chuẩn hóa số điện thoại; quy tắc match tên khi khác dấu/thiếu DOB.
+- Xác nhận đầu mạng/đầu số với chủ nghiệp vụ hoặc OTP provider nếu cần xác minh thuê bao; số chuẩn Việt Nam 10 chữ số `0[1-9]XXXXXXXX` đã được chốt.
 - OTP provider, nguồn dữ liệu chi tiết hợp đồng và allowlist trường CUSTOMER được đọc.
 - Danh mục hạng mục/đơn vị đo; quyền tạo/duyệt kế hoạch; kỳ/chỉ tiêu cho dashboard/KPI.
 - Queue provider settings, retry/dead-letter retention và cách vận hành worker.

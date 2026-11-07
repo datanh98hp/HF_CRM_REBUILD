@@ -20,6 +20,13 @@ type RoleOption = { key: string; name: string; description?: string | null; isSy
 type BranchOption = { id: string; code: string; name: string; parentId: string | null; status: string; createdAt: string };
 type PermissionOption = { key: string; groupKey: string; description: string };
 
+const ACCESS_CATALOG_PERMISSIONS = new Set([
+  'permissions.read',
+  'permissions.delegate',
+  'roles.read',
+  'roles.manage',
+]);
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001';
 
 function apiBaseUrl() {
@@ -110,6 +117,20 @@ const permissionScopes = [
 
 function scopeLabel(scope: string) {
   return permissionScopes.find((item) => item.key === scope)?.label ?? scope;
+}
+
+function hasGlobalDataScope(staff: Staff | null) {
+  return Boolean(staff?.permissions.some((permission) =>
+    permission.scopes.includes('ALL') && !ACCESS_CATALOG_PERMISSIONS.has(permission.key),
+  ));
+}
+
+function branchScopes(staff: Staff | null) {
+  const branches = new Map<string, string>();
+  for (const role of staff?.roles ?? []) {
+    if (role.scope.branch) branches.set(role.scope.branch.id, role.scope.branch.name);
+  }
+  return [...branches.entries()];
 }
 
 export default function HomePage() {
@@ -510,7 +531,7 @@ export default function HomePage() {
         <div className="profile-card">
           <div className="profile-heading"><div className="avatar" aria-hidden="true">{(staff?.displayName || staff?.username || 'N').slice(0, 1).toUpperCase()}</div><div><span className="status-pill"><span /> Tài khoản hoạt động</span><h2>{staff?.displayName ?? 'Nhân viên'}</h2><p>@{staff?.username ?? '—'}</p></div></div>
           <div className="profile-details"><div><span className="detail-label">Vai trò</span><div className="chip-row">{(staff?.roles ?? []).map((role, index) => <span className="role-chip" key={`${role.key}-${index}`}>{roleLabel(role.key)}</span>)}</div></div>
-            <div><span className="detail-label">Chi nhánh được cấp quyền</span><div className="chip-row">{staff?.roles?.some((role) => role.scope.global) ? <span className="branch-chip">Toàn hệ thống</span> : staff?.roles?.some((role) => role.scope.branch) ? staff.roles.filter((role) => role.scope.branch).map((role, index) => <span className="branch-chip" key={`${role.scope.branch?.id}-${index}`}>{role.scope.branch?.name}</span>) : <span className="muted-value">Chưa có phạm vi chi nhánh</span>}</div></div>
+            <div><span className="detail-label">Chi nhánh được cấp quyền</span><div className="chip-row">{hasGlobalDataScope(staff) ? <span className="branch-chip">Toàn hệ thống</span> : branchScopes(staff).length ? branchScopes(staff).map(([id, name]) => <span className="branch-chip" key={id}>{name}</span>) : <span className="muted-value">Chưa có phạm vi chi nhánh</span>}</div></div>
           </div>
         </div>
         <details className="permissions-card"><summary><span><strong>Quyền truy cập</strong><small>{staff?.permissions?.length ?? 0} quyền hiệu lực trong phiên</small></span><span className="chevron" aria-hidden="true">⌄</span></summary>

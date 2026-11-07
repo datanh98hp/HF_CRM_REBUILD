@@ -6,6 +6,7 @@ import { BackgroundQueueModule } from './background-queue/background-queue.modul
 import { PrismaModule } from './database/prisma.module.js';
 import { RuntimeConfigModule } from './runtime-config/runtime-config.module.js';
 import { HealthModule } from './health/health.module.js';
+import { CustomersModule } from './customers/customers.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { HealthModule } from './health/health.module.js';
     AccessControlModule,
     AuditModule,
     AuthModule,
+    CustomersModule,
     HealthModule,
   ],
 })

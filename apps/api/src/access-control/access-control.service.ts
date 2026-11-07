@@ -76,6 +76,50 @@ export class AccessControlService {
     }
   }
 
+  async hasDirectBranchPermission(userId: string, permissionKey: string, branchId: string): Promise<boolean> {
+    const grants = await this.prisma.userRoleGrant.findMany({
+      where: { userId },
+      include: { role: { include: { permissions: true } } },
+    });
+    return grants.some((grant) => grant.role.permissions.some((permission) => {
+      if (permission.permissionKey !== permissionKey) return false;
+      if (permission.scope === AccessScope.ALL) return grant.branchId === null;
+      return permission.scope === AccessScope.BRANCH && grant.branchId === branchId;
+    }));
+  }
+
+  async assertDirectBranchPermission(userId: string, permissionKey: string, branchId: string): Promise<void> {
+    if (!(await this.hasDirectBranchPermission(userId, permissionKey, branchId))) {
+      throw new ForbiddenException({ code: 'DIRECT_BRANCH_PERMISSION_REQUIRED' });
+    }
+  }
+
+  async isBranchManager(userId: string, branchId: string): Promise<boolean> {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { managerUserId: true },
+    });
+    if (branch?.managerUserId !== userId) return false;
+    const grant = await this.prisma.userRoleGrant.findFirst({
+      where: { userId, branchId, role: { key: 'MANAGE' }, user: { status: 'ACTIVE' } },
+      select: { id: true },
+    });
+    return Boolean(grant);
+  }
+
+  async hasManagedBranches(userId: string): Promise<boolean> {
+    return (await this.prisma.branch.count({ where: { managerUserId: userId } })) > 0;
+  }
+
+  async assertBranchManagerOrGlobal(userId: string, permissionKey: string, branchId: string): Promise<void> {
+    if (await this.hasPermission(userId, permissionKey, AccessScope.ALL)) return;
+    if (
+      await this.isBranchManager(userId, branchId) &&
+      await this.hasPermission(userId, permissionKey, AccessScope.BRANCH, branchId)
+    ) return;
+    throw new ForbiddenException({ code: 'BRANCH_MANAGER_PERMISSION_REQUIRED' });
+  }
+
   async canDelegate(
     actorId: string,
     permissionKey: string,
@@ -94,7 +138,7 @@ export class AccessControlService {
   async hasResourceAccess(
     actorId: string,
     permissionKey: string,
-    scope: AccessScope,
+    scope: AccessScope | undefined,
     resource: { ownerId?: string | null; assigneeId?: string | null; branchId?: string | null },
   ): Promise<boolean> {
     const grants = await this.prisma.userRoleGrant.findMany({
@@ -104,16 +148,21 @@ export class AccessControlService {
     for (const grant of grants) {
       for (const permission of grant.role.permissions) {
         if (permission.permissionKey !== permissionKey) continue;
-        if (permission.scope === AccessScope.ALL && !grant.branchId) return true;
-        if (permission.scope !== scope) continue;
-        if (permission.scope === AccessScope.OWN && resource.ownerId !== actorId) continue;
-        if (permission.scope === AccessScope.ASSIGNED && resource.assigneeId !== actorId) continue;
-        if (permission.scope === AccessScope.BRANCH) {
+        if (permission.scope === AccessScope.ALL) {
+          if (!grant.branchId) return true;
+          continue;
+        }
+        const effectiveScope = scope ?? permission.scope;
+        if (permission.scope !== effectiveScope) continue;
+        if (effectiveScope === AccessScope.OWN && resource.ownerId !== actorId) continue;
+        if (effectiveScope === AccessScope.ASSIGNED && resource.assigneeId !== actorId) continue;
+        if (effectiveScope === AccessScope.BRANCH) {
           if (!grant.branchId || !resource.branchId) continue;
           if (!(await this.isBranchInScope(resource.branchId, grant.branchId))) continue;
         }
-        if (grant.branchId && resource.branchId && !(await this.isBranchInScope(resource.branchId, grant.branchId))) continue;
-        if (grant.branchId && !resource.branchId) continue;
+        if (grant.branchId) {
+          if (!resource.branchId || !(await this.isBranchInScope(resource.branchId, grant.branchId))) continue;
+        }
         return true;
       }
     }
@@ -123,7 +172,7 @@ export class AccessControlService {
   async assertResourceAccess(
     actorId: string,
     permissionKey: string,
-    scope: AccessScope,
+    scope: AccessScope | undefined,
     resource: { ownerId?: string | null; assigneeId?: string | null; branchId?: string | null },
   ): Promise<void> {
     if (!(await this.hasResourceAccess(actorId, permissionKey, scope, resource))) {

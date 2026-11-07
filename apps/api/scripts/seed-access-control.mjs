@@ -73,17 +73,30 @@ try {
       }));
     }
 
-    const operatorPermissionKeys = new Set([
-      'auth.me', 'branches.read', 'branches.manage', 'users.read', 'users.manage',
-      'roles.read', 'roles.manage', 'permissions.read', 'permissions.delegate', 'audit.read',
+    const branchManagerPermissions = [
+      'branches.read', 'users.read', 'users.manage', 'roles.read', 'roles.manage', 'audit.read',
+      'customers.read', 'customers.manage', 'customers.assign', 'customers.duplicates.review',
+      'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read', 'loan-contracts.manage',
+      'loan-contracts.review', 'loan-contracts.status.manage', 'loan-contracts.ingest',
+    ];
+    const advisingPermissions = [
+      'customers.read', 'customers.manage', 'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read',
+    ];
+    const defaults = new Map([
+      ['OPERATOR', permissionCatalog.map(({ key }) => [key, AccessScope.ALL])],
+      ['ADMIN', permissionCatalog.map(({ key }) => [key, AccessScope.ALL])],
+      ['MANAGE', branchManagerPermissions.map((key) => [key, AccessScope.BRANCH])],
+      ['ADVISING', advisingPermissions.map((key) => [key, AccessScope.ASSIGNED])],
+      ['CUSTOMER', []],
     ]);
-    const operatorRole = roles.get('OPERATOR');
-    for (const permissionKey of operatorPermissionKeys) {
-      await tx.rolePermission.upsert({
-        where: { roleId_permissionKey_scope: { roleId: operatorRole.id, permissionKey, scope: AccessScope.ALL } },
-        create: { roleId: operatorRole.id, permissionKey, scope: AccessScope.ALL },
-        update: {},
-      });
+    for (const [roleKey, permissions] of defaults) {
+      const role = roles.get(roleKey);
+      await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+      if (permissions.length) {
+        await tx.rolePermission.createMany({
+          data: permissions.map(([permissionKey, scope]) => ({ roleId: role.id, permissionKey, scope })),
+        });
+      }
     }
 
     let admin = await tx.user.findUnique({ where: { username } });
@@ -99,6 +112,7 @@ try {
         },
       });
     }
+    const operatorRole = roles.get('OPERATOR');
     const operatorGrant = await tx.userRoleGrant.findUnique({
       where: { userId_roleId_scopeAnchor: { userId: admin.id, roleId: operatorRole.id, scopeAnchor: 'GLOBAL' } },
     });

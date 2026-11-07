@@ -17,6 +17,7 @@ type ShellProps = {
 };
 
 type IconName = 'grid' | 'users' | 'chat' | 'check' | 'chart' | 'branch' | 'shield' | 'user' | 'menu' | 'chevron' | 'logout';
+const SIDEBAR_STORAGE_KEY = 'finance-crm.sidebar-expanded';
 
 function Icon({ name }: { name: IconName }) {
   const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const };
@@ -37,8 +38,21 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export function AppShell({ children, activeSection, displayName, username, canReadUsers, canReadBranches, canReadRoles, busy, onNavigate, onLogout }: ShellProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (stored !== null) setExpanded(stored === 'true');
+  }, []);
+
+  function toggleExpanded() {
+    setExpanded((current) => {
+      const next = !current;
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -67,7 +81,7 @@ export function AppShell({ children, activeSection, displayName, username, canRe
   ];
 
   const sidebar = (mobile = false) => <aside className={`crm-sidebar${mobile ? ' is-mobile' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Điều hướng chính">
-    <div className="crm-sidebar-brand"><span className="crm-brand-mark">F</span><span className="crm-brand-name">Finance CRM</span><button className="crm-sidebar-toggle" type="button" aria-label={expanded ? 'Thu gọn thanh điều hướng' : 'Mở rộng thanh điều hướng'} aria-pressed={expanded} onClick={() => setExpanded((value) => !value)}><Icon name="menu"/></button></div>
+    <div className="crm-sidebar-brand"><span className="crm-brand-mark">F</span><span className="crm-brand-name">Finance CRM</span><button className="crm-sidebar-toggle" type="button" aria-label={expanded ? 'Thu gọn thanh điều hướng' : 'Mở rộng thanh điều hướng'} aria-pressed={expanded} onClick={toggleExpanded}><Icon name="menu"/></button></div>
     <nav className="crm-nav">
       {groups.map((group) => group.items.length > 0 && <div className="crm-nav-group" key={group.label}>
         <p className="crm-nav-heading">{group.label}</p>
@@ -88,7 +102,7 @@ export function AppShell({ children, activeSection, displayName, username, canRe
     <div className="crm-desktop-sidebar">{sidebar()}</div>
     {mobileOpen && <><button className="crm-drawer-backdrop" aria-label="Đóng menu điều hướng" onClick={() => setMobileOpen(false)} /><div className="crm-mobile-sidebar">{sidebar(true)}</div></>}
     <div className="crm-workspace-main">
-      <header className="crm-topbar"><button className="crm-menu-toggle" type="button" aria-label={mobileOpen ? 'Đóng điều hướng' : expanded ? 'Thu gọn thanh điều hướng' : 'Mở rộng thanh điều hướng'} aria-expanded={mobileOpen || expanded} onClick={() => { if (window.matchMedia('(max-width: 760px)').matches) setMobileOpen(true); else setExpanded((value) => !value); }}><Icon name="menu"/></button><div className="crm-breadcrumb"><span>Finance CRM</span><Icon name="chevron"/><strong>{currentLabel}</strong></div><div className="crm-topbar-actions"><span className="crm-topbar-user"><span className="crm-avatar small">{displayName.slice(0, 1).toUpperCase()}</span><span>{displayName}</span></span><button className="crm-logout" type="button" onClick={onLogout} disabled={busy}><Icon name="logout"/><span>Đăng xuất</span></button></div></header>
+      <header className="crm-topbar"><button className="crm-menu-toggle" type="button" aria-label={mobileOpen ? 'Đóng điều hướng' : expanded ? 'Thu gọn thanh điều hướng' : 'Mở rộng thanh điều hướng'} aria-expanded={mobileOpen || expanded} onClick={() => { if (window.matchMedia('(max-width: 760px)').matches) setMobileOpen(true); else toggleExpanded(); }}><Icon name="menu"/></button><div className="crm-breadcrumb"><span>Finance CRM</span><Icon name="chevron"/><strong>{currentLabel}</strong></div><div className="crm-topbar-actions"><span className="crm-topbar-user"><span className="crm-avatar small">{displayName.slice(0, 1).toUpperCase()}</span><span>{displayName}</span></span><button className="crm-logout" type="button" onClick={onLogout} disabled={busy}><Icon name="logout"/><span>Đăng xuất</span></button></div></header>
       <div className="crm-page-content">{children}</div>
     </div>
   </div>;

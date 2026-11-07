@@ -20,7 +20,7 @@ function runNpmScript(name) {
 
 // The production Docker image already contains the generated client and compiled seed module.
 // Local development builds these artifacts first, independent of the developer's OS.
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && process.env.CRM_PREBUILT_RUNTIME !== 'true') {
   runNpmScript('db:generate');
   runNpmScript('build');
 }

@@ -25,16 +25,69 @@ enum AccessScope {
   ALL
 }
 
+enum CustomerStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  IN_PROGRESS
+  CONVERTED
+  CLOSED
+}
+
+enum CustomerVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+}
+
+enum DuplicateReviewStatus {
+  OPEN
+  CONFIRMED_DUPLICATE
+  NOT_DUPLICATE
+}
+
+enum LoanRequestSource {
+  CUSTOMER
+  ADVISING
+}
+
+enum LoanRequestStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum LoanContractStatus {
+  PENDING_REVIEW
+  APPROVED
+  AWAITING_CUSTOMER_CONFIRMATION
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum ContractOtpChallengeStatus {
+  PENDING
+  VERIFIED
+  INVALIDATED
+  LOCKED
+}
+
 model Branch {
   id        String       @id @default(uuid()) @db.Uuid
   code      String       @unique @db.VarChar(64)
   name      String       @db.VarChar(160)
   parentId  String?      @db.Uuid
-  status    BranchStatus @default(ACTIVE)
+  managerUserId String?  @db.Uuid
+  status    BranchStatus @default(INACTIVE)
   parent    Branch?      @relation("BranchHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  manager   User?        @relation("BranchManager", fields: [managerUserId], references: [id], onDelete: Restrict)
   children  Branch[]     @relation("BranchHierarchy")
   grants    UserRoleGrant[]
   auditEvents AuditEvent[]
+  customers Customer[]
+  customerAssignments CustomerAssignment[]
+  loanRequests LoanRequest[]
+  loanContracts LoanContract[]
   createdAt DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -54,8 +107,18 @@ model User {
   passwordChangedAt  DateTime        @default(now()) @db.Timestamptz(3)
   roleGrants         UserRoleGrant[]
   sessions           AuthSession[]
+  managedBranches    Branch[]        @relation("BranchManager")
   grantsCreated      UserRoleGrant[] @relation("GrantCreator")
   auditEvents        AuditEvent[]    @relation("AuditActor")
+  createdCustomers   Customer[]      @relation("CustomerCreator")
+  customerAssignments CustomerAssignment[] @relation("CustomerAdviser")
+  assignmentsCreated CustomerAssignment[] @relation("CustomerAssignmentCreator")
+  customerStatusChanges CustomerStatusHistory[] @relation("CustomerStatusActor")
+  duplicateReviews DuplicateCandidate[] @relation("DuplicateReviewer")
+  recordedLoanRequests LoanRequest[] @relation("LoanRequestRecorder")
+  createdLoanContracts LoanContract[] @relation("LoanContractCreator")
+  approvedLoanContracts LoanContract[] @relation("LoanContractApprover")
+  loanContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractStatusActor")
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
 
@@ -148,4 +211,181 @@ model AuditEvent {
   @@index([branchId, createdAt])
   @@index([targetType, targetId, createdAt])
   @@index([action, createdAt])
+}
+
+model Customer {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  fullName           String                     @db.VarChar(160)
+  normalizedName     String                     @db.VarChar(160)
+  dateOfBirth        DateTime?                  @db.Date
+  phone              String                     @db.VarChar(32)
+  phoneNormalized    String                     @db.VarChar(24)
+  email              String?                    @db.VarChar(254)
+  emailNormalized    String?                    @db.VarChar(254)
+  provenance         String                     @db.VarChar(120)
+  verificationStatus CustomerVerificationStatus @default(UNVERIFIED)
+  status             CustomerStatus             @default(NEW)
+  branchId           String                     @db.Uuid
+  createdById        String?                    @db.Uuid
+  branch             Branch                     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy          User?                      @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  assignments        CustomerAssignment[]
+  statusHistory      CustomerStatusHistory[]
+  loanRequests       LoanRequest[]
+  contracts          LoanContract[]
+  contractOtpChallenges ContractOtpChallenge[]
+  duplicateCandidates DuplicateCandidate[]      @relation("DuplicateSource")
+  duplicateMatches   DuplicateCandidate[]       @relation("DuplicateMatch")
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @db.Timestamptz(3)
+
+  @@index([branchId, status, createdAt])
+  @@index([phoneNormalized])
+  @@index([emailNormalized])
+  @@index([normalizedName, dateOfBirth])
+}
+
+model CustomerAssignment {
+  id           String    @id @default(uuid()) @db.Uuid
+  customerId   String    @db.Uuid
+  adviserId    String    @db.Uuid
+  branchId     String    @db.Uuid
+  assignedById String?   @db.Uuid
+  isPrimary    Boolean   @default(true)
+  assignedAt   DateTime  @default(now()) @db.Timestamptz(3)
+  endedAt      DateTime? @db.Timestamptz(3)
+  customer     Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  adviser      User      @relation("CustomerAdviser", fields: [adviserId], references: [id], onDelete: Restrict)
+  branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  assignedBy   User?     @relation("CustomerAssignmentCreator", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, endedAt])
+  @@index([adviserId, endedAt])
+  @@index([branchId, endedAt])
+}
+
+model CustomerStatusHistory {
+  id          String         @id @default(uuid()) @db.Uuid
+  customerId  String         @db.Uuid
+  fromStatus  CustomerStatus
+  toStatus    CustomerStatus
+  reason      String         @db.VarChar(1000)
+  changedById String?        @db.Uuid
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  changedBy   User?          @relation("CustomerStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+}
+
+model DuplicateCandidate {
+  id                  String                @id @default(uuid()) @db.Uuid
+  customerId          String                @db.Uuid
+  candidateCustomerId String                @db.Uuid
+  matchReasons        Json
+  isCurrent           Boolean               @default(true)
+  status              DuplicateReviewStatus @default(OPEN)
+  reviewedById        String?               @db.Uuid
+  reviewedAt          DateTime?             @db.Timestamptz(3)
+  resolutionReason    String?               @db.VarChar(1000)
+  customer            Customer              @relation("DuplicateSource", fields: [customerId], references: [id], onDelete: Restrict)
+  candidateCustomer   Customer              @relation("DuplicateMatch", fields: [candidateCustomerId], references: [id], onDelete: Restrict)
+  reviewedBy          User?                 @relation("DuplicateReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@unique([customerId, candidateCustomerId])
+  @@index([customerId, status])
+  @@index([candidateCustomerId, status])
+}
+
+model LoanRequest {
+  id           String            @id @default(uuid()) @db.Uuid
+  customerId   String            @db.Uuid
+  branchId     String            @db.Uuid
+  source       LoanRequestSource
+  topic        String            @db.VarChar(200)
+  notes        String?           @db.VarChar(4000)
+  status       LoanRequestStatus @default(OPEN)
+  recordedById String?           @db.Uuid
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  branch       Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  recordedBy   User?             @relation("LoanRequestRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([customerId, createdAt])
+  @@index([branchId, status, createdAt])
+}
+
+model LoanContract {
+  id                 String                      @id @default(uuid()) @db.Uuid
+  customerId         String                      @db.Uuid
+  branchId           String                      @db.Uuid
+  contractNumber     String                      @unique @db.VarChar(120)
+  packageCode        String?                     @db.VarChar(80)
+  packageName        String                      @db.VarChar(200)
+  packageVersion     String?                     @db.VarChar(40)
+  loanType           String?                     @db.VarChar(120)
+  termMonths         Int?
+  sourceSystem       String?                     @db.VarChar(80)
+  externalContractId String?                     @db.VarChar(160)
+  sourceUpdatedAt    DateTime?                   @db.Timestamptz(3)
+  receivedAt         DateTime                    @default(now()) @db.Timestamptz(3)
+  importBatchId      String?                     @db.VarChar(120)
+  sourcePayloadHash  String?                     @db.Char(64)
+  idempotencyKeyHash String?                     @unique @db.Char(64)
+  status             LoanContractStatus          @default(PENDING_REVIEW)
+  version            Int                         @default(1)
+  approvedById       String?                     @db.Uuid
+  approvedAt         DateTime?                   @db.Timestamptz(3)
+  completedAt        DateTime?                   @db.Timestamptz(3)
+  createdById        String?                     @db.Uuid
+  customer           Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  branch             Branch                      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy          User?                       @relation("LoanContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy         User?                       @relation("LoanContractApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  statusHistory      LoanContractStatusHistory[]
+  otpChallenges      ContractOtpChallenge[]
+  createdAt          DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                    @updatedAt @db.Timestamptz(3)
+
+  @@unique([sourceSystem, externalContractId])
+  @@index([customerId, createdAt])
+  @@index([branchId, status, createdAt])
+  @@index([sourceSystem, receivedAt])
+}
+
+model LoanContractStatusHistory {
+  id          String             @id @default(uuid()) @db.Uuid
+  contractId  String             @db.Uuid
+  fromStatus  LoanContractStatus?
+  toStatus    LoanContractStatus
+  reason      String             @db.VarChar(1000)
+  changedById String?            @db.Uuid
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  contract    LoanContract       @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  changedBy   User?              @relation("LoanContractStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([contractId, createdAt])
+}
+
+model ContractOtpChallenge {
+  id              String                     @id @default(uuid()) @db.Uuid
+  contractId      String                     @db.Uuid
+  customerId      String                     @db.Uuid
+  codeHash        String                     @db.Char(64)
+  contractVersion Int
+  contentHash     String                     @db.Char(64)
+  status          ContractOtpChallengeStatus @default(PENDING)
+  attempts        Int                        @default(0)
+  expiresAt       DateTime                   @db.Timestamptz(3)
+  lastSentAt      DateTime                   @default(now()) @db.Timestamptz(3)
+  verifiedAt      DateTime?                  @db.Timestamptz(3)
+  createdAt       DateTime                   @default(now()) @db.Timestamptz(3)
+  contract        LoanContract               @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  customer        Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([contractId, status, createdAt])
+  @@index([customerId, createdAt])
 }

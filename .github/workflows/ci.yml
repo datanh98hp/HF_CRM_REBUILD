@@ -1,0 +1,73 @@
+name: CRM API CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: finance_crm_ci
+          POSTGRES_USER: finance_crm_ci
+          POSTGRES_PASSWORD: crm_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finance_crm_ci -d finance_crm_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      API_PORT: 3001
+      DATABASE_URL: postgresql://finance_crm_ci:crm_ci_password@localhost:5432/finance_crm_ci?schema=public
+      REDIS_URL: redis://localhost:6379
+      AUTH_ACCESS_TOKEN_SECRET: ci-only-secret-not-for-any-deployment-use
+      AUTH_ACCESS_TOKEN_TTL_SECONDS: 300
+      AUTH_REFRESH_TOKEN_TTL_DAYS: 1
+      WORKER_CONCURRENCY: 1
+      WEB_ORIGINS: http://localhost:3000
+      BOOTSTRAP_ADMIN_USERNAME: ci_operator
+      BOOTSTRAP_ADMIN_DISPLAY_NAME: CI Operator
+      BOOTSTRAP_ADMIN_PASSWORD: Ci-Integration-Admin-Pass-123!
+      API_BASE_URL: http://127.0.0.1:3001/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate --workspace @finance-crm/api
+      - run: npm run db:migrate:deploy --workspace @finance-crm/api
+      - run: npm run db:seed --workspace @finance-crm/api
+      - name: Start API
+        run: |
+          node apps/api/dist/src/main.js > /tmp/finance-crm-api.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3001/ready; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/finance-crm-api.log
+          exit 1
+      - run: npm run typecheck --workspace @finance-crm/api
+      - run: npm test --workspace @finance-crm/api -- --runInBand
+      - run: npm run test:integration --workspace @finance-crm/api

@@ -1,5 +1,15 @@
 # Finance CRM — Báo cáo triển khai nền tảng đầu tiên
 
+> **Cập nhật trạng thái 2026-11-07:** Phần dưới đây là báo cáo nền ngày 2026-11-05; các mô tả “chưa có migration nghiệp vụ/customer” bên dưới đã cũ sau khi triển khai P0-2. Trạng thái mới nhất:
+>
+> - **P0-0/P0-1:** Có code nền; các giới hạn runtime/production và kiểm thử nêu ở báo cáo nền vẫn cần theo dõi riêng.
+> - **P0-2:** Backend đã có customer, phân công, rà trùng, yêu cầu vay, contract review/OTP, external ingest, source idempotency, cursor pagination 20 item, audit và manager-per-branch. Các migration áp dụng thành công trên PostgreSQL Docker test. Active branch bắt buộc manager; migration đưa nhánh cũ về INACTIVE để gán manager rõ ràng.
+> - **Bảo mật/phạm vi:** Resource scope OWN/ASSIGNED/BRANCH/ALL có unit tests. CUSTOMER chỉ truy cập hồ sơ/yêu cầu/hợp đồng của chính mình; dữ liệu trả về được allowlist và lịch sử phân công chỉ cho staff. Một primary adviser đang hoạt động được bảo vệ bằng unique index PostgreSQL.
+> - **Kiểm thử:** Unit tests 19/19 đạt; build API/Web và Prisma validate/generate đạt. Docker PostgreSQL test xác nhận scope cha/con, direct-branch write restriction, contract approval/OTP, customer conversion, import resolution/idempotency và cursor 20 item. `db:seed` cũng chạy thành công trên Linux runtime container sau khi sửa runner/role seeding. GitHub Actions đã có workflow nhưng chưa chạy trên remote. Xem [P0-2](p0/p0-2-customer-loan-workflow.md).
+> - **Số điện thoại:** Đã triển khai dạng chuẩn 10 chữ số `0[1-9]XXXXXXXX`, quy đổi `+84`/`0084`/`84`, bỏ dấu phân cách và dùng chung cho nhập/lưu/tìm kiếm/dò trùng. Không kiểm tra carrier/reachability. Dev hiện chưa có hồ sơ khách hàng tồn tại khi kiểm tra dữ liệu cũ.
+> - **Đã triển khai:** Quyền ghi của MANAGE chỉ tại branch được gán; CUSTOMER completion OTP; allowlist contract/customer; import ngoài idempotent và pagination 20/trang.
+> - **Còn mở trước production/UI acceptance:** gán manager thật cho mỗi chi nhánh; cấu hình SMS gateway HTTPS và auth mobile CUSTOMER; chủ tín dụng/Compliance quyết định trường tài chính chi tiết; frontend customer/loan ở P0-6; theo dõi GitHub Actions sau push/PR.
+
 **Ngày:** 2026-11-05
 
 **Phạm vi:** Khung API/web, nền P0-0 và code P0-1 cho identity/RBAC/audit theo yêu cầu Giai đoạn 0 đã xác nhận.

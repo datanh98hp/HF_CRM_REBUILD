@@ -47,6 +47,7 @@ jobs:
       BOOTSTRAP_ADMIN_DISPLAY_NAME: CI Operator
       BOOTSTRAP_ADMIN_PASSWORD: Ci-Integration-Admin-Pass-123!
       API_BASE_URL: http://127.0.0.1:3001/api/v1
+      CUSTOMER_OTP_TEST_MODE: mock
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

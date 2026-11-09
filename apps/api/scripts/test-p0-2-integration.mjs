@@ -145,6 +145,9 @@ async function cleanup() {
 await db.connect();
 try {
   await waitForApi();
+  const capabilities = await responseJson(await fetch(`${baseUrl}/capabilities`));
+  check(capabilities.status === 200 && capabilities.body.contractCompletionOtp.status === 'DEFERRED' && capabilities.body.contractCompletionOtp.ready === false,
+    'frontend capability endpoint reports deferred CUSTOMER OTP without provider configuration');
   await seedBranchManager();
   const operatorToken = await login(operatorUsername, operatorPassword);
   const operatorHeaders = { authorization: `Bearer ${operatorToken}`, 'content-type': 'application/json' };
@@ -225,6 +228,12 @@ try {
     method: 'POST', headers: customerHeaders, body: JSON.stringify({ code: otpResponse.body.debugOtp }),
   }));
   check(completion.status === 201 && completion.body.status === 'COMPLETED', 'contract completes only after CUSTOMER OTP confirmation');
+  const contractActor = await db.query('SELECT "changedByCustomerId" FROM "LoanContractStatusHistory" WHERE "contractId" = $1 AND "toStatus" = \'COMPLETED\'', [contractResult.body.id]);
+  check(contractActor.rows[0]?.changedByCustomerId === first.id, 'contract status history records CUSTOMER OTP actor');
+  const customerStatusActor = await db.query('SELECT "changedByCustomerId" FROM "CustomerStatusHistory" WHERE "customerId" = $1 AND "toStatus" = \'CONVERTED\'', [first.id]);
+  check(customerStatusActor.rows[0]?.changedByCustomerId === first.id, 'customer conversion history records CUSTOMER actor');
+  const phoneVerification = await db.query('SELECT "phoneVerifiedAt", "verificationStatus" FROM "Customer" WHERE "id" = $1', [first.id]);
+  check(Boolean(phoneVerification.rows[0]?.phoneVerifiedAt) && phoneVerification.rows[0]?.verificationStatus === 'UNVERIFIED', 'successful OTP verifies phone without overstating full customer verification');
   const completedCustomer = await responseJson(await fetch(`${baseUrl}/customers/${first.id}`, { headers: operatorHeaders }));
   check(completedCustomer.body.status === 'CONVERTED', 'completion changes customer status to CONVERTED');
 

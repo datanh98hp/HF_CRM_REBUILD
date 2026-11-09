@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import {
@@ -78,12 +79,14 @@ export class CustomersService {
     };
     const result: CustomerRecord[] = [];
     const pageSize = 100;
-    let skip = 0;
     const take = query.take ?? 50;
+    let cursor = query.cursor;
     while (result.length < take) {
       const candidates = await this.prisma.customer.findMany({
-        where, skip, take: pageSize,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+        where,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        take: pageSize,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         include: { assignments: { where: { endedAt: null }, select: { adviserId: true } } },
       });
       if (!candidates.length) break;
@@ -91,7 +94,7 @@ export class CustomersService {
         if (await this.canAccessCustomer(actor, 'customers.read', customer)) result.push(customer);
         if (result.length >= take) break;
       }
-      skip += candidates.length;
+      cursor = candidates[candidates.length - 1].id;
       if (candidates.length < pageSize) break;
     }
     return result.map((customer) => this.serializeCustomer(customer));
@@ -423,11 +426,12 @@ export class CustomersService {
     await this.assertBranchManagePermission(actor, 'loan-contracts.status.manage', contract.branchId);
     if (!await this.access.hasPermission(actor.id, 'loan-contracts.status.manage', AccessScope.ALL) && !await this.access.isBranchManager(actor.id, contract.branchId)) throw new ForbiddenException({ code: 'DIRECT_BRANCH_MANAGER_REQUIRED' });
     if (contract.status !== 'APPROVED') throw new ConflictException({ code: 'CONTRACT_NOT_APPROVED' });
+    if (!this.isCustomerOtpTestMode()) throw new ServiceUnavailableException({
+      code: 'CUSTOMER_OTP_DEFERRED',
+      status: 'DEFERRED',
+      message: 'Xác nhận hợp đồng bằng OTP đang chờ cấu hình đăng nhập khách hàng trên mobile và cổng SMS.',
+    });
     const customer = await this.prisma.customer.findUniqueOrThrow({ where: { id: contract.customerId }, select: { phone: true } });
-    const gatewayUrl = process.env.SMS_GATEWAY_URL;
-    const gatewayToken = process.env.SMS_GATEWAY_TOKEN;
-    if (process.env.NODE_ENV === 'production' && (!gatewayUrl || !gatewayToken)) throw new ConflictException({ code: 'OTP_PROVIDER_NOT_CONFIGURED' });
-    if (process.env.NODE_ENV === 'production' && new URL(gatewayUrl!).protocol !== 'https:') throw new ConflictException({ code: 'OTP_PROVIDER_MUST_USE_HTTPS' });
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
     const secret = process.env.AUTH_ACCESS_TOKEN_SECRET;
     if (!secret) throw new ConflictException({ code: 'OTP_HASH_SECRET_NOT_CONFIGURED' });
@@ -444,27 +448,15 @@ export class CustomersService {
       await this.audit.write(tx, { actor, action: 'loan_contract.otp.requested', targetType: 'loan_contract', targetId: contractId, branchId: contract.branchId, afterState: { challengeId: created.id, expiresAt: created.expiresAt }, requestId: requestId(request) });
       return created;
     });
-    if (gatewayUrl && gatewayToken) {
-      let delivered = false;
-      try {
-        const response = await fetch(gatewayUrl, { method: 'POST', headers: { authorization: `Bearer ${gatewayToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ to: customer.phone, message: `Ma xac nhan hoan tat hop dong: ${code}` }), signal: AbortSignal.timeout(8000) });
-        delivered = response.ok;
-      } catch { /* delivery failure is handled below without exposing provider details */ }
-      if (!delivered) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.contractOtpChallenge.update({ where: { id: challenge.id }, data: { status: 'INVALIDATED' } });
-          await tx.loanContract.update({ where: { id: contractId }, data: { status: 'APPROVED' } });
-          await tx.loanContractStatusHistory.create({ data: { contractId, fromStatus: 'AWAITING_CUSTOMER_CONFIRMATION', toStatus: 'APPROVED', reason: 'OTP delivery failed', changedById: actor.id } });
-        });
-        throw new ConflictException({ code: 'OTP_DELIVERY_FAILED' });
-      }
-    } else if (process.env.NODE_ENV === 'production') {
-      throw new ConflictException({ code: 'OTP_PROVIDER_NOT_CONFIGURED' });
-    }
-    return { status: 'AWAITING_CUSTOMER_CONFIRMATION', expiresAt: challenge.expiresAt, ...(process.env.NODE_ENV === 'production' ? {} : { debugOtp: code }) };
+    return { status: 'AWAITING_CUSTOMER_CONFIRMATION', expiresAt: challenge.expiresAt, debugOtp: code };
   }
 
   async confirmCompletion(actor: ActorContext, contractId: string, code: string, request?: ActorRequest) {
+    if (!this.isCustomerOtpTestMode()) throw new ServiceUnavailableException({
+      code: 'CUSTOMER_OTP_DEFERRED',
+      status: 'DEFERRED',
+      message: 'Xác nhận hợp đồng bằng OTP đang chờ cấu hình đăng nhập khách hàng trên mobile và cổng SMS.',
+    });
     if (actor.type !== 'CUSTOMER') throw new ForbiddenException({ code: 'CUSTOMER_AUTHENTICATION_REQUIRED' });
     const contract = await this.prisma.loanContract.findUnique({ where: { id: contractId } });
     if (!contract) throw new NotFoundException({ code: 'LOAN_CONTRACT_NOT_FOUND' });
@@ -487,20 +479,25 @@ export class CustomersService {
       const claimed = await tx.contractOtpChallenge.updateMany({ where: { id: challenge.id, status: 'PENDING', attempts: { lt: 5 }, expiresAt: { gt: new Date() } }, data: { status: 'VERIFIED', verifiedAt: new Date() } });
       if (claimed.count !== 1) throw new ConflictException({ code: 'OTP_ALREADY_USED' });
       const updated = await tx.loanContract.update({ where: { id: contractId, status: 'AWAITING_CUSTOMER_CONFIRMATION' }, data: { status: 'COMPLETED', completedAt: new Date() } });
-      await tx.loanContractStatusHistory.create({ data: { contractId, fromStatus: 'AWAITING_CUSTOMER_CONFIRMATION', toStatus: 'COMPLETED', reason: 'Customer completed confirmation with OTP', changedById: null } });
-      const customer = await tx.customer.findUniqueOrThrow({ where: { id: actor.id }, select: { status: true, verificationStatus: true } });
-      if (customer.verificationStatus !== 'VERIFIED') {
-        await tx.customer.update({ where: { id: actor.id }, data: { verificationStatus: 'VERIFIED' } });
+      await tx.loanContractStatusHistory.create({ data: { contractId, fromStatus: 'AWAITING_CUSTOMER_CONFIRMATION', toStatus: 'COMPLETED', reason: 'Customer completed confirmation with OTP', changedByCustomerId: actor.id } });
+      const customer = await tx.customer.findUniqueOrThrow({ where: { id: actor.id }, select: { status: true, phoneVerifiedAt: true } });
+      if (!customer.phoneVerifiedAt) {
+        const phoneVerifiedAt = new Date();
+        await tx.customer.update({ where: { id: actor.id }, data: { phoneVerifiedAt } });
         await this.audit.write(tx, { actor, action: 'customer.phone.verified', targetType: 'customer', targetId: actor.id, branchId: contract.branchId,
-          afterState: { verificationStatus: 'VERIFIED', source: 'loan_contract_otp' }, requestId: requestId(request) });
+          afterState: { phoneVerifiedAt, source: 'loan_contract_otp' }, requestId: requestId(request) });
       }
       if (customer.status !== 'CLOSED' && customer.status !== 'CONVERTED') {
         await tx.customer.update({ where: { id: actor.id }, data: { status: 'CONVERTED' } });
-        await tx.customerStatusHistory.create({ data: { customerId: actor.id, fromStatus: customer.status, toStatus: 'CONVERTED', reason: 'Loan contract completed after customer OTP confirmation' } });
+        await tx.customerStatusHistory.create({ data: { customerId: actor.id, fromStatus: customer.status, toStatus: 'CONVERTED', reason: 'Loan contract completed after customer OTP confirmation', changedByCustomerId: actor.id } });
       }
       await this.audit.write(tx, { actor, action: 'loan_contract.completed', targetType: 'loan_contract', targetId: contractId, branchId: contract.branchId, requestId: requestId(request) });
       return this.serializeContract(updated, true);
     });
+  }
+
+  private isCustomerOtpTestMode(): boolean {
+    return process.env.NODE_ENV === 'test' && process.env.CUSTOMER_OTP_TEST_MODE === 'mock';
   }
 
   private async contractForAction(actor: ActorContext, id: string) {
@@ -664,4 +661,3 @@ export class CustomersService {
     return { fullName: customer.fullName, phone: customer.phone, email: customer.email, dateOfBirth: customer.dateOfBirth?.toISOString().slice(0, 10) ?? null, provenance: customer.provenance, verificationStatus: customer.verificationStatus };
   }
 }
-

@@ -1,6 +1,6 @@
 # P0-2 — Khách hàng, yêu cầu vay, hợp đồng và phân công
 
-**Trạng thái:** Backend P0-2 đã triển khai; migration, seed, unit test, build và kiểm thử HTTP/PostgreSQL tích hợp trên Docker test đều đạt. Giao diện customer/loan theo lát cắt P0-6.
+**Trạng thái:** Backend P0-2 đã triển khai; migration, seed, unit test, build và kiểm thử HTTP/PostgreSQL tích hợp trên Docker test đều đạt. SMS gateway và CUSTOMER mobile auth được chủ dự án tạm hoãn; API/frontend hiện chỉ công bố trạng thái chờ cấu hình. Giao diện customer/loan theo lát cắt P0-6.
 
 ## Mục tiêu
 
@@ -22,7 +22,7 @@ Triển khai CRM customer lifecycle và tách rõ yêu cầu vay khỏi hợp đ
 ## Tiêu chí hoàn tất
 
 - Backend kiểm tra quyền/scope cho list, search, detail, update, assignment và contract lookup.
-- Mọi chuyển customer state có actor, from/to, timestamp, reason; không cho `CONVERTED` thiếu contract relation.
+- Mọi chuyển customer/contract state ghi tác nhân, from/to, timestamp và reason; trạng thái `CONVERTED` chỉ sau khi contract đã `COMPLETED`.
 - Loan request không tự tạo hợp đồng hoặc quyết định eligibility/approval.
 - Cập nhật assignment giữ lịch sử và chịu kiểm tra branch scope.
 - Duplicate candidate không tự gộp; thao tác xác nhận/giải quyết được audit.
@@ -38,8 +38,10 @@ Triển khai CRM customer lifecycle và tách rõ yêu cầu vay khỏi hợp đ
 - CUSTOMER chỉ được đọc hồ sơ của mình, gửi yêu cầu vay cho chính mình và xem contract allowlist. JSON customer không chứa nguồn nhập, trạng thái xác minh nội bộ, mã chi nhánh hay người phụ trách; endpoint lịch sử phân công chỉ dành cho nhân viên.
 - Quản lý chi nhánh được gán qua endpoint riêng; role `MANAGE` không thể cấp qua grant thường. Chi nhánh mới ở `INACTIVE`, chỉ kích hoạt khi có quản lý; PostgreSQL chặn nhánh `ACTIVE` không có quản lý. Quản lý được đọc cây con nhưng quyền ghi, phân công, cấp nhân viên, import và duyệt chỉ áp dụng tại nhánh được gán.
 - Hợp đồng đi qua `PENDING_REVIEW -> APPROVED -> AWAITING_CUSTOMER_CONFIRMATION -> COMPLETED` (hoặc `REJECTED/CANCELLED`). OTP ràng buộc với hợp đồng, phiên bản và nội dung, hết hạn sau 5 phút, tối đa 5 lần thử, cooldown 60 giây và tối đa 3 challenge/giờ. Challenge lưu HMAC hash và chỉ dùng một lần; xác nhận thành công cũng đánh dấu số điện thoại đã được xác minh.
+- Lịch sử trạng thái lưu riêng ID của nhân viên hoặc CUSTOMER thực hiện hành động; migration `20261109000000_customer_actor_status_history` bổ sung attribution, `20261109010000_customer_phone_verified_at` tách xác minh điện thoại khỏi trạng thái xác minh hồ sơ.
 - `POST /loan-contracts/external` yêu cầu `Idempotency-Key`, lưu metadata/hash nguồn nhưng không lưu payload thô. Tự liên kết customer chỉ khi phone/tên/ngày sinh khớp duy nhất; trường hợp mới hoặc mơ hồ tạo hồ sơ `UNVERIFIED` để rà trùng. Lặp cùng payload trả bản ghi cũ, thay payload trả 409.
 - Contract API dùng cursor, tối đa 20 item/trang. Customer chỉ nhận allowlist: mã hợp đồng, trạng thái, thông tin gói/loại/kỳ hạn, mốc duyệt/hoàn tất.
+- `GET /api/v1/capabilities` cung cấp trạng thái an toàn, không chứa secret cho `customerMobileAuthentication`, `smsOtpGateway`, `contractCompletionOtp`; frontend hiển thị banner chờ cấu hình. OTP endpoint không tạo challenge/không hoàn tất hợp đồng ngoài mock của integration test.
 
 ## Yêu cầu mới đã chốt — 2026-11-07
 
@@ -79,7 +81,7 @@ Ranh giới trên đã được chốt và kiểm thử: quản lý cha không t
 - Provider SMS nhận cấu hình `SMS_GATEWAY_URL`/`SMS_GATEWAY_TOKEN`; production chỉ cho phép HTTPS. SMS/PSTN có rủi ro đổi SIM và không chống phishing; cần đánh giá trước production theo [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html).
 - OTP gắn `contractId` + version/hash, dùng một lần, TTL 5 phút, giới hạn 5 lần thử, cooldown 60 giây và tối đa 3 challenge/giờ. Xác nhận OTP thành công đánh dấu số điện thoại `VERIFIED`; mock CUSTOMER auth và `debugOtp` chỉ dành dev/test. Hướng dẫn transaction-bound OTP theo [OWASP Transaction Authorization](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html).
 
-Schema, trạng thái, allowlist, nhập ngoài và ranh giới quyền manager đã triển khai. SMS provider thật và xác thực CUSTOMER production vẫn cần cấu hình/tích hợp.
+Schema, trạng thái, allowlist, nhập ngoài và ranh giới quyền manager đã triển khai. Theo chỉ đạo hiện tại, SMS gateway và xác thực CUSTOMER mobile đang `DEFERRED`; chỉ tích hợp sau khi các chức năng CRM còn lại hoàn thành.
 
 ## Kiểm thử đã chạy
 
@@ -88,21 +90,19 @@ Schema, trạng thái, allowlist, nhập ngoài và ranh giới quyền manager 
 - `npm run test:integration --workspace @finance-crm/api`: kịch bản HTTP/PostgreSQL kiểm tra manager read/write scope, contract approval/OTP, idempotency/customer resolution và giới hạn 20/trang; đạt trên Docker test.
 - GitHub Actions workflow `.github/workflows/ci.yml` tự dựng PostgreSQL/Redis, áp migration/seed, khởi chạy API, sau đó chạy typecheck, unit tests và P0-2 integration tests trên push/PR.
 - `npm run db:validate --workspace @finance-crm/api` và `db:generate`: đạt.
-- Docker test: các migration customer/duplicate/contract/manager áp dụng thành công; seed chạy được trên Linux container sau khi sửa runner và đồng bộ permission.
+- Docker test: migrations customer/duplicate/contract/manager/customer-actor áp dụng thành công; seed chạy được trên Linux container sau khi sửa runner và đồng bộ permission.
 - HTTP smoke test trên API + PostgreSQL dev: CUSTOMER đọc hồ sơ mình, bị chặn hồ sơ người khác, tạo yêu cầu vay của mình và bị chặn tạo cho người khác; contract list chỉ có dữ liệu của mình.
 - HTTP smoke test nhân viên: tạo khách hàng, thấy duplicate candidate từ hai phía, giải quyết duplicate, bị chặn CONVERTED khi chưa có hợp đồng, tạo hợp đồng rồi chuyển trạng thái thành công. Fixture đã được dọn sạch.
 - HTTP smoke test sau cập nhật: đổi điện thoại làm candidate không còn khớp bị ẩn khỏi hai hàng đợi; cả hai bản ghi lịch sử được giữ. PostgreSQL có unique index cho một primary assignment đang hoạt động. Fixture đã được dọn sạch.
 
 ## Còn lại trước khi nghiệm thu đầy đủ P0-2
 
-- Chờ workflow GitHub Actions chạy trên remote sau khi push/PR; workflow và integration suite đã được thêm, integration suite đạt trên stack Docker test local.
-- Chờ GitHub Actions chạy trên remote sau push/PR.
+- Theo dõi GitHub Actions trên remote sau push/PR: bỏ qua trong giai đoạn phát triển hiện tại theo quyết định của chủ dự án.
 - Gán MANAGE thật cho từng chi nhánh vận hành; migration chuyển nhánh cũ về `INACTIVE` để chờ manager trước khi kích hoạt lại.
-- Cấu hình/test provider SMS thực tế và hoàn tất auth CUSTOMER mobile; hiện dev/test dùng mock token và `debugOtp`.
+- SMS gateway và CUSTOMER mobile auth được hoãn theo yêu cầu; capability API/frontend báo trạng thái. Việc cấu hình và xác nhận hợp đồng bằng OTP được bỏ qua khi rà soát luồng hiện tại; OTP mock chỉ phục vụ integration test. Sẽ tích hợp sau khi các chức năng CRM khác hoàn thiện.
 - Chủ tín dụng/Compliance quyết định có thêm số tiền/lãi suất/dư nợ/lịch trả vào allowlist hay giữ trường hiện tại.
-- Giao diện P0-2 thuộc P0-6, chưa triển khai trong lát cắt backend này.
 - Giao diện nghiệp vụ P0-2 thuộc P0-6; chưa có UI customer/contract trong lát cắt này.
 
 ## Cấu hình còn cần
 
-SMS provider, xác thực CUSTOMER mobile, manager thật cho từng chi nhánh và quyết định cuối về trường tài chính chi tiết.
+Manager thật cho từng chi nhánh và quyết định cuối về trường tài chính chi tiết. SMS provider và xác thực CUSTOMER mobile vẫn được giữ slot, chờ cấu hình sau.

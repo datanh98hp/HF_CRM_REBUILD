@@ -26,6 +26,7 @@ import {
   DisableUserDto,
   RevokeRoleGrantDto,
   SetRolePermissionsDto,
+  UpdateBranchStatusDto,
 } from './access.dto.js';
 
 @Controller('access')
@@ -81,6 +82,17 @@ export class AccessAdminController {
     @Req() request: ActorRequest,
   ) {
     return this.access.createBranch(actor, dto, request);
+  }
+
+  @RequirePermission('branches.manage')
+  @Patch('branches/:branchId/status')
+  updateBranchStatus(
+    @CurrentActor() actor: ActorContext,
+    @Param('branchId', ParseUUIDPipe) branchId: string,
+    @Body() dto: UpdateBranchStatusDto,
+    @Req() request: ActorRequest,
+  ) {
+    return this.access.updateBranchStatus(actor, branchId, dto, request);
   }
 
   @RequirePermission('branches.manage', AccessScope.ALL)

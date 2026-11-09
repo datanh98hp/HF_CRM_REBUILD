@@ -1,4 +1,4 @@
-import { AccessScope } from '../generated/prisma/client.js';
+import { AccessScope, BranchStatus } from '../generated/prisma/client.js';
 import {
   ArrayMaxSize,
   IsArray,
@@ -62,6 +62,15 @@ export class CreateBranchDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+}
+
+export class UpdateBranchStatusDto {
+  @IsEnum(BranchStatus)
+  status!: BranchStatus;
+
+  @IsString()
+  @Length(2, 1000)
+  reason!: string;
 }
 
 export class AssignBranchManagerDto {

@@ -37,6 +37,7 @@ Nạp cây chi nhánh thật, role grants và danh sách permission có thể �
 - `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/password`, `GET /api/v1/auth/me`.
 - `POST /api/v1/auth/dev/customer-token` chỉ phát token giả lập trong `development`/`test`; mock actor chỉ được truy cập các route đánh dấu authenticated-only, không cấp permission nghiệp vụ.
 - `/api/v1/access/permissions`, `/roles`, `/branches`, `/users`, `/role-grants`, `/audit-events` và các thao tác ghi tương ứng. Route không có permission metadata bị từ chối mặc định.
+- Chi nhánh có thể chuyển `ACTIVE`/`INACTIVE` qua `PATCH /api/v1/access/branches/:branchId/status`; thao tác cần `branches.manage` trong phạm vi chi nhánh, ghi lý do/audit, chỉ kích hoạt khi quản lý và chi nhánh cha đang hoạt động, và không ngừng hoạt động khi còn chi nhánh con hoạt động. Gán quản lý qua endpoint hiện có cũng kích hoạt chi nhánh.
 - Scope `BRANCH` kế thừa xuống hậu duệ bằng quan hệ parent-child. Các module nghiệp vụ phải gọi `assertResourceAccess` với owner/assignee/branch đã đọc từ DB; không dùng ID do request gửi lên làm bằng chứng quyền.
 
 ## Cấu hình/setup còn lại

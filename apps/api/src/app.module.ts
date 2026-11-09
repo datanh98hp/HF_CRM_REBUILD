@@ -7,6 +7,7 @@ import { PrismaModule } from './database/prisma.module.js';
 import { RuntimeConfigModule } from './runtime-config/runtime-config.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CustomersModule } from './customers/customers.module.js';
+import { CapabilitiesController } from './capabilities/capabilities.controller.js';
 
 @Module({
   imports: [
@@ -19,5 +20,6 @@ import { CustomersModule } from './customers/customers.module.js';
     CustomersModule,
     HealthModule,
   ],
+  controllers: [CapabilitiesController],
 })
 export class AppModule {}

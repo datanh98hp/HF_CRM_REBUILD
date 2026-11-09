@@ -224,6 +224,7 @@ model Customer {
   emailNormalized    String?                    @db.VarChar(254)
   provenance         String                     @db.VarChar(120)
   verificationStatus CustomerVerificationStatus @default(UNVERIFIED)
+  phoneVerifiedAt   DateTime?                  @db.Timestamptz(3)
   status             CustomerStatus             @default(NEW)
   branchId           String                     @db.Uuid
   createdById        String?                    @db.Uuid
@@ -231,9 +232,11 @@ model Customer {
   createdBy          User?                      @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
   assignments        CustomerAssignment[]
   statusHistory      CustomerStatusHistory[]
+  initiatedStatusChanges CustomerStatusHistory[] @relation("CustomerStatusCustomerActor")
   loanRequests       LoanRequest[]
   contracts          LoanContract[]
   contractOtpChallenges ContractOtpChallenge[]
+  initiatedContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractCustomerStatusActor")
   duplicateCandidates DuplicateCandidate[]      @relation("DuplicateSource")
   duplicateMatches   DuplicateCandidate[]       @relation("DuplicateMatch")
   createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
@@ -271,9 +274,11 @@ model CustomerStatusHistory {
   toStatus    CustomerStatus
   reason      String         @db.VarChar(1000)
   changedById String?        @db.Uuid
+  changedByCustomerId String? @db.Uuid
   createdAt   DateTime       @default(now()) @db.Timestamptz(3)
   customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
   changedBy   User?          @relation("CustomerStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
+  changedByCustomer Customer? @relation("CustomerStatusCustomerActor", fields: [changedByCustomerId], references: [id], onDelete: SetNull)
 
   @@index([customerId, createdAt])
 }
@@ -363,9 +368,11 @@ model LoanContractStatusHistory {
   toStatus    LoanContractStatus
   reason      String             @db.VarChar(1000)
   changedById String?            @db.Uuid
+  changedByCustomerId String?    @db.Uuid
   createdAt   DateTime           @default(now()) @db.Timestamptz(3)
   contract    LoanContract       @relation(fields: [contractId], references: [id], onDelete: Restrict)
   changedBy   User?              @relation("LoanContractStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
+  changedByCustomer Customer?    @relation("LoanContractCustomerStatusActor", fields: [changedByCustomerId], references: [id], onDelete: SetNull)
 
   @@index([contractId, createdAt])
 }

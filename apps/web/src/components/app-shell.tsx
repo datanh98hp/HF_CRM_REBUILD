@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
-type AccessSection = 'users' | 'branches' | 'roles' | null;
+type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | null;
+type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
   activeSection: AccessSection;
@@ -11,7 +12,9 @@ type ShellProps = {
   canReadUsers: boolean;
   canReadBranches: boolean;
   canReadRoles: boolean;
+  canReadCustomers: boolean;
   busy: boolean;
+  contractCompletionOtp?: CapabilityNotice;
   onNavigate: (section: AccessSection) => void;
   onLogout: () => void;
 };
@@ -37,7 +40,7 @@ function Icon({ name }: { name: IconName }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-export function AppShell({ children, activeSection, displayName, username, canReadUsers, canReadBranches, canReadRoles, busy, onNavigate, onLogout }: ShellProps) {
+export function AppShell({ children, activeSection, displayName, username, canReadUsers, canReadBranches, canReadRoles, canReadCustomers, busy, onNavigate, onLogout }: ShellProps) {
   const [expanded, setExpanded] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -70,7 +73,7 @@ export function AppShell({ children, activeSection, displayName, username, canRe
 
   const groups = [
     { label: 'Tổng quan', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'grid' as const, disabled: true }] },
-    { label: 'Khách hàng & tư vấn', items: [{ key: 'customers', label: 'Khách hàng', icon: 'users' as const, disabled: true }, { key: 'chat', label: 'Hội thoại', icon: 'chat' as const, disabled: true }] },
+    { label: 'Khách hàng & tư vấn', items: [...(canReadCustomers ? [{ key: 'customers', label: 'Khách hàng', icon: 'users' as const, section: 'customers' as const }] : []), { key: 'chat', label: 'Hội thoại', icon: 'chat' as const, disabled: true }] },
     { label: 'Công việc & KPI', items: [{ key: 'tasks', label: 'Công việc', icon: 'check' as const, disabled: true }, { key: 'reports', label: 'Kế hoạch & KPI', icon: 'chart' as const, disabled: true }] },
     { label: 'Quản trị hệ thống', items: [
       ...(canReadUsers ? [{ key: 'users', label: 'Nhân viên', icon: 'users' as const, section: 'users' as const }] : []),
@@ -86,9 +89,9 @@ export function AppShell({ children, activeSection, displayName, username, canRe
       {groups.map((group) => group.items.length > 0 && <div className="crm-nav-group" key={group.label}>
         <p className="crm-nav-heading">{group.label}</p>
         {group.items.map((item) => {
-          const isActive = item.key === 'profile' ? activeSection === null : item.key === 'users' ? activeSection === 'users' : item.key === 'branches' ? activeSection === 'branches' : item.key === 'roles' ? activeSection === 'roles' : false;
+          const isActive = item.key === 'profile' ? activeSection === null : item.key === 'customers' ? activeSection === 'customers' : item.key === 'users' ? activeSection === 'users' : item.key === 'branches' ? activeSection === 'branches' : item.key === 'roles' ? activeSection === 'roles' : false;
           const itemClass = `crm-nav-item${isActive ? ' is-active' : ''}${'disabled' in item && item.disabled ? ' is-unavailable' : ''}`;
-          if ('section' in item) return <button className={itemClass} key={item.key} type="button" title={item.label} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.section)}><Icon name={item.icon}/><span className="crm-nav-label">{item.label}</span></button>;
+          if ('section' in item && item.section !== undefined) return <button className={itemClass} key={item.key} type="button" title={item.label} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.section)}><Icon name={item.icon}/><span className="crm-nav-label">{item.label}</span></button>;
           return <div className={itemClass} key={item.key} title={`${item.label} · Chưa triển khai`} aria-disabled="true"><Icon name={item.icon}/><span className="crm-nav-label">{item.label}</span><span className="crm-coming-soon">Sau</span></div>;
         })}
       </div>)}
@@ -96,7 +99,7 @@ export function AppShell({ children, activeSection, displayName, username, canRe
     <div className="crm-sidebar-user"><span className="crm-avatar">{displayName.slice(0, 1).toUpperCase()}</span><span className="crm-user-copy"><strong>{displayName}</strong><small>@{username}</small></span></div>
   </aside>;
 
-  const currentLabel = activeSection === 'users' ? 'Nhân viên' : activeSection === 'branches' ? 'Chi nhánh' : activeSection === 'roles' ? 'Vai trò & quyền' : 'Tài khoản của tôi';
+  const currentLabel = activeSection === 'customers' ? 'Khách hàng' : activeSection === 'users' ? 'Nhân viên' : activeSection === 'branches' ? 'Chi nhánh' : activeSection === 'roles' ? 'Vai trò & quyền' : 'Tài khoản của tôi';
 
   return <div className="crm-workspace">
     <div className="crm-desktop-sidebar">{sidebar()}</div>

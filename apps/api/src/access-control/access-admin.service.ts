@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AccessScope } from '../generated/prisma/client.js';
+import { AccessScope, BranchStatus } from '../generated/prisma/client.js';
 import { ActorContext, ActorRequest } from '../common/actor-context.js';
 import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../database/prisma.service.js';
@@ -18,6 +18,7 @@ import {
   CreateUserDto,
   RolePermissionDto,
   SetRolePermissionsDto,
+  UpdateBranchStatusDto,
 } from './access.dto.js';
 
 function getRequestId(request?: ActorRequest): string | null {
@@ -129,7 +130,7 @@ export class AccessAdminService {
   async assignBranchManager(actor: ActorContext, branchId: string, managerUserId: string, request?: ActorRequest) {
     await this.access.assertPermission(actor.id, 'branches.manage', AccessScope.ALL);
     const [branch, user, managerRole, adviserRole] = await Promise.all([
-      this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, managerUserId: true } }),
+      this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, parentId: true, managerUserId: true } }),
       this.prisma.user.findUnique({ where: { id: managerUserId }, select: { id: true, username: true, displayName: true, status: true, roleGrants: { select: { branchId: true, role: { select: { key: true } } } } } }),
       this.prisma.role.findUnique({ where: { key: 'MANAGE' }, select: { id: true } }),
       this.prisma.role.findUnique({ where: { key: 'ADVISING' }, select: { id: true } }),
@@ -143,6 +144,13 @@ export class AccessAdminService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      if (branch.parentId) {
+        await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${branch.parentId}::uuid FOR UPDATE`;
+        const parent = await tx.branch.findUnique({ where: { id: branch.parentId }, select: { status: true } });
+        if (!parent || parent.status !== BranchStatus.ACTIVE) {
+          throw new ConflictException({ code: 'BRANCH_PARENT_INACTIVE' });
+        }
+      }
       await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${branchId}::uuid FOR UPDATE`;
       const current = await tx.branch.findUniqueOrThrow({ where: { id: branchId }, select: { managerUserId: true } });
       await tx.userRoleGrant.deleteMany({ where: { branchId, roleId: managerRole.id } });
@@ -175,17 +183,74 @@ export class AccessAdminService {
     });
   }
 
+  async updateBranchStatus(actor: ActorContext, branchId: string, dto: UpdateBranchStatusDto, request?: ActorRequest) {
+    await this.assertBranchPermission(actor.id, 'branches.manage', branchId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const currentBranch = await tx.branch.findUnique({ where: { id: branchId }, select: { parentId: true } });
+      if (!currentBranch) throw new NotFoundException({ code: 'BRANCH_NOT_FOUND' });
+      if (dto.status === BranchStatus.ACTIVE && currentBranch.parentId) {
+        await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${currentBranch.parentId}::uuid FOR UPDATE`;
+      }
+      await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${branchId}::uuid FOR UPDATE`;
+      const branch = await tx.branch.findUnique({
+        where: { id: branchId },
+        include: {
+          parent: { select: { status: true } },
+          manager: { select: { status: true } },
+        },
+      });
+      if (!branch) throw new NotFoundException({ code: 'BRANCH_NOT_FOUND' });
+      if (branch.status === dto.status) return branch;
+
+      if (dto.status === BranchStatus.ACTIVE) {
+        if (branch.parentId && branch.parent?.status !== BranchStatus.ACTIVE) {
+          throw new ConflictException({ code: 'BRANCH_PARENT_INACTIVE' });
+        }
+        if (!branch.managerUserId || branch.manager?.status !== 'ACTIVE') {
+          throw new ConflictException({ code: 'ACTIVE_BRANCH_REQUIRES_ACTIVE_MANAGER' });
+        }
+      } else {
+        const activeChild = await tx.branch.findFirst({
+          where: { parentId: branchId, status: BranchStatus.ACTIVE },
+          select: { id: true },
+        });
+        if (activeChild) throw new ConflictException({ code: 'BRANCH_HAS_ACTIVE_CHILDREN' });
+      }
+
+      const updated = await tx.branch.update({
+        where: { id: branchId },
+        data: { status: dto.status },
+      });
+      await this.audit.write(tx, {
+        actor,
+        action: 'organization.branch.status.changed',
+        targetType: 'branch',
+        targetId: branchId,
+        branchId,
+        reason: dto.reason.trim(),
+        beforeState: { status: branch.status },
+        afterState: { status: updated.status },
+        requestId: getRequestId(request),
+      });
+      return updated;
+    });
+  }
+
   async createBranch(actor: ActorContext, dto: CreateBranchDto, request?: ActorRequest) {
     const parentId = dto.parentId ?? null;
     if (parentId) {
-      const parent = await this.prisma.branch.findUnique({ where: { id: parentId } });
-      if (!parent || parent.status !== 'ACTIVE') throw new NotFoundException({ code: 'BRANCH_PARENT_NOT_FOUND' });
       await this.assertBranchPermission(actor.id, 'branches.manage', parentId);
     } else {
       await this.access.assertPermission(actor.id, 'branches.manage', AccessScope.ALL);
     }
 
     return this.prisma.$transaction(async (tx) => {
+      if (parentId) {
+        await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${parentId}::uuid FOR UPDATE`;
+        const parent = await tx.branch.findUnique({ where: { id: parentId }, select: { status: true } });
+        if (!parent || parent.status !== BranchStatus.ACTIVE) throw new NotFoundException({ code: 'BRANCH_PARENT_NOT_FOUND' });
+      }
       const branch = await tx.branch.create({
         data: { code: dto.code.trim().toUpperCase(), name: dto.name.trim(), parentId, status: 'INACTIVE' },
       });

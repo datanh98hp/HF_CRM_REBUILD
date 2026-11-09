@@ -168,6 +168,9 @@ export class CustomerListQueryDto {
   search?: string;
 
   @IsOptional() @IsUUID()
+  cursor?: string;
+
+  @IsOptional() @IsUUID()
   branchId?: string;
 
   @IsOptional() @IsEnum(CustomerStatus)

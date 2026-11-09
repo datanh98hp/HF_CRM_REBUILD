@@ -2,8 +2,11 @@
 
 import { Fragment, type FormEvent, useCallback, useEffect, useState } from 'react';
 import { AppShell } from '@/components/app-shell';
+import { CustomerWorkspace } from '@/components/customer-workspace';
 
 type Session = { accessToken: string; passwordChangeRequired: boolean };
+type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
+type Capabilities = { contractCompletionOtp: CapabilityNotice };
 type Staff = {
   id: string;
   username: string;
@@ -17,7 +20,16 @@ type Staff = {
 type ManagedUser = { id: string; username: string; displayName: string; status: string; createdAt: string; roleGrants: { id: string; role: { key: string; name: string }; branch: { id: string; code: string; name: string } | null }[] };
 type RolePermission = { permissionKey: string; scope: string };
 type RoleOption = { key: string; name: string; description?: string | null; isSystem: boolean; permissions: RolePermission[] };
-type BranchOption = { id: string; code: string; name: string; parentId: string | null; status: string; createdAt: string };
+type BranchOption = {
+  id: string;
+  code: string;
+  name: string;
+  parentId: string | null;
+  status: string;
+  managerUserId: string | null;
+  manager: { id: string; displayName: string; username: string; status: string } | null;
+  createdAt: string;
+};
 type PermissionOption = { key: string; groupKey: string; description: string };
 
 const ACCESS_CATALOG_PERMISSIONS = new Set([
@@ -140,14 +152,16 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [accessSection, setAccessSection] = useState<'users' | 'branches' | 'roles' | null>(null);
+  const [accessSection, setAccessSection] = useState<'customers' | 'users' | 'branches' | 'roles' | null>(null);
   const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [branchManagerCandidates, setBranchManagerCandidates] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [permissionCatalog, setPermissionCatalog] = useState<PermissionOption[]>([]);
@@ -182,6 +196,14 @@ export default function HomePage() {
       .catch(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [loadStaff]);
+
+  useEffect(() => {
+    let active = true;
+    void request<Capabilities>('/capabilities')
+      .then((value) => { if (active) setCapabilities(value); })
+      .catch(() => { if (active) setCapabilities(null); });
+    return () => { active = false; };
+  }, []);
 
   async function onLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
@@ -218,11 +240,13 @@ export default function HomePage() {
     finally { setSession(null); setStaff(null); setBusy(false); setNotice('Bạn đã đăng xuất.'); }
   }
 
-  async function openAccessSection(section: 'users' | 'branches' | 'roles') {
+  async function openAccessSection(section: 'customers' | 'users' | 'branches' | 'roles') {
     if (!session) return;
     setError(''); setBusy(true);
     try {
-      if (section === 'users') {
+      if (section === 'customers') {
+        setAccessSection('customers');
+      } else if (section === 'users') {
         const [usersResult, rolesResult, branchesResult] = await Promise.all([
           request<ManagedUser[]>('/access/users', {}, session.accessToken),
           canReadRoles ? request<RoleOption[]>('/access/roles', {}, session.accessToken) : Promise.resolve([]),
@@ -233,7 +257,14 @@ export default function HomePage() {
         if (rolesResult.some((role) => role.key === 'ADVISING')) setNewRole('ADVISING');
         else if (rolesResult[0]) setNewRole(rolesResult[0].key);
       } else if (section === 'branches') {
-        setBranches(await request<BranchOption[]>('/access/branches', {}, session.accessToken));
+        const [branchResult, usersResult] = await Promise.all([
+          request<BranchOption[]>('/access/branches', {}, session.accessToken),
+          canManageBranchManagers
+            ? request<ManagedUser[]>('/access/users', {}, session.accessToken)
+            : Promise.resolve([]),
+        ]);
+        setBranches(branchResult);
+        setBranchManagerCandidates(usersResult.filter((user) => user.status === 'ACTIVE' && user.roleGrants.some((grant) => grant.role.key === 'MANAGE')));
         setAccessSection('branches');
       } else {
         const [roleResult, permissionResult] = await Promise.all([
@@ -258,6 +289,48 @@ export default function HomePage() {
       setNotice('Đã tạo chi nhánh.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không thể tạo chi nhánh.'); }
     finally { setBusy(false); }
+  }
+
+  async function toggleBranchStatus(branch: BranchOption) {
+    if (!session) return;
+    const activating = branch.status !== 'ACTIVE';
+    const reason = window.prompt(activating ? 'Lý do kích hoạt chi nhánh:' : 'Lý do ngừng hoạt động chi nhánh:');
+    if (reason === null) return;
+    if (reason.trim().length < 2) {
+      setError('Lý do cần có ít nhất 2 ký tự.');
+      return;
+    }
+
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const updated = await request<BranchOption>(`/access/branches/${branch.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: activating ? 'ACTIVE' : 'INACTIVE', reason: reason.trim() }),
+      }, session.accessToken);
+      setBranches((current) => current.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
+      setNotice(activating ? 'Đã kích hoạt chi nhánh.' : 'Đã ngừng hoạt động chi nhánh.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể cập nhật trạng thái chi nhánh.');
+    } finally { setBusy(false); }
+  }
+
+  async function assignBranchManager(branch: BranchOption, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session) return;
+    const formData = new FormData(event.currentTarget);
+    const managerUserId = String(formData.get('managerUserId') ?? '');
+    if (!managerUserId) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const updated = await request<BranchOption>(`/access/branches/${branch.id}/manager`, {
+        method: 'PUT',
+        body: JSON.stringify({ managerUserId }),
+      }, session.accessToken);
+      setBranches((current) => current.map((item) => item.id === branch.id ? { ...item, ...updated } : item));
+      setNotice('Đã gán quản lý; chi nhánh đã được kích hoạt.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể gán quản lý chi nhánh.');
+    } finally { setBusy(false); }
   }
 
   function selectRole(roleKey: string) {
@@ -357,7 +430,15 @@ export default function HomePage() {
   const canManageRoles = staff?.permissions?.some((permission) => permission.key === 'roles.manage');
   const canReadBranches = staff?.permissions?.some((permission) => permission.key === 'branches.read');
   const canManageBranches = staff?.permissions?.some((permission) => permission.key === 'branches.manage');
+  const canManageBranchManagers = Boolean(canReadUsers && staff?.permissions?.some((permission) => permission.key === 'branches.manage' && permission.scopes.includes('ALL')));
   const canReadPermissions = staff?.permissions?.some((permission) => permission.key === 'permissions.read');
+  const canReadCustomers = staff?.permissions?.some((permission) => permission.key === 'customers.read');
+  const canManageCustomers = staff?.permissions?.some((permission) => permission.key === 'customers.manage');
+  const canAssignCustomers = staff?.permissions?.some((permission) => permission.key === 'customers.assign');
+  const canReviewCustomerDuplicates = staff?.permissions?.some((permission) => permission.key === 'customers.duplicates.review');
+  const canManageLoanRequests = staff?.permissions?.some((permission) => permission.key === 'loan-requests.manage');
+  const canManageLoanContracts = staff?.permissions?.some((permission) => permission.key === 'loan-contracts.manage');
+  const canReviewLoanContracts = staff?.permissions?.some((permission) => permission.key === 'loan-contracts.review');
   const selectedRole = roles.find((role) => role.key === selectedRoleKey);
   const shellProps = {
     activeSection: accessSection,
@@ -366,8 +447,9 @@ export default function HomePage() {
     canReadUsers: Boolean(canReadUsers || canManageUsers),
     canReadBranches: Boolean(canReadBranches),
     canReadRoles: Boolean(canReadRoles),
+    canReadCustomers: Boolean(canReadCustomers),
     busy,
-    onNavigate: (section: 'users' | 'branches' | 'roles' | null) => { setError(''); setNotice(''); if (section) void openAccessSection(section); else setAccessSection(null); },
+    onNavigate: (section: 'customers' | 'users' | 'branches' | 'roles' | null) => { setError(''); setNotice(''); if (section) void openAccessSection(section); else setAccessSection(null); },
     onLogout,
   };
 
@@ -430,6 +512,12 @@ export default function HomePage() {
     </main>
   );
 
+  if (accessSection === 'customers' && canReadCustomers) return (
+    <AppShell {...shellProps}>
+      <CustomerWorkspace accessToken={session.accessToken} request={request} canManageCustomers={Boolean(canManageCustomers)} canAssignCustomers={Boolean(canAssignCustomers)} canReviewDuplicates={Boolean(canReviewCustomerDuplicates)} canReadUsers={Boolean(canReadUsers)} canReadBranches={Boolean(canReadBranches)} canManageRequests={Boolean(canManageLoanRequests)} canManageContracts={Boolean(canManageLoanContracts)} canReviewContracts={Boolean(canReviewLoanContracts)} contractCompletionOtp={capabilities?.contractCompletionOtp} />
+    </AppShell>
+  );
+
   if (accessSection === 'branches' && canReadBranches) return (
     <AppShell {...shellProps}>
     <main className="account-layout">
@@ -451,7 +539,54 @@ export default function HomePage() {
           </form>
         </details>}
         <section className="users-table-card"><div className="users-table-heading"><strong>Cây chi nhánh</strong><span>{branches.length} chi nhánh trong phạm vi</span></div>
-          {branches.length ? <div className="table-scroll"><table><thead><tr><th>Mã</th><th>Tên</th><th>Chi nhánh cha</th><th>Trạng thái</th></tr></thead><tbody>{branches.map((branch) => { const parent = branches.find((candidate) => candidate.id === branch.parentId); return <tr key={branch.id}><td><span className="table-chip">{branch.code}</span></td><td><strong>{branch.name}</strong></td><td>{parent ? `${parent.name} · ${parent.code}` : 'Gốc'}</td><td><span className={`user-status ${branch.status === 'ACTIVE' ? 'is-active' : 'is-disabled'}`}>{branch.status === 'ACTIVE' ? 'Hoạt động' : 'Ngừng hoạt động'}</span></td></tr>; })}</tbody></table></div> : <p className="empty-state">Chưa có chi nhánh trong phạm vi quyền được cấp.</p>}
+          {branches.length ? <div className="table-scroll"><table><thead><tr><th>Mã</th><th>Tên</th><th>Chi nhánh cha</th><th>Trạng thái</th>{canManageBranches && <th>Thao tác</th>}</tr></thead><tbody>{branches.map((branch) => {
+            const parent = branches.find((candidate) => candidate.id === branch.parentId);
+            const hasActiveChildren = branches.some((candidate) => candidate.parentId === branch.id && candidate.status === 'ACTIVE');
+            const managerMissing = !branch.managerUserId || branch.manager?.status !== 'ACTIVE';
+            const cannotActivateReason = branch.status === 'ACTIVE'
+              ? ''
+              : parent && parent.status !== 'ACTIVE'
+                ? 'Cần kích hoạt chi nhánh cha trước.'
+                : managerMissing
+                  ? 'Cần gán quản lý đang hoạt động trước.'
+                  : '';
+            const cannotDeactivateReason = branch.status === 'ACTIVE' && hasActiveChildren
+              ? 'Không thể ngừng hoạt động khi còn chi nhánh con đang hoạt động.'
+              : '';
+            const disabledReason = cannotActivateReason || cannotDeactivateReason;
+            return <tr key={branch.id}>
+              <td><span className="table-chip">{branch.code}</span></td>
+              <td><strong>{branch.name}</strong><small>{branch.manager?.displayName ?? 'Chưa gán quản lý'}</small></td>
+              <td>{parent ? `${parent.name} · ${parent.code}` : 'Gốc'}</td>
+              <td><span className={`user-status ${branch.status === 'ACTIVE' ? 'is-active' : 'is-disabled'}`}>{branch.status === 'ACTIVE' ? 'Hoạt động' : 'Ngừng hoạt động'}</span></td>
+              {canManageBranches && <td>
+                <button
+                  className="table-action"
+                  type="button"
+                  disabled={busy || Boolean(disabledReason)}
+                  title={disabledReason || undefined}
+                  onClick={() => void toggleBranchStatus(branch)}
+                >
+                  {branch.status === 'ACTIVE' ? 'Ngừng hoạt động' : 'Kích hoạt'}
+                </button>
+                {disabledReason && <small>{disabledReason}</small>}
+                {canManageBranchManagers && (!branch.managerUserId || branch.manager?.status !== 'ACTIVE') && (
+                  parent && parent.status !== 'ACTIVE'
+                    ? <small>Cần kích hoạt chi nhánh cha trước.</small>
+                    : <details>
+                      <summary className="table-action">Gán quản lý</summary>
+                      <form className="inline-role" onSubmit={(event) => void assignBranchManager(branch, event)}>
+                        <select name="managerUserId" required defaultValue="">
+                          <option value="" disabled>Chọn quản lý đang hoạt động</option>
+                          {branchManagerCandidates.map((manager) => <option value={manager.id} key={manager.id}>{manager.displayName} · @{manager.username}</option>)}
+                        </select>
+                        <button type="submit" disabled={busy || branchManagerCandidates.length === 0}>Gán và kích hoạt</button>
+                      </form>
+                    </details>
+                )}
+              </td>}
+            </tr>;
+          })}</tbody></table></div> : <p className="empty-state">Chưa có chi nhánh trong phạm vi quyền được cấp.</p>}
         </section>
       </section><footer className="account-footer">Finance CRM <span>•</span> Quản trị chi nhánh</footer>
     </main>

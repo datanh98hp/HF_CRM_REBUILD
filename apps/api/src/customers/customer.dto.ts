@@ -10,6 +10,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   CustomerStatus,
   CustomerVerificationStatus,
@@ -176,7 +177,13 @@ export class CustomerListQueryDto {
   @IsOptional() @IsEnum(CustomerStatus)
   status?: CustomerStatus;
 
-  @IsOptional() @IsInt() @Min(1) @Max(100)
+  @IsOptional() @IsDateString()
+  assignedFrom?: string;
+
+  @IsOptional() @IsDateString()
+  assignedTo?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(101)
   take?: number = 50;
 }
 

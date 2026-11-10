@@ -34,7 +34,7 @@ import {
 import { normalizeVietnamesePhone, normalizeVietnamesePhoneSearch } from './phone-normalizer.js';
 
 type CustomerRecord = Prisma.CustomerGetPayload<{
-  include: { assignments: { where: { endedAt: null }; select: { adviserId: true } } };
+  include: { assignments: { where: { endedAt: null }; select: { adviserId: true; assignedAt: true } } };
 }>;
 
 function requestId(request?: ActorRequest): string | null {
@@ -66,9 +66,18 @@ export class CustomersService {
 
   async list(actor: ActorContext, query: CustomerListQueryDto) {
     this.assertStaff(actor);
+    const assignedAt: Prisma.DateTimeFilter = {};
+    if (query.assignedFrom) assignedAt.gte = new Date(query.assignedFrom);
+    if (query.assignedTo) assignedAt.lte = new Date(query.assignedTo);
+    if (query.assignedFrom && query.assignedTo && new Date(query.assignedFrom).getTime() > new Date(query.assignedTo).getTime()) {
+      throw new BadRequestException({ code: 'INVALID_ASSIGNMENT_DATE_RANGE' });
+    }
     const where: Prisma.CustomerWhereInput = {
       ...(query.branchId ? { branchId: query.branchId } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.assignedFrom || query.assignedTo
+        ? { assignments: { some: { endedAt: null, assignedAt } } }
+        : {}),
       ...(query.search ? {
         OR: [
           { fullName: { contains: query.search.trim(), mode: 'insensitive' } },
@@ -87,7 +96,7 @@ export class CustomersService {
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         take: pageSize,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        include: { assignments: { where: { endedAt: null }, select: { adviserId: true } } },
+        include: { assignments: { where: { endedAt: null }, select: { adviserId: true, assignedAt: true } } },
       });
       if (!candidates.length) break;
       for (const customer of candidates) {
@@ -642,7 +651,9 @@ export class CustomersService {
     return {
       id: customer.id, fullName: customer.fullName, dateOfBirth: customer.dateOfBirth, phone: customer.phone, email: customer.email,
       provenance: customer.provenance, verificationStatus: customer.verificationStatus, status: customer.status, branchId: customer.branchId,
-      primaryAdviserId: customer.assignments[0]?.adviserId ?? null, createdAt: customer.createdAt, updatedAt: customer.updatedAt,
+      primaryAdviserId: customer.assignments[0]?.adviserId ?? null,
+      primaryAssignedAt: customer.assignments[0]?.assignedAt ?? null,
+      createdAt: customer.createdAt, updatedAt: customer.updatedAt,
     };
   }
 

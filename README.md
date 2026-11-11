@@ -68,6 +68,17 @@ Each command reads only its matching `.env.*` file. Copy the corresponding `.env
 
 These use distinct Docker volumes; stop a stack with the same `--env-file` and `-f` arguments followed by `down`. Do not add `-v` unless deleting that environment's database is intended.
 
+The Bash equivalent accepts an environment and action, with optional service names for `ps` and `logs`:
+
+```bash
+bash scripts/docker-compose.sh dev up
+bash scripts/docker-compose.sh test ps
+bash scripts/docker-compose.sh prod logs api
+bash scripts/docker-compose.sh dev down
+```
+
+It uses the same environment files and Compose overlays as the npm scripts above. The `up` action builds and starts the stack in the background; `logs` follows output.
+
 ## Checks
 
 - `npm run typecheck`

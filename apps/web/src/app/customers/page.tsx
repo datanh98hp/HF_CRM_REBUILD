@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { CustomersPage as CustomersRoute } from '@/components/customers-page';
 
 export default function CustomersPage() {
-  return <CrmApp />;
+  return <CustomersRoute />;
 }

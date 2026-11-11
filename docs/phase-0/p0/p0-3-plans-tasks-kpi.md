@@ -1,6 +1,6 @@
 # P0-3 — Kế hoạch, task, xác minh và KPI
 
-**Trạng thái:** Chưa triển khai.
+**Trạng thái:** Đã triển khai API nền và giao diện liệt kê/tạo kế hoạch nháp theo chi nhánh; task, kết quả, xác minh và tổng hợp KPI còn chờ triển khai.
 
 ## Mục tiêu
 
@@ -26,3 +26,15 @@ Theo dõi mục tiêu theo kế hoạch và tổng hợp KPI từ kết quả ta
 ## Cấu hình còn cần
 
 Danh mục hạng mục/đơn vị, role được tạo/duyệt plan, kỳ KPI và quy trình sửa/điều chỉnh kết quả sau xác minh.
+
+## Phần đã triển khai
+
+- Prisma model `Plan`/`PlanMetric` và migration `20261111000000_p0_3_plan_foundation`.
+- `GET /api/v1/plans` trả kế hoạch theo phạm vi quyền `plans.read` và hỗ trợ branch filter/cursor.
+- `POST /api/v1/plans` tạo kế hoạch `DRAFT` cho chi nhánh đang hoạt động, có kỳ UTC và 1–100 chỉ tiêu do người dùng cấu hình trên kế hoạch. Mỗi chỉ tiêu gồm tên, đơn vị và target không âm, độ chính xác tối đa 3 chữ số thập phân.
+- Kiểm tra scope `plans.manage`, kỳ bắt đầu-kết thúc, tên chỉ tiêu trùng; tạo kế hoạch/chỉ tiêu và audit trong cùng transaction.
+- Permission `plans.read`/`plans.manage` đã thêm vào catalog. Quản trị viên cần cấp các quyền này theo role/scope trước khi endpoint dùng được.
+- Unit tests của plans service: 5/5 đạt; Prisma validate/generate, API typecheck/build và web typecheck đạt. Migration chưa được chạy trên PostgreSQL trong lượt này.
+- Web có route `/plans` riêng: danh sách theo phạm vi API, panel chi tiết kế hoạch/chỉ tiêu và form tạo kế hoạch nháp; quyền `plans.read`/`plans.manage` được dùng để hiển thị luồng tương ứng. Chưa có thao tác sửa/kích hoạt, task, tiến độ hoặc KPI.
+
+Chưa triển khai trong lát cắt này: chỉnh trạng thái/kế hoạch, gán task, nhập kết quả, luồng yêu cầu bổ sung/xác minh, lịch sử sửa kết quả, file chứng minh và truy vấn KPI. Chỉ tiêu metric hiện được khai báo riêng trên từng kế hoạch; catalog dùng chung vẫn cần chủ nghiệp vụ cung cấp.

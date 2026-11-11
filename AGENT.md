@@ -121,6 +121,8 @@ Log delivery metadata and safe errors; never log secrets. Distinguish HTTP 2xx a
 ## 13. Frontend and sidebar
 Group navigation by business area: Dashboard; Customers & Advising; Products & Loan Applications; Reports & Integrations; System Administration. Each item references a stable permission key. Render using current effective permissions. Provide role/permission UI with group and individual controls, search, and clear allow/deny state. Frontend filtering is not a security boundary. Support responsive layout, keyboard navigation, active routes, accessible labels, and safe handling of 403.
 
+For features with a frontend, implement the corresponding route and user flow in the same feature slice after the backend API contract is available and verified. Do not defer frontend work to a later phase unless the user explicitly excludes it or a documented dependency blocks it.
+
 ## 14. Dashboard and reporting
 Provide role/scope-aware dashboards for adviser, branch manager, administrator, and operator. All aggregates and exports must enforce the same scope as source records. Define metric formulas and time zones. Avoid unnecessary personal/financial data. Reconcile dashboard totals with source queries.
 

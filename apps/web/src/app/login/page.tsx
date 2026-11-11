@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { LoginPage as LoginRoute } from '@/components/login-page';
 
 export default function LoginPage() {
-  return <CrmApp />;
+  return <LoginRoute />;
 }

@@ -8,6 +8,7 @@ import { RuntimeConfigModule } from './runtime-config/runtime-config.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { CapabilitiesController } from './capabilities/capabilities.controller.js';
+import { PlansModule } from './plans/plans.module.js';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CapabilitiesController } from './capabilities/capabilities.controller.j
     AuditModule,
     AuthModule,
     CustomersModule,
+    PlansModule,
     HealthModule,
   ],
   controllers: [CapabilitiesController],

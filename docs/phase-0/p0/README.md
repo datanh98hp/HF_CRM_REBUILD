@@ -12,4 +12,4 @@ Các file dưới đây chia kế hoạch P0 thành từng giai đoạn triển 
 | P0-5 | Chat realtime | P0-0, P0-1, P0-2 | [Chat realtime](p0-5-realtime-chat.md) |
 | P0-6 | Web nội bộ và mobile web/PWA | API/nghiệp vụ P0 cần thiết; PWA CUSTOMER cần xác thực đã cấu hình | [Web và PWA](p0-6-web-pwa.md) |
 
-P0-0/P0-1 đã có nền mã nguồn. Backend P0-2 đã hoàn thành code và đạt migration/seed/test trên PostgreSQL Docker test; cần gán manager thật cho chi nhánh trước khi mở hoạt động và triển khai giao diện ở P0-6. Xem [kế hoạch tổng](../p0-implementation-plan.md), [phạm vi MVP](../mvp-scope.md), [sổ quyết định](../decision-log.md) và [trạng thái code](../implementation-status.md).
+P0-0/P0-1 đã có nền mã nguồn. Backend P0-2 đã hoàn thành code và đạt migration/seed/test trên PostgreSQL Docker test. P0-3 đã bắt đầu với API/schema tạo và đọc kế hoạch/chỉ tiêu; task, xác minh và KPI còn lại. P0-6 tiếp tục triển khai từng lát cắt. CI pipeline được loại khỏi phạm vi theo yêu cầu hiện tại. Xem [kế hoạch tổng](../p0-implementation-plan.md), [phạm vi MVP](../mvp-scope.md), [sổ quyết định](../decision-log.md) và [trạng thái code](../implementation-status.md).

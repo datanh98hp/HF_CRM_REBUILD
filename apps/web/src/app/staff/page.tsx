@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { StaffPage as StaffRoute } from '@/components/staff-page';
 
 export default function StaffPage() {
-  return <CrmApp />;
+  return <StaffRoute />;
 }

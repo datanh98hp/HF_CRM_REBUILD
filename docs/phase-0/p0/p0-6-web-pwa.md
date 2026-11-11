@@ -1,6 +1,6 @@
 # P0-6 — Web nội bộ và mobile web/PWA
 
-**Trạng thái:** Đang triển khai; lát cắt staff customer/loan đã có giao diện, các luồng P0-6 còn lại chưa triển khai.
+**Trạng thái:** Đang triển khai; đã có giao diện quản trị truy cập và lát cắt staff customer/loan. CUSTOMER PWA, chat và các luồng P0-6 khác chưa hoàn tất.
 
 ## Mục tiêu
 
@@ -14,6 +14,8 @@
 - Responsive layout, keyboard access, trạng thái loading/error/403 và progress background jobs.
 
 Lát cắt customer/loan staff hiện dùng bố cục danh sách cạnh chi tiết: tạo hồ sơ với chi nhánh trong phạm vi, đổi trạng thái có lý do, phân công ADVISING và xem lịch sử, rà soát ứng viên trùng không tự gộp, theo dõi yêu cầu vay và duyệt/từ chối hợp đồng. OTP hoàn tất hợp đồng vẫn phụ thuộc cấu hình; đây chưa phải nghiệm thu toàn bộ P0-6.
+
+Giao diện quản trị truy cập hiện có các route riêng cho nhân viên, chi nhánh và vai trò/quyền; form tạo tài khoản/chi nhánh/vai trò mở trong modal. Trang nhân viên hiển thị chi tiết role và chi nhánh; cấp `MANAGE` từ danh sách nhân viên được chuyển qua luồng phân công quản lý chi nhánh, không dùng cấp grant thông thường. Ma trận role `ADMIN` hỗ trợ chọn/bỏ chọn toàn bộ quyền theo nhóm; `OPERATOR` được khóa. Trạng thái quy tắc quản lý chi nhánh được mô tả tại [P0-1](p0-1-access-control.md); hướng dẫn thao tác ở [Hướng dẫn sử dụng CRM](../user-guide.md).
 
 ## Tiêu chí hoàn tất
 

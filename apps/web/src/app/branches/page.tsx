@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { BranchesPage as BranchesRoute } from '@/components/branches-page';
 
 export default function BranchesPage() {
-  return <CrmApp />;
+  return <BranchesRoute />;
 }

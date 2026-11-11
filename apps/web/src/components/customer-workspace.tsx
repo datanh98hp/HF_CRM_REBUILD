@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
@@ -783,8 +784,8 @@ export function CustomerWorkspace({
     }
   }
 
-  const inputClass = 'h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 md:h-10';
-  const secondaryButtonClass = 'rounded-lg border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-60';
+  const inputClass = 'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+  const secondaryButtonClass = buttonVariants({ variant: 'outline', size: 'default' });
 
   return (
     <main className="w-full min-w-0">
@@ -808,8 +809,8 @@ export function CustomerWorkspace({
         className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canManageCustomers && canReadBranches ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}
         aria-label="Tìm kiếm và lọc khách hàng"
       >
-        <div className="relative min-w-0 sm:col-span-2 xl:col-span-2">
-          <label className="sr-only" htmlFor="customer-search">Tìm khách hàng</label>
+        <div className="relative grid min-w-0 content-start gap-1 sm:col-span-2 xl:col-span-2">
+          <label className="text-sm font-medium text-slate-800" htmlFor="customer-search">Tìm khách hàng</label>
           <Input id="customer-search" aria-label="Tìm khách hàng" type="search" value={search} onChange={(event) => { setSearch(event.target.value); setCustomerPage(1); }} placeholder="Tìm tên, số điện thoại, email" className="h-11 bg-white pr-9 text-sm md:h-10 [&::-webkit-search-cancel-button]:hidden" />
           {search && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => { setSearch(''); setCustomerPage(1); }} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800">
             <X aria-hidden="true" className="size-4" />
@@ -846,7 +847,7 @@ export function CustomerWorkspace({
             setShowCreate((value) => !value);
             if (!branchId && activeBranches.length === 1) setBranchId(activeBranches[0].id);
           }}
-          className="inline-flex h-11 items-center justify-center gap-2 self-end whitespace-nowrap rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 md:h-10"
+          className="inline-flex h-10 items-center justify-center gap-2 self-end whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span aria-hidden="true">＋</span>{showCreate ? 'Đóng biểu mẫu' : 'Thêm khách hàng'}
         </button>}
@@ -876,7 +877,7 @@ export function CustomerWorkspace({
             <input value={provenance} onChange={(event) => setProvenance(event.target.value)} minLength={2} required className={inputClass} />
           </label>
           <div className="flex items-end sm:col-span-2 lg:col-span-3">
-            <button disabled={saving || activeBranches.length === 0} className="w-full rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
+            <button disabled={saving || activeBranches.length === 0} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
               {saving ? 'Đang lưu…' : 'Lưu khách hàng'}
             </button>
             {activeBranches.length === 0 && <p className="ml-3 text-sm text-amber-800">Không có chi nhánh hoạt động trong phạm vi được cấp.</p>}

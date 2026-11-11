@@ -4,7 +4,7 @@ Finance CRM is planned as a modular monolith: NestJS REST API, Next.js staff web
 
 ## Current implementation scope
 
-P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 adds staff authentication, organization/access-control schema and scoped admin APIs. Customer, assignment, care history, tasks, plans/KPI, loan requests/contracts, realtime chat, customer read-only lookup, background import and file storage are not implemented yet.
+P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 provides staff authentication and scoped organization/access-control APIs, with staff web screens for users, branches and roles. P0-2 provides customer, assignment, care history, loan request/contract and related workflows. P0-3 has started with scoped plan/metric creation and listing; tasks, verification and KPI aggregation remain. P0-6 is in progress: staff customer/loan and access-administration screens are available, while customer PWA, realtime chat UI and remaining workflows are not complete. CI pipeline work is excluded from the current continuation. See the [implementation status](docs/phase-0/implementation-status.md) for current verification and limitations.
 
 ## Requirements accepted so far
 
@@ -21,6 +21,7 @@ P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and wo
 - [Phase 0: scope and accepted requirements](docs/phase-0/mvp-scope.md)
 - [Phase 0: decision log and remaining configuration](docs/phase-0/decision-log.md)
 - [Phase 0: implementation status](docs/phase-0/implementation-status.md)
+- [CRM user guide](docs/phase-0/user-guide.md)
 - [P0 implementation overview](docs/phase-0/p0-implementation-plan.md)
 - [P0 stages index](docs/phase-0/p0/README.md), with one Markdown file for each stage P0-0 through P0-6.
 

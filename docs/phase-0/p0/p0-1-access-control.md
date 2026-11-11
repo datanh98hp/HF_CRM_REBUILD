@@ -1,6 +1,6 @@
 # P0-1 — Tổ chức, auth, RBAC và audit
 
-**Trạng thái:** Đã triển khai code/schema/migration; chờ chạy migration, seed và kiểm thử tích hợp trên PostgreSQL.
+**Trạng thái:** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần; còn cổng kiểm thử tích hợp/production và xác nhận cấu hình môi trường thật.
 
 ## Mục tiêu
 
@@ -37,7 +37,9 @@ Nạp cây chi nhánh thật, role grants và danh sách permission có thể �
 - `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/password`, `GET /api/v1/auth/me`.
 - `POST /api/v1/auth/dev/customer-token` chỉ phát token giả lập trong `development`/`test`; mock actor chỉ được truy cập các route đánh dấu authenticated-only, không cấp permission nghiệp vụ.
 - `/api/v1/access/permissions`, `/roles`, `/branches`, `/users`, `/role-grants`, `/audit-events` và các thao tác ghi tương ứng. Route không có permission metadata bị từ chối mặc định.
-- Chi nhánh có thể chuyển `ACTIVE`/`INACTIVE` qua `PATCH /api/v1/access/branches/:branchId/status`; thao tác cần `branches.manage` trong phạm vi chi nhánh, ghi lý do/audit, chỉ kích hoạt khi quản lý và chi nhánh cha đang hoạt động, và không ngừng hoạt động khi còn chi nhánh con hoạt động. Gán quản lý qua endpoint hiện có cũng kích hoạt chi nhánh.
+- Gán `MANAGE` chỉ qua `PUT /api/v1/access/branches/:branchId/manager`; API cấp grant thông thường từ chối `MANAGE`. Thao tác phân công yêu cầu `branches.manage` phạm vi `ALL`, tài khoản quản lý đang hoạt động và đủ điều kiện; chi nhánh cha phải hoạt động. Phân công tạo grant gắn đúng chi nhánh và kích hoạt chi nhánh.
+- Chi nhánh có thể tồn tại chưa có quản lý nhưng phải ở trạng thái `INACTIVE`. Chuyển sang `ACTIVE` yêu cầu người quản lý đang hoạt động và chi nhánh cha (nếu có) đang hoạt động. Một chi nhánh đang hoạt động không thể bị ngừng hoạt động thủ công khi còn chi nhánh con hoạt động.
+- Thu hồi grant `MANAGE` có thể thực hiện qua API thu hồi grant bởi quản trị viên toàn hệ thống đủ quyền. Khi gỡ người quản lý hoặc vô hiệu hóa tài khoản đang quản lý, hệ thống bỏ liên kết quản lý, ngừng hoạt động chi nhánh và toàn bộ hậu duệ đang hoạt động trong cùng transaction; mỗi trạng thái thay đổi được ghi audit.
 - Scope `BRANCH` kế thừa xuống hậu duệ bằng quan hệ parent-child. Các module nghiệp vụ phải gọi `assertResourceAccess` với owner/assignee/branch đã đọc từ DB; không dùng ID do request gửi lên làm bằng chứng quyền.
 
 ## Cấu hình/setup còn lại

@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { redirect } from 'next/navigation';
 
 export default function HomePage() {
-  return <CrmApp />;
+  redirect('/profile');
 }

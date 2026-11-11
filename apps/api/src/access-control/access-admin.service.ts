@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AccessScope, BranchStatus } from '../generated/prisma/client.js';
+import { AccessScope, BranchStatus, Prisma } from '../generated/prisma/client.js';
 import { ActorContext, ActorRequest } from '../common/actor-context.js';
 import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../database/prisma.service.js';
@@ -138,6 +138,9 @@ export class AccessAdminService {
     if (!branch) throw new NotFoundException({ code: 'BRANCH_NOT_FOUND' });
     if (!user || user.status !== 'ACTIVE') throw new NotFoundException({ code: 'ACTIVE_MANAGER_NOT_FOUND' });
     if (!managerRole) throw new NotFoundException({ code: 'MANAGE_ROLE_NOT_FOUND' });
+    if (user.roleGrants.some((grant) => grant.role.key === 'OPERATOR' || grant.role.key === 'CUSTOMER')) {
+      throw new ForbiddenException({ code: 'INELIGIBLE_BRANCH_MANAGER' });
+    }
     if (branch.managerUserId === managerUserId) return { branchId, manager: user };
     if (user.roleGrants.some((grant) => grant.role.key === 'ADVISING' && grant.branchId !== branchId)) {
       throw new ConflictException({ code: 'BRANCH_MANAGER_HAS_ADVISER_SCOPE' });
@@ -425,21 +428,53 @@ export class AccessAdminService {
       },
     });
     if (!grant) throw new NotFoundException({ code: 'ROLE_GRANT_NOT_FOUND' });
-    if (grant.role.key === 'MANAGE') throw new ForbiddenException({ code: 'MANAGE_ASSIGNMENT_REQUIRES_BRANCH_MANAGER_ENDPOINT' });
     if (actor.id === grant.user.id) throw new ForbiddenException({ code: 'SELF_ROLE_REVOCATION_DENIED' });
-    await this.assertBranchPermission(actor.id, 'roles.manage', grant.branchId);
+    const hasGlobalRoleManagement = await this.access.hasPermission(
+      actor.id,
+      'roles.manage',
+      AccessScope.ALL,
+    );
+    const systemAdminGrant = grant.role.key === 'MANAGE' && !hasGlobalRoleManagement
+      ? await this.prisma.userRoleGrant.findFirst({
+        where: {
+          userId: actor.id,
+          branchId: null,
+          role: { key: { in: ['ADMIN', 'OPERATOR'] } },
+        },
+        select: { id: true },
+      })
+      : null;
+    const canRevokeManagerRole = hasGlobalRoleManagement || Boolean(systemAdminGrant);
+    if (grant.role.key === 'MANAGE' && !canRevokeManagerRole) {
+      throw new ForbiddenException({ code: 'MANAGE_ROLE_REVOCATION_REQUIRES_GLOBAL_ADMIN' });
+    }
+    if (!canRevokeManagerRole) {
+      await this.assertBranchPermission(actor.id, 'roles.manage', grant.branchId);
+    }
     if (grant.role.key === 'OPERATOR') await this.assertOperator(actor.id);
-    await this.assertTargetScope(actor.id, grant.user.roleGrants.map((entry) => ({
-      branchId: entry.branchId,
-      roleKey: entry.role.key,
-    })), 'roles.manage');
+    if (!canRevokeManagerRole) {
+      await this.assertTargetScope(actor.id, grant.user.roleGrants.map((entry) => ({
+        branchId: entry.branchId,
+        roleKey: entry.role.key,
+      })), 'roles.manage');
+    }
     const managedBranches = await this.prisma.branch.findMany({ where: { managerUserId: actor.id }, select: { id: true } });
-    if (managedBranches.length && !(await this.access.hasPermission(actor.id, 'roles.manage', AccessScope.ALL)) &&
+    if (managedBranches.length && !canRevokeManagerRole &&
       (grant.role.key !== 'ADVISING' || !grant.branchId || !managedBranches.some(({ id }) => id === grant.branchId))) {
       throw new ForbiddenException({ code: 'BRANCH_MANAGER_GRANT_SCOPE_RESTRICTED' });
     }
 
     await this.prisma.$transaction(async (tx) => {
+      if (grant.role.key === 'MANAGE' && grant.branchId) {
+        await this.unassignManagerAndDeactivateBranchTree(
+          tx,
+          actor,
+          grant.branchId,
+          grant.user.id,
+          reason,
+          request,
+        );
+      }
       await tx.userRoleGrant.delete({ where: { id: grant.id } });
       await this.audit.write(tx, {
         actor,
@@ -473,10 +508,6 @@ export class AccessAdminService {
       const canManageTarget = target.roleGrants.some((grant) => grant.role.key === 'ADVISING' && grant.branchId !== null && managedBranches.some(({ id }) => id === grant.branchId));
       if (!canManageTarget || target.roleGrants.some((grant) => grant.role.key === 'MANAGE')) throw new ForbiddenException({ code: 'BRANCH_MANAGER_USER_SCOPE_RESTRICTED' });
     }
-    if (!enabled && target.roleGrants.some((grant) => grant.role.key === 'MANAGE')) {
-      const managed = await this.prisma.branch.count({ where: { managerUserId: userId } });
-      if (managed) throw new ConflictException({ code: 'BRANCH_MANAGER_REASSIGNMENT_REQUIRED' });
-    }
     await this.assertTargetScope(actor.id, target.roleGrants.map((grant) => ({
       branchId: grant.branchId,
       roleKey: grant.role.key,
@@ -493,6 +524,21 @@ export class AccessAdminService {
           where: { userId, revokedAt: null },
           data: { revokedAt: new Date() },
         });
+        const managedBranches = await tx.branch.findMany({
+          where: { managerUserId: userId },
+          orderBy: { id: 'asc' },
+          select: { id: true, status: true },
+        });
+        for (const branch of managedBranches) {
+          await this.unassignManagerAndDeactivateBranchTree(
+            tx,
+            actor,
+            branch.id,
+            userId,
+            reason,
+            request,
+          );
+        }
       }
       const targetBranchIds = [...new Set(target.roleGrants.map((grant) => grant.branchId))];
       const auditBranchIds: Array<string | null> = targetBranchIds.includes(null)
@@ -568,6 +614,75 @@ export class AccessAdminService {
       if (!(await this.access.canDelegate(actorId, permission.permissionKey, permission.scope, branchId ?? undefined))) {
         throw new ForbiddenException({ code: 'PERMISSION_OUTSIDE_DELEGATION_AUTHORITY' });
       }
+    }
+  }
+
+  private async unassignManagerAndDeactivateBranchTree(
+    tx: Prisma.TransactionClient,
+    actor: ActorContext,
+    branchId: string,
+    managerUserId: string,
+    reason: string,
+    request?: ActorRequest,
+  ) {
+    const branch = await tx.branch.findUnique({
+      where: { id: branchId },
+      select: { managerUserId: true },
+    });
+    if (branch?.managerUserId !== managerUserId) return;
+
+    const descendants: string[] = [];
+    let parentIds = [branchId];
+    while (parentIds.length) {
+      const children = await tx.branch.findMany({
+        where: { parentId: { in: parentIds } },
+        select: { id: true },
+      });
+      descendants.push(...children.map(({ id }) => id));
+      parentIds = children.map(({ id }) => id);
+    }
+
+    const branchIds = [branchId, ...descendants];
+    for (const id of [...branchIds].sort()) {
+      await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${id}::uuid FOR UPDATE`;
+    }
+
+    for (const id of branchIds) {
+      const current = await tx.branch.findUnique({
+        where: { id },
+        select: { managerUserId: true, status: true },
+      });
+      if (!current) continue;
+      if (id === branchId && current.managerUserId !== managerUserId) return;
+      if (id !== branchId && current.status !== BranchStatus.ACTIVE) continue;
+
+      const previousStatus = current.status;
+      const isManagerBranch = id === branchId;
+      const nextStatus = previousStatus === BranchStatus.ACTIVE ? BranchStatus.INACTIVE : previousStatus;
+      await tx.branch.update({
+        where: { id },
+        data: {
+          ...(isManagerBranch ? { managerUserId: null } : {}),
+          ...(nextStatus !== previousStatus ? { status: nextStatus } : {}),
+        },
+      });
+      await this.audit.write(tx, {
+        actor,
+        action: isManagerBranch
+          ? 'organization.branch.manager.unassigned'
+          : 'organization.branch.status.changed',
+        targetType: 'branch',
+        targetId: id,
+        branchId: id,
+        reason,
+        beforeState: isManagerBranch
+          ? { managerUserId, status: previousStatus }
+          : { status: previousStatus },
+        afterState: isManagerBranch
+          ? { managerUserId: null, status: nextStatus }
+          : { status: nextStatus },
+        requestId: getRequestId(request),
+      });
     }
   }
 

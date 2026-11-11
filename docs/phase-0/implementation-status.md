@@ -1,15 +1,14 @@
 # Finance CRM — Báo cáo triển khai nền tảng đầu tiên
 
-> **Cập nhật trạng thái 2026-11-09:** Phần dưới đây là báo cáo nền ngày 2026-11-05; các mô tả “chưa có migration nghiệp vụ/customer” bên dưới đã cũ sau khi triển khai P0-2. Trạng thái mới nhất:
+> **Cập nhật trạng thái 2026-11-11:** Trạng thái nghiệp vụ và tiến độ hiện tại; các phần chi tiết bên dưới là báo cáo nền lịch sử, không thay thế nội dung cập nhật này.
 >
-> - **P0-0/P0-1:** Có code nền; các giới hạn runtime/production và kiểm thử nêu ở báo cáo nền vẫn cần theo dõi riêng.
-> - **P0-2:** Backend đã có customer, phân công, rà trùng, yêu cầu vay, contract review/OTP, external ingest, source idempotency, cursor pagination 20 item, audit và manager-per-branch. Customer actor được lưu vào lịch sử customer/contract; ngày xác minh điện thoại được tách khỏi trạng thái xác minh hồ sơ. Các migration áp dụng thành công trên PostgreSQL Docker test. Active branch bắt buộc manager; migration đưa nhánh cũ về INACTIVE để gán manager rõ ràng.
-> - **Bảo mật/phạm vi:** Resource scope OWN/ASSIGNED/BRANCH/ALL có unit tests. CUSTOMER chỉ truy cập hồ sơ/yêu cầu/hợp đồng của chính mình; dữ liệu trả về được allowlist và lịch sử phân công chỉ cho staff. Một primary adviser đang hoạt động được bảo vệ bằng unique index PostgreSQL.
-> - **Kiểm thử:** Unit tests 19/19 đạt; build API/Web và Prisma validate/generate đạt. Docker PostgreSQL test xác nhận scope cha/con, direct-branch write restriction, contract approval/OTP, customer conversion, import resolution/idempotency và cursor 20 item. `db:seed` cũng chạy thành công trên Linux runtime container sau khi sửa runner/role seeding. Theo dõi lần chạy GitHub Actions trên remote được bỏ qua trong giai đoạn phát triển hiện tại. Xem [P0-2](p0/p0-2-customer-loan-workflow.md).
-> - **Số điện thoại:** Đã triển khai dạng chuẩn 10 chữ số `0[1-9]XXXXXXXX`, quy đổi `+84`/`0084`/`84`, bỏ dấu phân cách và dùng chung cho nhập/lưu/tìm kiếm/dò trùng. Không kiểm tra carrier/reachability. Dev hiện chưa có hồ sơ khách hàng tồn tại khi kiểm tra dữ liệu cũ.
-> - **Đã triển khai:** Quyền ghi của MANAGE chỉ tại branch được gán; CUSTOMER completion OTP; allowlist contract/customer; import ngoài idempotent và pagination 20/trang.
-> - **P0-6:** Đã có lát cắt staff customer/loan theo bố cục danh sách + chi tiết: tìm kiếm, tạo hồ sơ theo chi nhánh, phân công và lịch sử, rà soát trùng, trạng thái có lý do, yêu cầu vay và contract review. Các luồng P0-6 còn lại và nghiệm thu UI toàn diện vẫn mở.
-> - **Còn mở trước production/UI acceptance:** gán manager thật cho mỗi chi nhánh; chủ tín dụng/Compliance quyết định trường tài chính chi tiết. Theo dõi GitHub Actions sau push/PR và cấu hình SMS/mobile auth được bỏ qua trong quá trình hiện tại để ưu tiên rà soát luồng hệ thống; capability API/frontend vẫn báo trạng thái OTP chờ cấu hình.
+> - **P0-0/P0-1:** Nền dữ liệu, auth, RBAC/audit và API quản trị đã có. Quyền thao tác vẫn phụ thuộc vào grants/scope được cấu hình và xác thực tại backend.
+> - **Quản lý chi nhánh:** Chi nhánh được tạo chưa có quản lý nhưng phải ở trạng thái INACTIVE. Chỉ kích hoạt khi đã có quản lý đang hoạt động và cha (nếu có) ACTIVE. Cấp `MANAGE` chỉ qua luồng phân công quản lý; role grant thông thường không cấp được quyền này. Khi quản lý bị gỡ hoặc tài khoản quản lý bị vô hiệu hóa, chi nhánh cùng các hậu duệ ACTIVE tự chuyển INACTIVE, có audit.
+> - **P0-2:** Backend customer/assignment/duplicate review/loan request/contract cùng các luồng đã mô tả tại [P0-2](p0/p0-2-customer-loan-workflow.md); migration và kiểm thử trên PostgreSQL Docker test đã được ghi nhận trong báo cáo trước.
+> - **P0-3:** Đã có API tạo/liệt kê kế hoạch theo scope chi nhánh và route web `/plans` để xem danh sách/chi tiết, tạo kế hoạch nháp cùng chỉ tiêu. Task, kết quả, xác minh, KPI chưa triển khai; migration P0-3 chưa chạy trên PostgreSQL.
+> - **P0-6:** Có các màn staff theo route riêng, gồm khách hàng, tài khoản nhân viên, chi nhánh, vai trò/quyền và các màn xác thực/hồ sơ. Luồng customer/loan staff là lát cắt đang có; CUSTOMER PWA, chat realtime UI và các luồng P0-6 còn lại chưa hoàn tất. Xem [P0-6](p0/p0-6-web-pwa.md) và [hướng dẫn sử dụng](user-guide.md).
+> - **Kiểm tra gần nhất:** plans service tests 5/5 và access-admin service tests 9/9; Prisma schema validate/generate, API/web typecheck và `git diff --check` đạt. Migration P0-3 chưa được apply, build toàn ứng dụng và integration tests chưa chạy trong lượt này. CI pipeline được bỏ qua theo yêu cầu.
+> - **Còn mở:** nghiệm thu toàn bộ P0-6, xác nhận quyền/grants và cây chi nhánh thật trên môi trường mục tiêu, cấu hình OTP/provider CUSTOMER và các cổng production trong P0-1/P0-2.
 
 **Ngày:** 2026-11-05
 
@@ -17,13 +16,13 @@
 
 **Chuẩn bị P0:** Xem [kế hoạch triển khai tổng](p0-implementation-plan.md) và [mục lục các giai đoạn P0](p0/README.md) để biết thứ tự module, tiêu chí nghiệm thu và cổng dữ liệu thật.
 
-**Cập nhật yêu cầu sau scaffold:** Giai đoạn 0 hiện đưa chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có preview/kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với xác minh thủ công và upload file vào MVP; các module này chưa được triển khai trong mã nguồn.
+**Yêu cầu được bổ sung sau scaffold:** Giai đoạn 0 bổ sung chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có preview/kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với xác minh thủ công và upload file vào MVP. Trạng thái hiện tại: P0-2 đã có một phần backend customer/loan; P0-3 mới có foundation kế hoạch/chỉ tiêu và chưa có task, xác minh hay KPI; chat realtime, CUSTOMER PWA và upload evidence chưa hoàn thành.
 
 ## Đã triển khai
 
 - Monorepo npm workspaces với API NestJS và web Next.js TypeScript.
 - API REST có prefix `/api/v1` dành cho API nghiệp vụ, validation DTO toàn cục, OpenAPI tại `/api/docs` ngoài môi trường production.
-- Prisma Client qua PostgreSQL driver adapter, Prisma schema/config và lệnh generate/validate/migrate; P0-1 đã thêm migration identity/access ban đầu, chưa có migration nghiệp vụ CRM.
+- Prisma Client qua PostgreSQL driver adapter, Prisma schema/config và lệnh generate/validate/migrate; P0-1 có migration identity/access, P0-2 có migration nghiệp vụ đã kiểm tra trên PostgreSQL Docker test, và P0-3 có migration plan foundation chưa apply.
 - Redis/BullMQ queue và worker riêng; retry/backoff, concurrency cấu hình được, healthcheck job mẫu, dừng an toàn.
 - Runtime config kiểm tra NODE_ENV, API_PORT, DATABASE_URL, REDIS_URL và WORKER_CONCURRENCY; secrets không được đưa vào log khởi động.
 - P0-1 thêm schema Branch/User/Role/Permission/RolePermission/UserRoleGrant/AuthSession/AuditEvent và migration PostgreSQL khởi tạo.

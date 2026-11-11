@@ -1,5 +1,5 @@
-import { CrmApp } from '@/app/crm-app';
+import { RolesPage as RolesRoute } from '@/components/roles-page';
 
 export default function RolesPage() {
-  return <CrmApp />;
+  return <RolesRoute />;
 }

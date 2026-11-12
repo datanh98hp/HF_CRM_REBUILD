@@ -11,6 +11,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import permissionCatalog from '../../prisma/permission-catalog.json' with { type: 'json' };
+
+const MAX_ROLE_PERMISSION_ASSIGNMENTS = permissionCatalog.length * Object.values(AccessScope).length;
 
 export class RolePermissionDto {
   @IsString()
@@ -36,7 +39,7 @@ export class CreateRoleDto {
   description?: string;
 
   @IsArray()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(MAX_ROLE_PERMISSION_ASSIGNMENTS)
   @ValidateNested({ each: true })
   @Type(() => RolePermissionDto)
   permissions!: RolePermissionDto[];
@@ -44,7 +47,7 @@ export class CreateRoleDto {
 
 export class SetRolePermissionsDto {
   @IsArray()
-  @ArrayMaxSize(100)
+  @ArrayMaxSize(MAX_ROLE_PERMISSION_ASSIGNMENTS)
   @ValidateNested({ each: true })
   @Type(() => RolePermissionDto)
   permissions!: RolePermissionDto[];

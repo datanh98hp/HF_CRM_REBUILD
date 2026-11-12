@@ -1,0 +1,13 @@
+FROM node:24-alpine
+
+WORKDIR /workspace
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node apps/api/package.json apps/api/package.json
+COPY --chown=node:node apps/web/package.json apps/web/package.json
+
+RUN chown -R node:node /workspace
+USER node
+RUN npm ci \
+  && sha256sum package-lock.json | cut -d' ' -f1 > node_modules/.finance-crm-package-lock
+
+CMD ["sleep", "infinity"]

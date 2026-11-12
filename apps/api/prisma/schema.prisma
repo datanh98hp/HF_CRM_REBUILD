@@ -71,6 +71,26 @@ enum PlanStatus {
   ARCHIVED
 }
 
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskVerificationStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  NEEDS_INFO
+  REJECTED
+}
+
+enum FileScanStatus {
+  QUARANTINED
+  AVAILABLE
+  REJECTED
+  DELETED
+}
+
 enum ContractOtpChallengeStatus {
   PENDING
   VERIFIED
@@ -95,6 +115,8 @@ model Branch {
   loanRequests LoanRequest[]
   loanContracts LoanContract[]
   planBranches PlanBranch[]
+  tasks Task[]
+  evidenceFiles FileAsset[]
   createdAt DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -127,6 +149,12 @@ model User {
   approvedLoanContracts LoanContract[] @relation("LoanContractApprover")
   loanContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractStatusActor")
   createdPlans Plan[] @relation("PlanCreator")
+  createdTasks Task[] @relation("TaskCreator")
+  assignedTasks Task[] @relation("TaskAssignee")
+  submittedTaskResults TaskResult[] @relation("TaskResultSubmitter")
+  reviewedTaskResults TaskVerification[] @relation("TaskResultReviewer")
+  uploadedEvidenceFiles FileAsset[] @relation("EvidenceFileUploader")
+  linkedTaskResultEvidence TaskResultEvidence[] @relation("TaskResultEvidenceLinker")
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
 
@@ -417,6 +445,7 @@ model Plan {
   createdBy   User          @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Restrict)
   branches    PlanBranch[]
   metrics     PlanMetric[]
+  tasks       Task[]
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -442,9 +471,104 @@ model PlanMetric {
   unit      String   @db.VarChar(40)
   target    Decimal  @db.Decimal(16, 3)
   plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tasks     Task[]
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([planId, name])
   @@index([planId])
+}
+
+model Task {
+  id           String     @id @default(uuid()) @db.Uuid
+  planId       String     @db.Uuid
+  metricId     String     @db.Uuid
+  branchId     String     @db.Uuid
+  title        String     @db.VarChar(160)
+  description  String?    @db.VarChar(2000)
+  createdById  String     @db.Uuid
+  assigneeId   String     @db.Uuid
+  dueAt        DateTime?  @db.Timestamptz(3)
+  status       TaskStatus @default(TODO)
+  plan         Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
+  metric       PlanMetric @relation(fields: [metricId], references: [id], onDelete: Restrict)
+  branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignee     User       @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  results      TaskResult[]
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([planId, branchId, status])
+  @@index([assigneeId, status, dueAt])
+}
+
+model TaskResult {
+  id             String           @id @default(uuid()) @db.Uuid
+  taskId         String           @db.Uuid
+  revision       Int
+  submittedById  String           @db.Uuid
+  reportedValue  Decimal          @db.Decimal(16, 3)
+  reportedUnit   String           @db.VarChar(40)
+  narrative      String           @db.VarChar(4000)
+  occurredAt     DateTime         @db.Timestamptz(3)
+  task           Task             @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  submittedBy    User             @relation("TaskResultSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  verification   TaskVerification?
+  evidenceFiles  TaskResultEvidence[]
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@unique([taskId, revision])
+}
+
+model TaskVerification {
+  id           String                 @id @default(uuid()) @db.Uuid
+  resultId     String                 @unique @db.Uuid
+  verifierId   String                 @db.Uuid
+  status       TaskVerificationStatus
+  reason       String?                @db.VarChar(1000)
+  result       TaskResult             @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  verifier     User                   @relation("TaskResultReviewer", fields: [verifierId], references: [id], onDelete: Restrict)
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt])
+}
+
+model FileAsset {
+  id           String        @id @default(uuid()) @db.Uuid
+  branchId     String        @db.Uuid
+  uploadedById String        @db.Uuid
+  objectKey    String        @unique @db.VarChar(512)
+  originalName String        @db.VarChar(255)
+  mimeType     String        @db.VarChar(100)
+  sizeBytes    Int
+  sha256       String        @db.Char(64)
+  scanStatus   FileScanStatus @default(QUARANTINED)
+  scannedAt    DateTime?     @db.Timestamptz(3)
+  expiresAt    DateTime?     @db.Timestamptz(3)
+  legalHold    Boolean       @default(false)
+  deletedAt    DateTime?     @db.Timestamptz(3)
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  uploadedBy   User          @relation("EvidenceFileUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  resultLinks  TaskResultEvidence[]
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([branchId, scanStatus, createdAt])
+  @@index([uploadedById, createdAt])
+  @@index([expiresAt, legalHold])
+}
+
+model TaskResultEvidence {
+  id         String     @id @default(uuid()) @db.Uuid
+  resultId   String     @db.Uuid
+  fileId     String     @db.Uuid
+  linkedById String     @db.Uuid
+  result     TaskResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  file       FileAsset  @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  linkedBy   User       @relation("TaskResultEvidenceLinker", fields: [linkedById], references: [id], onDelete: Restrict)
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@unique([resultId, fileId])
+  @@index([fileId, createdAt])
 }

@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { useCrmSession } from '@/components/crm-session';
 
-type Section = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | null;
+type Section = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'tasks' | null;
 const sectionPaths: Record<Exclude<Section, null>, string> = {
   customers: '/customers',
   users: '/staff',
   branches: '/branches',
   roles: '/roles',
   plans: '/plans',
+  tasks: '/tasks',
 };
 
 export function WorkspaceLayout({
@@ -55,6 +56,7 @@ export function WorkspaceLayout({
       canReadRoles={can('roles.read')}
       canReadCustomers={can('customers.read')}
       canAccessPlans={can('plans.read') || can('plans.manage')}
+      canReadTasks={can('tasks.read')}
       busy={busy}
       onNavigate={(section) => {
         setError('');

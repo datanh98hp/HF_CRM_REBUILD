@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wireframe P0-3 · Công việc & KPI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+      @theme inline {
+        --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+        --color-sidebar-ring: var(--sidebar-ring);
+        --color-sidebar-border: var(--sidebar-border);
+        --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+        --color-sidebar-accent: var(--sidebar-accent);
+        --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+        --color-sidebar-primary: var(--sidebar-primary);
+        --color-sidebar-foreground: var(--sidebar-foreground);
+        --color-sidebar: var(--sidebar);
+        --color-chart-5: var(--chart-5);
+        --color-chart-4: var(--chart-4);
+        --color-chart-3: var(--chart-3);
+        --color-chart-2: var(--chart-2);
+        --color-chart-1: var(--chart-1);
+        --color-ring: var(--ring);
+        --color-input: var(--input);
+        --color-border: var(--border);
+        --color-destructive: var(--destructive);
+        --color-accent-foreground: var(--accent-foreground);
+        --color-accent: var(--accent);
+        --color-muted-foreground: var(--muted-foreground);
+        --color-muted: var(--muted);
+        --color-secondary-foreground: var(--secondary-foreground);
+        --color-secondary: var(--secondary);
+        --color-primary-foreground: var(--primary-foreground);
+        --color-primary: var(--primary);
+        --color-popover-foreground: var(--popover-foreground);
+        --color-popover: var(--popover);
+        --color-card-foreground: var(--card-foreground);
+        --color-card: var(--card);
+        --color-foreground: var(--foreground);
+        --color-background: var(--background);
+        --radius-sm: calc(var(--radius) * 0.6);
+        --radius-md: calc(var(--radius) * 0.8);
+        --radius-lg: var(--radius);
+        --radius-xl: calc(var(--radius) * 1.4);
+      }
+
+      @theme {
+        --animate-progress-slide: progress-slide 1.2s ease-in-out infinite;
+        @keyframes progress-slide {
+          from { translate: -100% 0; }
+          to { translate: 300% 0; }
+        }
+      }
+    </style>
+    <style>
+      :root {
+        color-scheme: light;
+        --background: oklch(0.982 0.004 180);
+        --foreground: oklch(0.22 0.018 190);
+        --card: oklch(1 0 0);
+        --card-foreground: oklch(0.22 0.018 190);
+        --popover: oklch(1 0 0);
+        --popover-foreground: oklch(0.22 0.018 190);
+        --primary: oklch(0.49 0.09 178);
+        --primary-foreground: oklch(0.99 0.004 180);
+        --secondary: oklch(0.955 0.008 180);
+        --secondary-foreground: oklch(0.29 0.024 185);
+        --muted: oklch(0.955 0.006 180);
+        --muted-foreground: oklch(0.52 0.018 190);
+        --accent: oklch(0.94 0.025 178);
+        --accent-foreground: oklch(0.32 0.06 178);
+        --destructive: oklch(0.56 0.22 25);
+        --border: oklch(0.94 0.008 180);
+        --input: oklch(0.89 0.015 180);
+        --ring: oklch(0.55 0.1 178);
+        --chart-1: oklch(0.56 0.12 178);
+        --chart-2: oklch(0.63 0.1 155);
+        --chart-3: oklch(0.71 0.13 82);
+        --chart-4: oklch(0.59 0.12 225);
+        --chart-5: oklch(0.57 0.16 28);
+        --radius: 0.625rem;
+        --sidebar: oklch(0.255 0.035 185);
+        --sidebar-foreground: oklch(0.96 0.008 180);
+        --sidebar-primary: oklch(0.66 0.12 175);
+        --sidebar-primary-foreground: oklch(0.2 0.025 185);
+        --sidebar-accent: oklch(0.34 0.045 185);
+        --sidebar-accent-foreground: oklch(0.98 0.004 180);
+        --sidebar-border: oklch(0.38 0.03 185);
+        --sidebar-ring: oklch(0.66 0.12 175);
+        --line: oklch(0.94 0.008 180);
+        --success: #176b53;
+        --success-bg: #eaf7f1;
+        --warning: #8a5700;
+        --warning-bg: #fff5dc;
+        --danger: #a63232;
+        --danger-bg: #fff1f0;
+      }
+
+      :root[data-mau="xam"] {
+        --primary: #2f3b3e;
+        --primary-foreground: #fff;
+        --ring: #526166;
+        --chart-1: #68777a;
+        --chart-2: #68777a;
+        --chart-3: #68777a;
+        --chart-4: #68777a;
+        --chart-5: #68777a;
+        --success: #4a595d;
+        --success-bg: #edf0f0;
+        --warning: #4a595d;
+        --warning-bg: #edf0f0;
+        --danger: #4a595d;
+        --danger-bg: #edf0f0;
+      }
+
+      :root.dark-mode {
+        color-scheme: dark;
+        --background: oklch(0.145 0 0);
+        --foreground: oklch(0.985 0 0);
+        --card: oklch(0.205 0 0);
+        --card-foreground: oklch(0.985 0 0);
+        --popover: oklch(0.205 0 0);
+        --popover-foreground: oklch(0.985 0 0);
+        --primary: oklch(0.66 0.12 175);
+        --primary-foreground: oklch(0.2 0.025 185);
+        --secondary: oklch(0.269 0 0);
+        --secondary-foreground: oklch(0.985 0 0);
+        --muted: oklch(0.269 0 0);
+        --muted-foreground: oklch(0.708 0 0);
+        --accent: oklch(0.269 0 0);
+        --accent-foreground: oklch(0.985 0 0);
+        --border: oklch(1 0 0 / 10%);
+        --sidebar: oklch(0.205 0 0);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; margin: 0; }
+      body {
+        background: var(--background);
+        color: var(--foreground);
+        font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+        font-size: 14px;
+        -webkit-font-smoothing: antialiased;
+      }
+      button, input, select, textarea { font: inherit; }
+      button, summary, a { -webkit-tap-highlight-color: transparent; }
+      button { cursor: pointer; }
+      a { color: inherit; text-decoration: none; }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+      }
+      *:hover { scrollbar-color: #9aa5a5 transparent; }
+      *::-webkit-scrollbar { width: 4px; height: 4px; }
+      *::-webkit-scrollbar-track { background: transparent; }
+      *::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+      *:hover::-webkit-scrollbar-thumb { background: #9aa5a5; }
+      .wf-bar {
+        position: relative; z-index: 50; display: flex; align-items: center; gap: 18px; height: 56px;
+        padding: 0 16px; overflow-x: auto; white-space: nowrap; background: #fff; border-bottom: 1px solid #e5e7eb;
+        color: #647074; font: 14px/1 system-ui, sans-serif;
+      }
+      .wf-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+      .wf-label { color: #647074; font-size: 12px; }
+      .wf-set { display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 3px; border-radius: 10px; background: #f1f3f4; }
+      .wf-set a, .wf-menu summary {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 10px;
+        border-radius: 7px; color: #647074; cursor: pointer; list-style: none;
+      }
+      .wf-set a:hover, .wf-menu summary:hover { color: #172d36; }
+      .wf-set a[aria-current="page"], .wf-flags a[aria-pressed="true"] {
+        background: #fff; color: #172d36; font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04);
+      }
+      .wf-flags a::before { content: ""; width: 12px; height: 12px; border: 1.5px solid #929c9f; border-radius: 3px; }
+      .wf-flags a[aria-pressed="true"]::before { border-color: #172d36; background: #172d36; box-shadow: inset 0 0 0 2px #fff; }
+      .wf-switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; color: #46575b; }
+      .wf-switch i { position: relative; width: 36px; height: 20px; border-radius: 10px; background: #d7ddde; }
+      .wf-switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #0003; transition: translate .15s; }
+      .wf-switch[aria-checked="true"] i { background: #16786d; }
+      .wf-switch[aria-checked="true"] i::after { translate: 16px 0; }
+      .wf-menu { position: relative; flex-shrink: 0; }
+      .wf-menu summary { height: 36px; padding: 0 10px; }
+      .wf-menu summary::-webkit-details-marker { display: none; }
+      .wf-menu[open] summary { background: #f1f3f4; }
+      .wf-menu-pop {
+        position: absolute; z-index: 60; top: 40px; right: 0; display: grid; gap: 4px; min-width: 170px; padding: 4px;
+        border: 1px solid #dfe5e5; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #172d3618;
+      }
+      .wf-menu-pop a { display: flex; align-items: center; height: 34px; padding: 0 10px; border-radius: 6px; color: #34474c; }
+      .wf-menu-pop a:hover, .wf-menu-pop a[aria-current="page"] { background: #f1f3f4; }
+      .wf-reason { border-bottom: 1px solid #e1e6e5; background: #fafbfb; color: #34474c; font: 13px/1.5 system-ui, sans-serif; }
+      .wf-reason summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 44px; padding: 8px 16px; cursor: pointer; list-style: none; }
+      .wf-reason summary::-webkit-details-marker { display: none; }
+      .wf-reason-name { color: #172d36; font-weight: 600; }
+      .wf-reason-tag { flex-shrink: 0; padding: 1px 8px; border-radius: 10px; background: #e7f2ef; color: #155e56; font-size: 12px; font-weight: 500; }
+      .wf-reason-why { flex: 1; min-width: 0; color: #52666b; }
+      .wf-reason-toggle { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 28px; margin-left: auto; padding: 0 8px; border-radius: 6px; color: #172d36; font-weight: 500; }
+      .wf-reason-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 4px 16px 16px; }
+      .wf-reason-cols { display: grid; max-width: 1120px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px 32px; }
+      .wf-reason h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; color: #172d36; font-size: 12px; font-weight: 600; }
+      .wf-reason h3 i { width: 6px; height: 6px; border-radius: 50%; background: #96a0a2; }
+      .wf-reason h3 i[data-tone="uu"] { background: #15803d; }
+      .wf-reason h3 i[data-tone="nhuoc"] { background: #c27a12; }
+      .wf-reason ul { display: grid; gap: 4px; margin: 0; padding-left: 16px; }
+      .wf-reason-tips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid #e1e6e5; }
+      .wf-reason-tips h3 { margin: 0 4px 0 0; }
+      .wf-reason-tips button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid #dfe5e5; border-radius: 8px; background: #fff; color: #263b40; font: inherit; white-space: nowrap; }
+      .wf-reason-tips button svg { width: 14px; height: 14px; }
+      .wf-reason-tips button [data-icon="copied"], .wf-reason-tips button[data-copied] [data-icon="copy"] { display: none; }
+      .wf-reason-tips button[data-copied] [data-icon="copied"] { display: block; color: #15803d; }
+      .wf-reason :focus-visible { outline: 2px solid #16786d; outline-offset: 2px; }
+      body[data-gon="1"] [data-wf-gon], body[data-bolap="1"] [data-wf-lap] { display: none !important; }
+      body[data-frame] .wf-bar, body[data-frame] .wf-reason { display: none; }
+      .wf-wrap { display: flex; min-height: calc(100vh - 100px); background: var(--background); }
+      .wf-sidebar { position: sticky; top: 0; display: flex; width: 248px; height: 100vh; flex: 0 0 auto; flex-direction: column; overflow: hidden; background: var(--sidebar); color: var(--sidebar-foreground); }
+      .wf-brand { display: flex; min-height: 64px; align-items: center; gap: 10px; padding: 12px 16px; white-space: nowrap; }
+      .wf-brand-mark { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 10px; background: #16786d; color: #fff; font-size: 18px; font-weight: 700; }
+      .wf-brand-name { color: #fff; font-size: 14px; font-weight: 700; }
+      .wf-nav { flex: 1; overflow-y: auto; padding: 12px 9px; }
+      .wf-nav-group { margin-bottom: 16px; }
+      .wf-nav-heading { margin: 10px 0 7px; padding: 0 10px; color: #c0c9ca; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+      .wf-nav-item { position: relative; display: flex; min-height: 40px; align-items: center; gap: 12px; margin: 3px 0; padding: 0 12px; border-radius: 7px; color: var(--sidebar-foreground); font-size: 12px; }
+      .wf-nav-item svg { width: 18px; height: 18px; flex: 0 0 18px; }
+      .wf-nav-item:hover { background: var(--sidebar-accent); }
+      .wf-nav-item[aria-current="page"] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); font-weight: 600; }
+      .wf-nav-item[aria-current="page"]::before { position: absolute; top: 8px; bottom: 8px; left: -9px; width: 3px; border-radius: 0 3px 3px 0; background: #16786d; content: ""; }
+      .wf-nav-meta { margin-left: auto; color: #c0c9ca; font-size: 11px; }
+      .wf-user { display: flex; min-height: 64px; align-items: center; gap: 10px; padding: 11px 15px; border-top: 1px solid #ffffff1f; }
+      .wf-avatar { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border-radius: 50%; background: #e8f4f1; color: #105e56; font-size: 11px; font-weight: 700; }
+      .wf-user-name { color: #fff; font-size: 12px; font-weight: 600; }
+      .wf-user-role { margin-top: 3px; color: #bbc5c6; font-size: 11px; }
+      .wf-main { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+      .wf-topbar { position: sticky; z-index: 4; top: 0; display: flex; height: 64px; flex: 0 0 64px; align-items: center; gap: 14px; padding: 0 24px; border-bottom: 1px solid var(--border); background: var(--card); }
+      .wf-topbar-crumb { display: flex; min-width: 0; align-items: center; gap: 9px; color: #65747b; font-size: 12px; }
+      .wf-topbar-crumb svg { width: 14px; height: 14px; }
+      .wf-topbar-crumb strong { overflow: hidden; color: #172d36; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+      .wf-topbar-user { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #52666b; font-size: 12px; }
+      .wf-topbar-user .wf-avatar { width: 30px; height: 30px; flex-basis: 30px; }
+      .wf-page { width: 100%; min-width: 0; flex: 1; padding: 24px; }
+      .wf-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+      .wf-page-head h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.3px; }
+      .wf-page-head p { margin: 6px 0 0; color: #65747b; font-size: 13px; line-height: 1.5; }
+      .wf-button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; border: 1px solid #dce5e3; border-radius: 8px; background: #fff; color: #263b40; font-size: 13px; font-weight: 500; white-space: nowrap; }
+      .wf-button:hover { background: #f3f6f5; }
+      .wf-button svg { width: 16px; height: 16px; }
+      .wf-button-primary { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+      .wf-button-primary:hover { filter: brightness(.94); }
+      .wf-button-ghost { border-color: transparent; background: transparent; }
+      .wf-button-small { min-height: 30px; padding: 0 9px; font-size: 12px; }
+      .wf-button-danger { border-color: transparent; background: #fff1f0; color: #a63232; }
+      .wf-select-wrap { position: relative; }
+      .wf-plan-picker { display: inline-flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #dce5e3; border-radius: 8px; background: #fff; color: #263b40; font-size: 13px; }
+      .wf-plan-picker svg { width: 15px; height: 15px; color: #65747b; }
+      .wf-popover { position: absolute; z-index: 15; top: 42px; right: 0; display: grid; gap: 4px; min-width: 260px; padding: 4px; border: 1px solid #dce5e3; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #172d3618; }
+      .wf-popover button { display: grid; gap: 3px; min-height: 48px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: #263b40; text-align: left; }
+      .wf-popover button:hover, .wf-popover button[aria-current="page"] { background: #f1f5f4; }
+      .wf-popover small { color: #65747b; font-size: 11px; }
+      .wf-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+      .wf-card { min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--card-foreground); }
+      .wf-kpi { padding: 16px; }
+      .wf-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .wf-kpi-label { color: #65747b; font-size: 12px; }
+      .wf-kpi-value { margin-top: 8px; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 600; letter-spacing: -.25px; }
+      .wf-kpi-target { margin-top: 3px; color: #65747b; font-size: 12px; font-variant-numeric: tabular-nums; }
+      .wf-kpi-icon { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border-radius: 9px; background: #e8f4f1; color: #16786d; }
+      .wf-kpi-icon svg { width: 16px; height: 16px; }
+      .wf-progress { height: 6px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: #edf0ef; }
+      .wf-progress span { display: block; height: 100%; border-radius: inherit; background: var(--chart-1); }
+      .wf-kpi-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: #65747b; font-size: 11px; }
+      .wf-kpi-foot strong { color: #52666b; font-weight: 500; }
+      .wf-kpi-card-long .wf-kpi-value { font-size: 18px; }
+      .wf-task-card { overflow: hidden; }
+      .wf-card-head { display: flex; min-height: 60px; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+      .wf-card-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+      .wf-card-head p { margin: 4px 0 0; color: #65747b; font-size: 12px; }
+      .wf-card-actions { display: flex; align-items: center; gap: 8px; }
+      .wf-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+      .wf-tabs { display: flex; min-width: 0; align-items: center; gap: 4px; overflow-x: auto; }
+      .wf-tab { display: inline-flex; min-height: 32px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: #65747b; font-size: 12px; }
+      .wf-tab[aria-current="page"] { background: #edf5f3; color: #105e56; font-weight: 600; }
+      .wf-tab span { font-variant-numeric: tabular-nums; }
+      .wf-filter-actions { display: flex; align-items: center; gap: 8px; }
+      .wf-search { display: flex; width: 180px; min-height: 34px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #dce5e3; border-radius: 8px; background: #fff; color: #65747b; }
+      .wf-search svg { width: 15px; height: 15px; flex: 0 0 15px; }
+      .wf-search input { width: 100%; min-width: 0; border: 0; outline: 0; color: #172d36; font-size: 12px; }
+      .wf-search input::placeholder { color: #77868a; }
+      .wf-table-scroll { width: 100%; overflow-x: auto; }
+      .wf-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+      .wf-table th { height: 38px; padding: 0 12px; border-bottom: 1px solid var(--border); background: #f8faf9; color: #65747b; font-size: 11px; font-weight: 500; white-space: nowrap; }
+      .wf-table td { min-height: 58px; padding: 11px 12px; border-bottom: 1px solid #edf0ef; color: #34474c; vertical-align: middle; }
+      .wf-table tbody tr:last-child td { border-bottom: 0; }
+      .wf-table tbody tr:hover { background: #f8faf9; }
+      .wf-task-name { display: block; max-width: 360px; overflow: hidden; color: #172d36; font-weight: 500; line-height: 1.4; text-overflow: ellipsis; }
+      .wf-task-meta { display: block; max-width: 360px; margin-top: 3px; overflow: hidden; color: #65747b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+      .wf-person { display: flex; min-width: 145px; align-items: center; gap: 8px; white-space: nowrap; }
+      .wf-person .wf-avatar { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; }
+      .wf-value { white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .wf-date { white-space: nowrap; color: #52666b; }
+      .wf-date.overdue { color: var(--danger); font-weight: 500; }
+      .wf-badge { display: inline-flex; min-height: 22px; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: #edf0ef; color: #52666b; font-size: 11px; font-weight: 500; white-space: nowrap; }
+      .wf-badge::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+      .wf-badge.success { background: var(--success-bg); color: var(--success); }
+      .wf-badge.warning { background: var(--warning-bg); color: var(--warning); }
+      .wf-badge.danger { background: var(--danger-bg); color: var(--danger); }
+      .wf-badge.neutral { background: #edf0ef; color: #52666b; }
+      .wf-row-action { display: inline-grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #65747b; }
+      .wf-row-action:hover { background: #edf0ef; color: #172d36; }
+      .wf-row-action svg { width: 16px; height: 16px; }
+      .wf-table-footer { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; border-top: 1px solid var(--border); color: #65747b; font-size: 11px; }
+      .wf-pager { display: flex; align-items: center; gap: 4px; }
+      .wf-pager button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #52666b; }
+      .wf-pager button.current { border-color: var(--border); background: #fff; color: #172d36; font-weight: 600; }
+      .wf-pager svg { width: 15px; height: 15px; }
+      .wf-b-layout { display: grid; min-height: 520px; grid-template-columns: minmax(250px, 330px) minmax(0, 1fr); }
+      .wf-queue { min-width: 0; border-right: 1px solid var(--border); }
+      .wf-queue-head { display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+      .wf-queue-head strong { font-size: 13px; }
+      .wf-queue-list { display: grid; gap: 4px; padding: 8px; }
+      .wf-queue-item { display: grid; gap: 8px; padding: 12px; border: 1px solid transparent; border-radius: 9px; color: #34474c; }
+      .wf-queue-item:hover { background: #f7f9f8; }
+      .wf-queue-item[aria-current="true"] { border-color: #cddbd8; background: #f1f7f5; }
+      .wf-queue-item strong { display: -webkit-box; overflow: hidden; color: #172d36; font-size: 13px; font-weight: 500; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+      .wf-queue-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #65747b; font-size: 11px; }
+      .wf-queue-value { color: #52666b; font-size: 11px; font-variant-numeric: tabular-nums; }
+      .wf-detail { min-width: 0; padding: 18px; }
+      .wf-detail-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .wf-detail-title h3 { max-width: 640px; margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+      .wf-detail-title p { margin: 6px 0 0; color: #65747b; font-size: 12px; }
+      .wf-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+      .wf-detail-field { min-width: 0; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; }
+      .wf-detail-field span { display: block; color: #65747b; font-size: 11px; }
+      .wf-detail-field strong { display: block; margin-top: 5px; overflow: hidden; color: #263b40; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+      .wf-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 10px; }
+      .wf-section-title h4 { margin: 0; font-size: 13px; font-weight: 600; }
+      .wf-result { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+      .wf-result-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      .wf-result-value { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .wf-result-copy { margin: 9px 0 0; color: #52666b; font-size: 12px; line-height: 1.55; }
+      .wf-review-note { margin-top: 12px; padding: 10px 12px; border-left: 2px solid #c27a12; background: #fffaf0; color: #664a19; font-size: 12px; line-height: 1.5; }
+      .wf-history { display: grid; gap: 0; border-left: 1px solid #dce5e3; margin: 2px 0 0 4px; padding-left: 16px; }
+      .wf-history-item { position: relative; display: flex; justify-content: space-between; gap: 12px; padding: 0 0 12px; color: #52666b; font-size: 11px; }
+      .wf-history-item::before { position: absolute; top: 4px; left: -21px; width: 8px; height: 8px; border: 1px solid #fff; border-radius: 50%; background: #839092; content: ""; }
+      .wf-history-item strong { color: #34474c; font-weight: 500; }
+      .wf-review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+      .wf-review-actions .wf-button { min-height: 34px; }
+      .wf-skeleton { display: none; padding: 14px 16px; }
+      .wf-skeleton-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 16px; padding: 15px 0; border-bottom: 1px solid #edf0ef; }
+      .wf-skeleton i { display: block; height: 11px; border-radius: 999px; background: #e6ebea; animation: pulse 1.2s ease-in-out infinite alternate; }
+      .wf-state-message { display: none; min-height: 190px; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #65747b; font-size: 13px; }
+      .wf-error { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 190px; padding: 24px; text-align: center; }
+      .wf-error strong { color: #a63232; font-size: 13px; font-weight: 600; }
+      .wf-error span { color: #65747b; font-size: 12px; }
+      .wf-retry { min-height: 32px; padding: 0 10px; border: 1px solid #dce5e3; border-radius: 8px; background: #fff; color: #263b40; font-size: 12px; }
+      .wf-mobile-cards { display: none; }
+      .wf-mobile-card { display: grid; gap: 8px; padding: 13px 14px; border-bottom: 1px solid #edf0ef; }
+      .wf-mobile-card:last-child { border-bottom: 0; }
+      .wf-mobile-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+      .wf-mobile-card-title { min-width: 0; color: #172d36; font-size: 13px; font-weight: 500; line-height: 1.4; }
+      .wf-mobile-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; color: #65747b; font-size: 11px; }
+      .wf-mobile-meta strong { color: #34474c; font-weight: 500; }
+      .wf-menu-toggle { display: none; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #52666b; }
+      .wf-menu-toggle svg { width: 18px; height: 18px; }
+      .wf-drawer-backdrop { display: none; }
+      .wf-drawer { display: none; }
+      .wf-block { position: relative; }
+      .wf-block::before { position: absolute; z-index: 5; top: 4px; left: 4px; display: grid; width: 18px; height: 18px; place-items: center; border-radius: 9px; background: #263b40; color: #fff; content: attr(data-wf-block); font: 11px/1 system-ui, sans-serif; }
+      .wf-block[data-wf-block-out]::before { top: auto; bottom: 100%; }
+      .wf-progress-track { position: relative; }
+      .wf-progress-track::after { position: absolute; top: 0; left: 0; width: var(--progress, 60%); height: 100%; border-radius: inherit; background: var(--chart-1); content: ""; }
+      .wf-variant-b, .wf-state-loading, .wf-state-empty, .wf-state-error { display: none; }
+      body[data-v="b"] .wf-page > .wf-kpis { display: none; }
+      body[data-v="b"] .wf-variant-a { display: none; }
+      body[data-v="b"] .wf-variant-b { display: block; }
+      body[data-tt="dang-tai"] .wf-state-data { display: none !important; }
+      body[data-tt="dang-tai"] .wf-state-loading { display: block !important; }
+      body[data-tt="dang-tai"] .wf-state-loading .wf-skeleton { display: block; }
+      body[data-tt="rong"] .wf-state-data { display: none !important; }
+      body[data-tt="rong"] .wf-state-empty { display: flex !important; }
+      body[data-tt="loi"] .wf-state-data { display: none !important; }
+      body[data-tt="loi"] .wf-state-error { display: flex !important; }
+      body[data-tt="dang-tai"] .wf-state-loading, body[data-tt="rong"] .wf-state-empty, body[data-tt="loi"] .wf-state-error { display: none; }
+      body[data-mau="xam"] .wf-badge.success, body[data-mau="xam"] .wf-badge.warning, body[data-mau="xam"] .wf-badge.danger { background: #edf0f0; color: #4a595d; }
+      body[data-mau="xam"] .wf-kpi-icon { background: #edf0f0; color: #4a595d; }
+      body[data-mau="xam"] .wf-tab[aria-current="page"] { background: #edf0f0; color: #34474c; }
+      body[data-mau="xam"] .wf-progress span, body[data-mau="xam"] .wf-progress-track::after { background: #68777a; }
+      body[data-kho="mobile"]:not([data-frame]) .wf-bar,
+      body[data-kho="mobile"]:not([data-frame]) .wf-reason { display: block; }
+      body[data-kho="mobile"]:not([data-frame]) .wf-wrap { display: block; min-height: auto; padding: 24px 12px; }
+      body[data-kho="mobile"]:not([data-frame]) #wf-design { display: grid; justify-items: center; }
+      body[data-kho="mobile"]:not([data-frame]) .wf-device-frame { width: 375px; max-width: 100%; height: 812px; overflow: hidden; border: 1px solid #d8dfdf; border-radius: 24px; background: #fff; }
+      body[data-kho="mobile"]:not([data-frame]) iframe { display: block; width: 100%; height: 100%; border: 0; }
+      body[data-frame] .wf-device-frame { display: contents; }
+      body[data-frame] .wf-wrap { min-height: 100vh; }
+      body[data-frame] .wf-sidebar { display: none; }
+      body[data-frame] .wf-main { width: 100%; }
+      body[data-frame] .wf-topbar { height: 58px; flex-basis: 58px; padding: 0 12px; }
+      body[data-frame] .wf-menu-toggle { display: grid; flex: 0 0 36px; }
+      body[data-frame] .wf-topbar-user { display: none; }
+      body[data-frame] .wf-page { padding: 16px; }
+      body[data-frame] .wf-page-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+      body[data-frame] .wf-page-head h1 { font-size: 18px; }
+      body[data-frame] .wf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      body[data-frame] .wf-kpi { padding: 13px; }
+      body[data-frame] .wf-kpi-card-long { grid-column: 1 / -1; }
+      body[data-frame] .wf-kpi-value, body[data-frame] .wf-kpi-card-long .wf-kpi-value { font-size: 16px; }
+      body[data-frame] .wf-toolbar { align-items: flex-start; flex-direction: column; }
+      body[data-frame] .wf-tabs { max-width: 100%; }
+      body[data-frame] .wf-filter-actions { width: 100%; }
+      body[data-frame] .wf-search { width: 100%; }
+      body[data-frame] .wf-table-scroll { display: none; }
+      body[data-frame] .wf-mobile-cards { display: block; }
+      body[data-frame] .wf-table-footer { align-items: flex-start; flex-direction: column; padding: 10px 14px; }
+      body[data-frame] .wf-b-layout { display: flex; min-height: 0; flex-direction: column; }
+      body[data-frame] .wf-queue { border-right: 0; }
+      body[data-frame] .wf-queue-list { display: flex; overflow-x: auto; gap: 8px; padding: 10px 12px; }
+      body[data-frame] .wf-queue-item { width: 250px; flex: 0 0 250px; border: 1px solid var(--border); }
+      body[data-frame] .wf-detail { padding: 14px; border-top: 1px solid var(--border); }
+      body[data-frame] .wf-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      body[data-frame] .wf-detail-field:last-child { grid-column: 1 / -1; }
+      body[data-frame] .wf-review-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      body[data-frame] .wf-review-actions .wf-button:first-child { grid-column: 1 / -1; }
+      body[data-frame] .wf-drawer-backdrop { position: fixed; z-index: 20; inset: 0; display: none; border: 0; background: #12282c66; }
+      body[data-frame] .wf-drawer { position: fixed; z-index: 21; inset: 0 auto 0 0; display: block; width: min(286px, 86vw); height: 100dvh; transform: translateX(-100%); transition: transform .35s; }
+      body[data-frame][data-menu-open] .wf-drawer { transform: translateX(0); }
+      body[data-frame][data-menu-open] .wf-drawer-backdrop { display: block; }
+      body[data-frame] .wf-drawer .wf-sidebar { display: flex; width: 100%; height: 100%; }
+      body[data-frame] .wf-drawer .wf-nav-heading { display: block; }
+      @media (max-width: 760px) {
+        .wf-bar { gap: 12px; }
+        .wf-reason-why { order: 1; flex-basis: 100%; }
+        .wf-reason-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+        .wf-reason-tips h3 { flex-basis: 100%; }
+      }
+      @keyframes pulse { from { opacity: .48; } to { opacity: 1; } }
+    </style>
+  </head>
+  <body data-v="a" data-gon="0" data-bolap="0" data-mau="xam" data-kho="desktop" data-tt="du-lieu" data-uu="0">
+    <nav class="wf-bar" aria-label="Wireframe">
+      <div class="wf-group">
+        <span class="wf-label">Phương án</span>
+        <span class="wf-set" data-wf-param="v">
+          <a data-value="a" title="A · Bảng công việc, KPI phía trên" data-recommended>A</a>
+          <a data-value="b" title="B · Hàng đợi + chi tiết">B</a>
+        </span>
+      </div>
+      <span class="wf-set wf-flags">
+        <a data-wf-toggle="gon" data-on="1" data-off="0" aria-pressed="false">Gọn chữ</a>
+        <a data-wf-toggle="bolap" data-on="1" data-off="0" aria-pressed="false">Bỏ lặp</a>
+      </span>
+      <a class="wf-switch" data-wf-toggle="mau" data-on="mau" data-off="xam" role="switch" aria-checked="false">Màu <i></i></a>
+      <span class="wf-set" data-wf-param="kho">
+        <a data-value="desktop" aria-label="Máy tính"><i data-lucide="monitor"></i>Desktop</a>
+        <a data-value="mobile" aria-label="Điện thoại"><i data-lucide="smartphone"></i>Mobile</a>
+      </span>
+      <details class="wf-menu">
+        <summary><span>Trạng thái:</span><b data-wf-current="tt">Có dữ liệu</b><i data-lucide="chevron-down"></i></summary>
+        <div class="wf-menu-pop" data-wf-param="tt">
+          <a data-value="du-lieu">Có dữ liệu</a>
+          <a data-value="dang-tai">Đang tải</a>
+          <a data-value="rong">Rỗng</a>
+          <a data-value="loi">Lỗi</a>
+        </div>
+      </details>
+    </nav>
+    <details class="wf-reason" data-wf-reason>
+      <summary>
+        <span class="wf-reason-name" data-wf-reason-title>A · Bảng công việc</span>
+        <span class="wf-reason-tag" data-wf-reason-tag>Khuyên dùng</span>
+        <span class="wf-reason-why" data-wf-reason-why>So sánh tiến độ, người nhận và kết quả mới nhất đã xác minh ngay tại danh sách.</span>
+        <span class="wf-reason-toggle"><span>Ưu, nhược</span><i data-lucide="chevron-down"></i></span>
+      </summary>
+      <div class="wf-reason-body">
+        <div class="wf-reason-cols">
+          <section><h3><i data-tone="uu"></i>Ưu</h3><ul><li data-wf-reason-pro="0">Dễ so nhiều task, hạn và người nhận cùng lúc.</li><li data-wf-reason-pro="1">KPI và bảng việc cùng thấy, không phải đổi màn.</li></ul></section>
+          <section><h3><i data-tone="nhuoc"></i>Nhược</h3><ul><li data-wf-reason-con>Chi tiết revision và ghi chú xác minh cần mở riêng.</li></ul></section>
+          <section><h3><i></i>Hợp khi</h3><p data-wf-reason-fit>Người dùng vừa giao việc, vừa cập nhật và theo dõi KPI.</p></section>
+        </div>
+        <div class="wf-reason-tips">
+          <h3>Gợi ý góp ý</h3>
+          <button type="button" data-copy="Ưu tiên KPI đã xác minh">Ưu tiên KPI đã xác minh<i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+          <button type="button" data-copy="Đưa task cần xác minh lên đầu">Đưa task cần xác minh lên đầu<i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+          <button type="button" data-copy="Thêm bộ lọc chi nhánh">Thêm bộ lọc chi nhánh<i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+        </div>
+      </div>
+    </details>
+
+    <div id="wf-design" class="wf-device-frame">
+      <div class="wf-wrap">
+        <aside class="wf-sidebar" aria-label="Điều hướng chính">
+          <div class="wf-brand"><span class="wf-brand-mark">F</span><span class="wf-brand-name">Finance CRM</span></div>
+          <nav class="wf-nav">
+            <div class="wf-nav-group">
+              <p class="wf-nav-heading">Tổng quan</p>
+              <a class="wf-nav-item" href="#"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+            </div>
+            <div class="wf-nav-group">
+              <p class="wf-nav-heading">Khách hàng & tư vấn</p>
+              <a class="wf-nav-item" href="#"><i data-lucide="users-round"></i><span>Khách hàng</span></a>
+              <a class="wf-nav-item" href="#"><i data-lucide="messages-square"></i><span>Hội thoại</span></a>
+            </div>
+            <div class="wf-nav-group">
+              <p class="wf-nav-heading">Công việc & KPI</p>
+              <a class="wf-nav-item" href="#" aria-current="page"><i data-lucide="check-square"></i><span>Công việc</span><span class="wf-nav-meta">4</span></a>
+              <a class="wf-nav-item" href="#"><i data-lucide="chart-no-axes-column-increasing"></i><span>Kế hoạch</span></a>
+            </div>
+            <div class="wf-nav-group">
+              <p class="wf-nav-heading">Quản trị hệ thống</p>
+              <a class="wf-nav-item" href="#"><i data-lucide="user-round-cog"></i><span>Nhân viên</span></a>
+              <a class="wf-nav-item" href="#"><i data-lucide="git-branch"></i><span>Chi nhánh</span></a>
+              <a class="wf-nav-item" href="#"><i data-lucide="shield-check"></i><span>Vai trò & quyền</span></a>
+            </div>
+          </nav>
+          <div class="wf-user"><span class="wf-avatar">LH</span><div><div class="wf-user-name">Lê Thu Hà</div><div class="wf-user-role">Quản lý chi nhánh</div></div></div>
+        </aside>
+
+        <main class="wf-main">
+          <header class="wf-topbar">
+            <button type="button" class="wf-menu-toggle" data-wf-menu aria-label="Mở điều hướng"><i data-lucide="menu"></i></button>
+            <div class="wf-topbar-crumb"><span>Finance CRM</span><i data-lucide="chevron-right"></i><strong>Công việc</strong></div>
+            <div class="wf-topbar-user"><span class="wf-avatar">LH</span><span>Lê Thu Hà</span></div>
+          </header>
+          <div class="wf-page">
+            <section class="wf-page-head wf-block" data-wf-block="1">
+              <div>
+                <h1>Công việc</h1>
+                <p>Thực hiện task và theo dõi kết quả đã xác minh trong kế hoạch.</p>
+              </div>
+              <div class="wf-card-actions">
+                <details class="wf-select-wrap">
+                  <summary class="wf-plan-picker"><i data-lucide="calendar-range"></i><span>Kế hoạch quý IV · 2026</span><i data-lucide="chevron-down"></i></summary>
+                  <div class="wf-popover">
+                    <button aria-current="page"><strong>Kế hoạch quý IV · 2026</strong><small>01/10/2026 – 31/12/2026</small></button>
+                    <button><strong>Kế hoạch quý III · 2026</strong><small>01/07/2026 – 30/09/2026</small></button>
+                  </div>
+                </details>
+                <button type="button" class="wf-button wf-button-primary"><i data-lucide="plus"></i>Tạo task</button>
+              </div>
+            </section>
+
+            <section class="wf-kpis wf-block" data-wf-block="2" aria-label="KPI đã xác minh">
+              <article class="wf-card wf-kpi">
+                <div class="wf-kpi-top"><div><div class="wf-kpi-label">Hồ sơ hoàn tất</div><div class="wf-kpi-value">17 / 24</div><div class="wf-kpi-target">hồ sơ · mục tiêu 24</div></div><span class="wf-kpi-icon"><i data-lucide="files"></i></span></div>
+                <div class="wf-progress"><span style="width:71%"></span></div><div class="wf-kpi-foot"><span>Tiến độ</span><strong>71%</strong></div>
+              </article>
+              <article class="wf-card wf-kpi">
+                <div class="wf-kpi-top"><div><div class="wf-kpi-label">Hợp đồng giải ngân</div><div class="wf-kpi-value">8 / 12</div><div class="wf-kpi-target">hợp đồng · mục tiêu 12</div></div><span class="wf-kpi-icon"><i data-lucide="file-check-2"></i></span></div>
+                <div class="wf-progress"><span style="width:67%"></span></div><div class="wf-kpi-foot"><span>Tiến độ</span><strong>67%</strong></div>
+              </article>
+              <article class="wf-card wf-kpi wf-kpi-card-long">
+                <div class="wf-kpi-top"><div><div class="wf-kpi-label">Doanh số giải ngân</div><div class="wf-kpi-value">1.284.500.000 ₫</div><div class="wf-kpi-target">mục tiêu 2.000.000.000 ₫</div></div><span class="wf-kpi-icon"><i data-lucide="banknote"></i></span></div>
+                <div class="wf-progress"><span style="width:64%"></span></div><div class="wf-kpi-foot"><span>Tiến độ</span><strong>64%</strong></div>
+              </article>
+              <p class="wf-kpi-foot wf-kpi-note" data-wf-gon>Chỉ tính revision mới nhất đã xác minh · cập nhật 12/11/2026</p>
+            </section>
+
+            <section class="wf-card wf-task-card wf-variant-a wf-block" data-wf-block="3">
+              <div class="wf-card-head">
+                <div><h2>Công việc trong kế hoạch</h2><p data-wf-lap>Kế hoạch quý IV · 2026 · 8 task</p></div>
+                <div class="wf-card-actions"><button type="button" class="wf-button wf-button-small"><i data-lucide="download"></i>Xuất</button></div>
+              </div>
+              <div class="wf-toolbar">
+                <div class="wf-tabs" aria-label="Lọc trạng thái">
+                  <button class="wf-tab" aria-current="page">Tất cả <span>8</span></button>
+                  <button class="wf-tab">Cần làm <span>2</span></button>
+                  <button class="wf-tab">Đang làm <span>3</span></button>
+                  <button class="wf-tab">Chờ xác minh <span>2</span></button>
+                  <button class="wf-tab">Hoàn thành <span>1</span></button>
+                </div>
+                <div class="wf-filter-actions">
+                  <label class="wf-search"><i data-lucide="search"></i><input aria-label="Tìm công việc" placeholder="Tìm công việc" /></label>
+                  <button type="button" class="wf-button wf-button-small"><i data-lucide="list-filter"></i><span>Lọc</span></button>
+                </div>
+              </div>
+              <div class="wf-state-data">
+                <div class="wf-table-scroll">
+                  <table class="wf-table">
+                    <thead><tr><th>Công việc / chỉ tiêu</th><th>Chi nhánh</th><th>Người nhận</th><th>Hạn chót</th><th>Kết quả mới nhất</th><th>Xác minh</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
+                    <tbody>
+                      <tr aria-selected="true">
+                        <td><span class="wf-task-name">Đối soát hồ sơ vay cho khách hàng doanh nghiệp Nguyễn Thị Phương Thảo</span><span class="wf-task-meta" data-wf-gon>Hợp đồng giải ngân · revision 2</span></td>
+                        <td>Hà Nội</td>
+                        <td><span class="wf-person"><span class="wf-avatar">TA</span><span>Trần Nguyễn Anh Tuấn</span></span></td>
+                        <td><span class="wf-date overdue">Quá hạn 2 ngày</span></td>
+                        <td><span class="wf-value">0 hồ sơ</span><span class="wf-task-meta" data-wf-gon>12/11/2026</span></td>
+                        <td><span class="wf-badge warning">Cần bổ sung</span></td>
+                        <td><button class="wf-row-action" aria-label="Thao tác task"><i data-lucide="ellipsis"></i></button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="wf-task-name">Gọi xác nhận lịch ký hợp đồng tín dụng</span><span class="wf-task-meta" data-wf-gon>Hồ sơ hoàn tất</span></td>
+                        <td>Đà Nẵng</td>
+                        <td><span class="wf-person"><span class="wf-avatar">NQ</span><span>Nguyễn Quỳnh Như</span></span></td>
+                        <td><span class="wf-date">Hôm nay</span></td>
+                        <td><span class="wf-value">—</span></td>
+                        <td><span class="wf-badge neutral">Chưa nộp</span></td>
+                        <td><button class="wf-row-action" aria-label="Thao tác task"><i data-lucide="ellipsis"></i></button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="wf-task-name">Rà soát hợp đồng tái thẩm định quý IV</span><span class="wf-task-meta" data-wf-gon>Hồ sơ hoàn tất · 4 khách hàng</span></td>
+                        <td>Hải Phòng</td>
+                        <td><span class="wf-person"><span class="wf-avatar">LT</span><span>Lê Thu Hà</span></span></td>
+                        <td><span class="wf-date">18/11/2026</span></td>
+                        <td><span class="wf-value">3 hồ sơ</span></td>
+                        <td><span class="wf-badge warning">Chờ xác minh</span></td>
+                        <td><button class="wf-row-action" aria-label="Thao tác task"><i data-lucide="ellipsis"></i></button></td>
+                      </tr>
+                      <tr>
+                        <td><span class="wf-task-name">Cập nhật danh sách khách hàng chưa liên hệ được</span><span class="wf-task-meta" data-wf-gon>Hồ sơ hoàn tất</span></td>
+                        <td>Hồ Chí Minh</td>
+                        <td><span class="wf-person"><span class="wf-avatar">MT</span><span>Mai Thanh Tâm</span></span></td>
+                        <td><span class="wf-date">—</span></td>
+                        <td><span class="wf-value">5 hồ sơ</span></td>
+                        <td><span class="wf-badge success">Đã xác minh</span></td>
+                        <td><button class="wf-row-action" aria-label="Thao tác task"><i data-lucide="ellipsis"></i></button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="wf-mobile-cards">
+                  <article class="wf-mobile-card">
+                    <div class="wf-mobile-card-top"><strong class="wf-mobile-card-title">Đối soát hồ sơ vay cho khách hàng doanh nghiệp Nguyễn Thị Phương Thảo</strong><span class="wf-badge warning">Cần bổ sung</span></div>
+                    <div class="wf-mobile-meta"><span>Hợp đồng giải ngân · Hà Nội</span><strong>0 hồ sơ</strong></div>
+                    <div class="wf-mobile-meta"><span>Trần Nguyễn Anh Tuấn</span><span class="wf-date overdue">Quá hạn 2 ngày</span></div>
+                  </article>
+                  <article class="wf-mobile-card">
+                    <div class="wf-mobile-card-top"><strong class="wf-mobile-card-title">Gọi xác nhận lịch ký hợp đồng tín dụng</strong><span class="wf-badge neutral">Chưa nộp</span></div>
+                    <div class="wf-mobile-meta"><span>Hồ sơ hoàn tất · Đà Nẵng</span><strong>—</strong></div>
+                    <div class="wf-mobile-meta"><span>Nguyễn Quỳnh Như</span><span>Hôm nay</span></div>
+                  </article>
+                  <article class="wf-mobile-card">
+                    <div class="wf-mobile-card-top"><strong class="wf-mobile-card-title">Rà soát hợp đồng tái thẩm định quý IV</strong><span class="wf-badge warning">Chờ xác minh</span></div>
+                    <div class="wf-mobile-meta"><span>Hồ sơ hoàn tất · Hải Phòng</span><strong>3 hồ sơ</strong></div>
+                    <div class="wf-mobile-meta"><span>Lê Thu Hà</span><span>18/11/2026</span></div>
+                  </article>
+                </div>
+                <footer class="wf-table-footer"><span>1–4 trong 8 công việc</span><span class="wf-pager"><button aria-label="Trang trước"><i data-lucide="chevron-left"></i></button><button class="current" aria-current="page">1</button><button>2</button><button aria-label="Trang sau"><i data-lucide="chevron-right"></i></button></span></footer>
+              </div>
+              <div class="wf-state-loading">
+                <div class="wf-skeleton" aria-busy="true"><div class="wf-skeleton-row"><i></i><i></i><i></i><i></i></div><div class="wf-skeleton-row"><i></i><i></i><i></i><i></i></div><div class="wf-skeleton-row"><i></i><i></i><i></i><i></i></div></div>
+                <span class="sr-only" role="status">Đang tải danh sách công việc</span>
+              </div>
+              <div class="wf-state-empty">Chưa có công việc trong kế hoạch này.</div>
+              <div class="wf-state-error"><strong>Không tải được công việc</strong><span>Thử lại sau khi kết nối ổn định.</span><button class="wf-retry"><i data-lucide="rotate-cw"></i> Thử lại</button></div>
+            </section>
+
+            <section class="wf-card wf-task-card wf-variant-b wf-block" data-wf-block="3">
+              <div class="wf-card-head">
+                <div><h2>Hàng đợi công việc</h2><p data-wf-lap>Kế hoạch quý IV · 2026 · 3 việc cần xử lý</p></div>
+                <div class="wf-card-actions"><button type="button" class="wf-button wf-button-primary wf-button-small"><i data-lucide="plus"></i>Tạo task</button></div>
+              </div>
+              <div class="wf-kpis wf-block" data-wf-block="4" style="padding:12px 12px 0;margin:0">
+                <article class="wf-card wf-kpi"><div class="wf-kpi-label">Hồ sơ hoàn tất</div><div class="wf-kpi-value">17 / 24</div><div class="wf-progress"><span style="width:71%"></span></div><div class="wf-kpi-foot"><span>Đã xác minh</span><strong>71%</strong></div></article>
+                <article class="wf-card wf-kpi"><div class="wf-kpi-label">Hợp đồng giải ngân</div><div class="wf-kpi-value">8 / 12</div><div class="wf-progress"><span style="width:67%"></span></div><div class="wf-kpi-foot"><span>Đã xác minh</span><strong>67%</strong></div></article>
+                <article class="wf-card wf-kpi wf-kpi-card-long"><div class="wf-kpi-label">Doanh số giải ngân</div><div class="wf-kpi-value">1.284.500.000 ₫</div><div class="wf-kpi-target">mục tiêu 2.000.000.000 ₫</div><div class="wf-progress"><span style="width:64%"></span></div><div class="wf-kpi-foot"><span>Đã xác minh</span><strong>64%</strong></div></article>
+              </div>
+              <div class="wf-toolbar">
+                <div class="wf-tabs" aria-label="Lọc trạng thái">
+                  <button class="wf-tab" aria-current="page">Cần xử lý <span>3</span></button>
+                  <button class="wf-tab">Tất cả <span>8</span></button>
+                </div>
+                <div class="wf-filter-actions"><button type="button" class="wf-button wf-button-small"><i data-lucide="list-filter"></i><span>Lọc</span></button></div>
+              </div>
+              <div class="wf-state-data wf-b-layout">
+                <aside class="wf-queue" aria-label="Danh sách task cần xử lý">
+                  <div class="wf-queue-head"><strong>Chờ bạn xử lý</strong><button class="wf-row-action" aria-label="Tùy chọn"><i data-lucide="ellipsis"></i></button></div>
+                  <div class="wf-queue-list">
+                    <button class="wf-queue-item" aria-current="true">
+                      <strong>Đối soát hồ sơ vay cho khách hàng doanh nghiệp Nguyễn Thị Phương Thảo</strong>
+                      <div class="wf-queue-meta"><span class="wf-badge warning">Cần bổ sung</span><span class="wf-queue-value">0 hồ sơ</span></div>
+                      <div class="wf-queue-meta"><span>Trần Nguyễn Anh Tuấn</span><span class="wf-date overdue">Quá hạn 2 ngày</span></div>
+                    </button>
+                    <button class="wf-queue-item">
+                      <strong>Rà soát hợp đồng tái thẩm định quý IV</strong>
+                      <div class="wf-queue-meta"><span class="wf-badge warning">Chờ xác minh</span><span class="wf-queue-value">3 hồ sơ</span></div>
+                      <div class="wf-queue-meta"><span>Lê Thu Hà</span><span>18/11/2026</span></div>
+                    </button>
+                    <button class="wf-queue-item">
+                      <strong>Gọi xác nhận lịch ký hợp đồng tín dụng</strong>
+                      <div class="wf-queue-meta"><span class="wf-badge neutral">Chưa nộp</span><span class="wf-queue-value">—</span></div>
+                      <div class="wf-queue-meta"><span>Nguyễn Quỳnh Như</span><span>Hôm nay</span></div>
+                    </button>
+                  </div>
+                </aside>
+                <article class="wf-detail" aria-label="Chi tiết task đang chọn">
+                  <div class="wf-detail-title"><div><h3>Đối soát hồ sơ vay cho khách hàng doanh nghiệp Nguyễn Thị Phương Thảo</h3><p>Task TSK-2048 · cập nhật 12/11/2026</p></div><span class="wf-badge warning">Cần bổ sung</span></div>
+                  <div class="wf-detail-grid">
+                    <div class="wf-detail-field"><span>Chỉ tiêu</span><strong>Hợp đồng giải ngân · hồ sơ</strong></div>
+                    <div class="wf-detail-field"><span>Chi nhánh</span><strong>Hà Nội</strong></div>
+                    <div class="wf-detail-field"><span>Người nhận</span><strong>Trần Nguyễn Anh Tuấn</strong></div>
+                    <div class="wf-detail-field"><span>Hạn chót</span><strong class="wf-date overdue">Quá hạn 2 ngày</strong></div>
+                    <div class="wf-detail-field"><span>Người tạo</span><strong>Lê Thu Hà</strong></div>
+                    <div class="wf-detail-field"><span>Kỳ kế hoạch</span><strong>01/10/2026 – 31/12/2026</strong></div>
+                  </div>
+                  <div class="wf-section-title"><h4>Kết quả mới nhất · revision 2</h4><span class="wf-badge warning">Cần bổ sung</span></div>
+                  <div class="wf-result">
+                    <div class="wf-result-top"><div><div class="wf-result-value">0 hồ sơ</div><span class="wf-task-meta">Thực hiện 12/11/2026 · nộp bởi Trần Nguyễn Anh Tuấn</span></div><button class="wf-row-action" aria-label="Tùy chọn kết quả"><i data-lucide="ellipsis"></i></button></div>
+                    <p class="wf-result-copy">Đã rà soát danh sách hồ sơ trong kỳ, chưa có hồ sơ đạt điều kiện giải ngân.</p>
+                    <div class="wf-review-note">Bổ sung danh sách đã đối chiếu và ghi rõ lý do 0 hồ sơ trước khi gửi lại.</div>
+                  </div>
+                  <div class="wf-section-title"><h4>Lịch sử kết quả</h4><a class="wf-button wf-button-small" href="#">Xem tất cả</a></div>
+                  <div class="wf-history">
+                    <div class="wf-history-item"><span><strong>Revision 2</strong> · Lê Thu Hà yêu cầu bổ sung</span><time>12/11/2026</time></div>
+                    <div class="wf-history-item"><span><strong>Revision 1</strong> · bị từ chối, lý do đã lưu</span><time>10/11/2026</time></div>
+                  </div>
+                  <div class="wf-review-actions">
+                    <button class="wf-button wf-button-primary"><i data-lucide="check"></i>Xác minh kết quả</button>
+                    <button class="wf-button"><i data-lucide="message-square-text"></i>Cần bổ sung</button>
+                    <button class="wf-button wf-button-danger"><i data-lucide="ban"></i>Từ chối</button>
+                  </div>
+                </article>
+              </div>
+              <div class="wf-state-loading"><div class="wf-skeleton"><div class="wf-skeleton-row"><i></i><i></i><i></i><i></i></div><div class="wf-skeleton-row"><i></i><i></i><i></i><i></i></div></div></div>
+              <div class="wf-state-empty">Không có công việc cần xử lý trong kế hoạch này.</div>
+              <div class="wf-state-error"><strong>Không tải được hàng đợi công việc</strong><span>Thử lại sau khi kết nối ổn định.</span><button class="wf-retry"><i data-lucide="rotate-cw"></i> Thử lại</button></div>
+            </section>
+          </div>
+        </main>
+      </div>
+      <button class="wf-drawer-backdrop" type="button" aria-label="Đóng điều hướng" data-wf-menu></button>
+      <div class="wf-drawer"><aside class="wf-sidebar"><div class="wf-brand"><span class="wf-brand-mark">F</span><span class="wf-brand-name">Finance CRM</span></div><nav class="wf-nav">
+        <div class="wf-nav-group"><p class="wf-nav-heading">Tổng quan</p><a class="wf-nav-item" href="#"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a></div>
+        <div class="wf-nav-group"><p class="wf-nav-heading">Khách hàng & tư vấn</p><a class="wf-nav-item" href="#"><i data-lucide="users-round"></i><span>Khách hàng</span></a><a class="wf-nav-item" href="#"><i data-lucide="messages-square"></i><span>Hội thoại</span></a></div>
+        <div class="wf-nav-group"><p class="wf-nav-heading">Công việc & KPI</p><a class="wf-nav-item" href="#" aria-current="page"><i data-lucide="check-square"></i><span>Công việc</span></a><a class="wf-nav-item" href="#"><i data-lucide="chart-no-axes-column-increasing"></i><span>Kế hoạch</span></a></div>
+        <div class="wf-nav-group"><p class="wf-nav-heading">Quản trị hệ thống</p><a class="wf-nav-item" href="#"><i data-lucide="user-round-cog"></i><span>Nhân viên</span></a><a class="wf-nav-item" href="#"><i data-lucide="git-branch"></i><span>Chi nhánh</span></a><a class="wf-nav-item" href="#"><i data-lucide="shield-check"></i><span>Vai trò & quyền</span></a></div>
+      </nav><div class="wf-user"><span class="wf-avatar">LH</span><div><div class="wf-user-name">Lê Thu Hà</div><div class="wf-user-role">Quản lý chi nhánh</div></div></div></aside></div>
+    </div>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const state = {
+        v: params.get("v") || "a",
+        gon: params.get("gon") || "0",
+        bolap: params.get("bolap") || "0",
+        mau: params.get("mau") || "xam",
+        kho: params.get("kho") || "desktop",
+        tt: params.get("tt") || "du-lieu",
+        uu: params.get("uu") || "0",
+      };
+      Object.assign(document.body.dataset, {
+        v: state.v, gon: state.gon, bolap: state.bolap, mau: state.mau, kho: state.kho, tt: state.tt, uu: state.uu,
+      });
+      if (params.has("frame")) document.body.dataset.frame = "1";
+      if (state.kieu === "midnight") document.documentElement.classList.add("dark-mode");
+
+      const labels = {
+        tt: { "du-lieu": "Có dữ liệu", "dang-tai": "Đang tải", rong: "Rỗng", loi: "Lỗi" },
+      };
+      const linkTo = (changes) => `?${new URLSearchParams({ ...state, ...changes })}`;
+      function updateLinks() {
+        document.querySelectorAll("[data-wf-param]").forEach((set) => {
+          set.querySelectorAll("a").forEach((link) => {
+            const key = set.dataset.wfParam;
+            link.href = linkTo({ [key]: link.dataset.value });
+            if (state[key] === link.dataset.value) {
+              link.setAttribute("aria-current", "page");
+              const label = document.querySelector(`[data-wf-current="${key}"]`);
+              if (label) label.textContent = labels[key][link.dataset.value] || link.textContent.trim();
+            } else {
+              link.removeAttribute("aria-current");
+            }
+          });
+        });
+        document.querySelectorAll("[data-wf-toggle]").forEach((toggle) => {
+          const key = toggle.dataset.wfToggle;
+          const on = state[key] === toggle.dataset.on;
+          toggle.setAttribute(toggle.getAttribute("role") === "switch" ? "aria-checked" : "aria-pressed", String(on));
+          toggle.href = linkTo({ [key]: on ? toggle.dataset.off : toggle.dataset.on });
+        });
+      }
+      updateLinks();
+
+      const variantCopy = {
+        a: {
+          title: "A · Bảng công việc",
+          tag: "Khuyên dùng",
+          why: "So sánh tiến độ, người nhận và kết quả mới nhất đã xác minh ngay tại danh sách.",
+          pros: ["Dễ so nhiều task, hạn và người nhận cùng lúc.", "KPI và bảng việc cùng thấy, không phải đổi màn."],
+          con: "Chi tiết revision và ghi chú xác minh cần mở riêng.",
+          fit: "Người dùng vừa giao việc, vừa cập nhật và theo dõi KPI.",
+        },
+        b: {
+          title: "B · Hàng đợi + chi tiết",
+          tag: "Phương án khác",
+          why: "Ưu tiên xử lý từng task, xem revision và xác minh kết quả trong cùng màn hình.",
+          pros: ["Tập trung task cần xử lý, hạn và người phụ trách.", "Lịch sử revision và hành động xác minh nằm ngay trong chi tiết."],
+          con: "Bảng task và KPI không hiển thị đồng thời.",
+          fit: "Người dùng thường xuyên nộp, rà soát và xác minh kết quả.",
+        },
+      };
+      const copy = variantCopy[state.v] || variantCopy.a;
+      document.querySelector("[data-wf-reason-title]").textContent = copy.title;
+      document.querySelector("[data-wf-reason-tag]").textContent = copy.tag;
+      document.querySelector("[data-wf-reason-why]").textContent = copy.why;
+      document.querySelectorAll("[data-wf-reason-pro]").forEach((item) => {
+        item.textContent = copy.pros[Number(item.dataset.wfReasonPro)];
+      });
+      document.querySelector("[data-wf-reason-con]").textContent = copy.con;
+      document.querySelector("[data-wf-reason-fit]").textContent = copy.fit;
+
+      const reason = document.querySelector("[data-wf-reason]");
+      reason.open = state.uu === "1";
+      reason.addEventListener("toggle", () => {
+        state.uu = reason.open ? "1" : "0";
+        history.replaceState(null, "", linkTo({}));
+        updateLinks();
+      });
+
+      document.querySelectorAll(".wf-menu").forEach((menu) => {
+        menu.addEventListener("toggle", () => {
+          if (!menu.open) return;
+          document.querySelectorAll(".wf-menu").forEach((other) => { if (other !== menu) other.open = false; });
+        });
+      });
+      document.addEventListener("click", (event) => {
+        document.querySelectorAll(".wf-menu").forEach((menu) => {
+          if (!menu.contains(event.target)) menu.open = false;
+        });
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          document.body.removeAttribute("data-menu-open");
+          document.querySelectorAll(".wf-menu").forEach((menu) => { menu.open = false; });
+        }
+      });
+      document.querySelectorAll("[data-wf-menu]").forEach((button) => {
+        button.addEventListener("click", () => document.body.toggleAttribute("data-menu-open"));
+      });
+      document.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            button.setAttribute("data-copied", "");
+            setTimeout(() => button.removeAttribute("data-copied"), 1500);
+          } catch (error) {
+            console.error("Could not copy wireframe suggestion.", error);
+          }
+        });
+      });
+      if (state.kho === "mobile" && !params.has("frame")) {
+        const frameParams = new URLSearchParams({ ...state, kho: "desktop", frame: "1" });
+        document.getElementById("wf-design").innerHTML =
+          `<iframe title="Xem wireframe ở màn 375px" src="?${frameParams}"></iframe>`;
+      }
+      function placeBlockNumbers() {
+        const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        for (const block of document.querySelectorAll("[data-wf-block]")) {
+          const rect = block.getBoundingClientRect();
+          const numberRect = { left: rect.left + 4, top: rect.top + 4, right: rect.left + 22, bottom: rect.top + 22 };
+          const contentRects = [...block.querySelectorAll("svg, img")].map((node) => node.getBoundingClientRect());
+          const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            contentRects.push(...range.getClientRects());
+          }
+          block.toggleAttribute("data-wf-block-out", contentRects.some((contentRect) => overlaps(contentRect, numberRect)));
+        }
+      }
+      document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(placeBlockNumbers)));
+      addEventListener("resize", placeBlockNumbers);
+      if (window.lucide) {
+        lucide.createIcons();
+        new MutationObserver(() => {
+          if (document.querySelector("i[data-lucide]")) lucide.createIcons();
+        }).observe(document.body, { childList: true, subtree: true });
+      }
+    </script>
+  </body>
+</html>

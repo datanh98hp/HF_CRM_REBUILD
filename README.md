@@ -4,7 +4,7 @@ Finance CRM is planned as a modular monolith: NestJS REST API, Next.js staff web
 
 ## Current implementation scope
 
-P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 provides staff authentication and scoped organization/access-control APIs, with staff web screens for users, branches and roles. P0-2 provides customer, assignment, care history, loan request/contract and related workflows. P0-3 has started with scoped plan/metric creation and listing; tasks, verification and KPI aggregation remain. P0-6 is in progress: staff customer/loan and access-administration screens are available, while customer PWA, realtime chat UI and remaining workflows are not complete. CI pipeline work is excluded from the current continuation. See the [implementation status](docs/phase-0/implementation-status.md) for current verification and limitations.
+P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 provides staff authentication and scoped organization/access-control APIs, with staff web screens for users, branches and roles. P0-2 provides customer, assignment, care history, loan request/contract and related workflows. P0-3 includes scoped plan/task APIs, immutable result revisions, audited verification decisions, verified-only KPI aggregation, and a task/KPI workspace at `/tasks` based on selected wireframe B. Evidence metadata relations are implemented and migrated on the test database; binary upload/download, security-policy configuration, and target-environment acceptance remain open. P0-6 is in progress: staff customer/loan and access-administration screens are available, while customer PWA, realtime chat UI and remaining workflows are not complete. CI pipeline work is excluded from the current continuation. See the [implementation status](docs/phase-0/implementation-status.md) for current verification and limitations.
 
 ## Requirements accepted so far
 
@@ -29,19 +29,24 @@ P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and wo
 
 - Node.js 24 LTS (the installed Node.js 24.22.2 meets this prerequisite).
 - npm.
+- Bash (Git Bash on Windows).
 - Docker Desktop or another Docker Compose implementation for local PostgreSQL and Redis.
 
 ## Local development
 
-1. Copy `.env.example` to `.env` in the repository root. Keep the database name/user and password consistent between `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` and `DATABASE_URL`.
-2. Set a random `AUTH_ACCESS_TOKEN_SECRET` of at least 32 characters and bootstrap operator username/display name/password in `.env`; keep these local secrets out of source control.
-3. Start PostgreSQL and Redis with `docker compose up -d postgres redis`.
-4. Install locked dependencies with `npm ci`.
-5. Generate Prisma client and apply the P0-1 schema: `npm run db:generate` then `npm run db:migrate:dev`.
-6. Seed the permission catalog/system roles and initial operator: `npm run db:seed`. In development the runner generates the Prisma client and builds before seeding; when the plans table is empty it also seeds four demo plans against active branches, without replacing existing plans. Demo plans are never seeded in test or production. The production Docker image uses its prebuilt client. It loads `.env.dev`, `.env.test`, or `.env.prod` based on `NODE_ENV`, while explicit shell/container variables take precedence.
-7. Start API: `npm run dev:api` (default `http://localhost:3001`).
-8. Start background worker in another terminal: `npm run dev:worker`.
-9. Start web: `npm run dev:web` (default `http://localhost:3000`).
+1. Copy `.env.dev.example` to `.env.dev`. Keep the database name/user and password consistent between `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD` and `DATABASE_URL`.
+2. Set a random `AUTH_ACCESS_TOKEN_SECRET` of at least 32 characters and bootstrap operator username/display name/password in `.env.dev`; keep these local secrets out of source control.
+3. Use the wrapper to start PostgreSQL and Redis: `bash scripts/docker-compose.sh dev up postgres redis`.
+4. To run a root npm script in the toolbox container, use the wrapper's `app` action. For example, generate Prisma Client, apply migrations, and seed:
+
+   ```bash
+   bash scripts/docker-compose.sh dev app db:generate
+   bash scripts/docker-compose.sh dev app db:migrate:dev
+   bash scripts/docker-compose.sh dev app db:seed
+   ```
+
+   The wrapper builds the toolbox image as needed, installs locked dependencies in the container, and points database connections at the Compose PostgreSQL service. In development and test, `db:seed` also fills eligible empty business tables with synthetic sample data; it leaves populated tables unchanged. The same form runs checks/builds in the container: `bash scripts/docker-compose.sh dev app typecheck`, `... app test`, or `... app build`. Root npm scripts remain unchanged and run on the host when called directly.
+5. To start the full API/worker/web Compose stack, run `npm run docker:dev:up` (or `npm run docker:test:up` for test). Both development and test stacks apply migrations and run the idempotent seed service before the API/worker. Sample data is limited to empty eligible tables in development/test and is never auto-seeded in production. The default ports are `http://localhost:3001` for the API and `http://localhost:3000` for the web. These compiled service containers are separate from one-off toolbox commands.
 
 API probes: `GET /health` (process liveness) and `GET /ready` (PostgreSQL and Redis readiness). OpenAPI UI is served at `/api/docs` in non-production environments. Staff auth and scoped access administration are documented in the [P0-1 plan](docs/phase-0/p0/p0-1-access-control.md). Database schema changes are managed by Prisma migrations; run `npm run db:migrate:dev` for local development and `npm run db:migrate:deploy` in deployment workflows.
 
@@ -64,25 +69,25 @@ Run and manage each stack with the matching npm scripts:
 - Test: `npm run docker:test:up`, `npm run docker:test:ps`, `npm run docker:test:logs`, `npm run docker:test:down`.
 - Production: `npm run docker:prod:up`, `npm run docker:prod:ps`, `npm run docker:prod:logs`, `npm run docker:prod:down`.
 
-Each command reads only its matching `.env.*` file. Copy the corresponding `.env.*.example` before running it. Use the `docker-compose` command directly if you need to target an individual service.
+Each command reads only its matching `.env.*` file. Copy the corresponding `.env.*.example` before running it. The npm `docker:*` scripts and the wrapper's `up`/`down`/`ps`/`logs` actions execute Docker Compose on the host to manage containers.
 
 These use distinct Docker volumes; stop a stack with the same `--env-file` and `-f` arguments followed by `down`. Do not add `-v` unless deleting that environment's database is intended.
 
-The Bash equivalent accepts an environment and action, with optional service names for `ps` and `logs`:
+The Bash wrapper supports both Compose lifecycle commands and running an npm script inside the toolbox container:
 
 ```bash
-bash scripts/docker-compose.sh dev up
+bash scripts/docker-compose.sh dev up postgres redis
 bash scripts/docker-compose.sh test ps
 bash scripts/docker-compose.sh prod logs api
 bash scripts/docker-compose.sh dev down
+bash scripts/docker-compose.sh dev app typecheck
 ```
 
-It uses the same environment files and Compose overlays as the npm scripts above. The `up` action builds and starts the stack in the background; `logs` follows output.
+It uses the matching `.env.dev`, `.env.test`, or `.env.prod` file and Compose overlay. `up` starts selected services in the background; `logs` follows output. The `app` action runs a root npm script in a one-off toolbox container; start required services first when that script needs PostgreSQL or Redis.
 
 ## Checks
 
-- `npm run typecheck`
-- `npm run test`
-- `npm run build`
+- Host: `npm run typecheck`, `npm run test`, `npm run build`.
+- Toolbox container: `bash scripts/docker-compose.sh dev app typecheck`, `... app test`, `... app build`.
 
 No production-readiness claim is made by this scaffold. See `AGENT.md`, the Phase 0 decision log, and P0 stage plans for required controls, gates and remaining configuration.

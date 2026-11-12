@@ -26,6 +26,7 @@ import {
   type PermissionOption,
   type RoleOption,
   type RolePermission,
+  toRolePermissionInput,
 } from '@/lib/crm-access';
 import { request } from '@/lib/crm-api';
 
@@ -61,7 +62,7 @@ export function RolesPage() {
       const firstRole = nextRoles.find((role) => role.key !== 'OPERATOR') ?? nextRoles[0];
       if (firstRole) {
         setSelectedRoleKey(firstRole.key);
-        setRolePermissionDraft(firstRole.permissions);
+        setRolePermissionDraft(toRolePermissionInput(firstRole.permissions));
       }
     }).catch((cause: unknown) => {
       if (active) setError(cause instanceof Error ? cause.message : 'Không thể tải vai trò và quyền.');
@@ -73,10 +74,12 @@ export function RolesPage() {
 
   function selectRole(roleKey: string) {
     setSelectedRoleKey(roleKey);
-    setRolePermissionDraft(roles.find((role) => role.key === roleKey)?.permissions ?? []);
+    setRolePermissionDraft(toRolePermissionInput(
+      roles.find((role) => role.key === roleKey)?.permissions ?? [],
+    ));
   }
 
-  function setRoleScope(permissionKey: string, scope: string, enabled: boolean) {
+  function setRoleScope(permissionKey: string, scope: RolePermission['scope'], enabled: boolean) {
     setRolePermissionDraft((current) => {
       const withoutSelection = current.filter((item) =>
         !(item.permissionKey === permissionKey && item.scope === scope),
@@ -150,7 +153,7 @@ export function RolesPage() {
         session.accessToken,
       );
       setRoles((current) => current.map((role) => role.key === updated.key ? updated : role));
-      setRolePermissionDraft(updated.permissions);
+      setRolePermissionDraft(toRolePermissionInput(updated.permissions));
       setNotice(`Đã lưu ma trận quyền cho ${displayRoleName(updated)}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể lưu ma trận quyền.');

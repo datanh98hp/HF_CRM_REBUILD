@@ -12,7 +12,7 @@ import { PlansService } from './plans.service.js';
 export class PlansController {
   constructor(private readonly plans: PlansService) {}
 
-  @RequirePermission('plans.manage')
+  @RequirePermission('plans.read')
   @Get()
   list(@CurrentActor() actor: ActorContext, @Query() query: PlanListQueryDto) {
     return this.plans.list(actor, query);

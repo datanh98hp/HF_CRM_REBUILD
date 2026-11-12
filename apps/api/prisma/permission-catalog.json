@@ -24,6 +24,11 @@
   { "key": "loan-applications.assign", "groupKey": "loans", "description": "Assign loan applications within granted scope | Phân công hồ sơ vay trong phạm vi được cấp." },
   { "key": "plans.read", "groupKey": "plans", "description": "Read plans within granted scope | Xem kế hoạch trong phạm vi được cấp." },
   { "key": "plans.manage", "groupKey": "plans", "description": "Create plans and targets within granted scope | Tạo kế hoạch và chỉ tiêu trong phạm vi được cấp." },
+  { "key": "tasks.read", "groupKey": "plans", "description": "Read tasks within granted scope | Xem công việc trong phạm vi được cấp." },
+  { "key": "tasks.manage", "groupKey": "plans", "description": "Create and assign tasks within granted scope | Tạo và giao công việc trong phạm vi được cấp." },
+  { "key": "tasks.submit", "groupKey": "plans", "description": "Submit task results within granted scope | Nộp kết quả công việc trong phạm vi được cấp." },
+  { "key": "tasks.verify", "groupKey": "plans", "description": "Verify task results within granted scope | Xác minh kết quả công việc trong phạm vi được cấp." },
+  { "key": "kpi.read", "groupKey": "plans", "description": "Read verified KPI within granted scope | Xem KPI đã xác minh trong phạm vi được cấp." },
   { "key": "advising.message.send", "groupKey": "advising", "description": "Send advising messages within granted scope | Gửi tin nhắn tư vấn trong phạm vi được cấp." },
   { "key": "reports.read", "groupKey": "reports", "description": "Read reports within granted scope | Xem báo cáo trong phạm vi được cấp." }
 ]

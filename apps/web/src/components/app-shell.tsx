@@ -21,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | null;
+type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'tasks' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -33,6 +33,7 @@ type ShellProps = {
   canReadRoles: boolean;
   canReadCustomers: boolean;
   canAccessPlans: boolean;
+  canReadTasks: boolean;
   busy: boolean;
   contractCompletionOtp?: CapabilityNotice;
   onNavigate: (section: AccessSection) => void;
@@ -63,6 +64,7 @@ export function AppShell({
   canReadRoles,
   canReadCustomers,
   canAccessPlans,
+  canReadTasks,
   busy,
   onNavigate,
   onLogout,
@@ -109,7 +111,7 @@ export function AppShell({
     {
       label: 'Công việc & KPI',
       items: [
-        { key: 'tasks', label: 'Công việc', icon: CheckSquare, disabled: true },
+        ...(canReadTasks ? [{ key: 'tasks', label: 'Công việc', icon: CheckSquare, section: 'tasks' as const }] : []),
         ...(canAccessPlans ? [{ key: 'plans', label: 'Kế hoạch', icon: ChartNoAxesColumn, section: 'plans' as const }] : []),
       ],
     },
@@ -134,6 +136,8 @@ export function AppShell({
           ? 'Vai trò & quyền'
           : activeSection === 'plans'
             ? 'Kế hoạch'
+          : activeSection === 'tasks'
+            ? 'Công việc'
           : 'Tài khoản của tôi';
 
   function renderSidebar(mobile = false) {

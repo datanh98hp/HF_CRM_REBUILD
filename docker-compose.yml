@@ -136,6 +136,21 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  toolbox:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - toolbox_node_modules:/workspace/node_modules
+    environment:
+      DATABASE_URL: ${TOOLBOX_DATABASE_URL:-}
+      REDIS_URL: redis://redis:6379
+    init: true
+
 volumes:
   postgres_data:
   redis_data:
+  toolbox_node_modules:

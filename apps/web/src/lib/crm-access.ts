@@ -13,13 +13,15 @@ export type ManagedUser = {
   }[];
 };
 
-export type RolePermission = { permissionKey: string; scope: string };
+export type AccessScope = 'OWN' | 'ASSIGNED' | 'BRANCH' | 'ALL';
+export type RolePermission = { permissionKey: string; scope: AccessScope };
+export type RolePermissionRecord = RolePermission & { roleId: string };
 export type RoleOption = {
   key: string;
   name: string;
   description?: string | null;
   isSystem: boolean;
-  permissions: RolePermission[];
+  permissions: RolePermissionRecord[];
 };
 export type PermissionOption = { key: string; groupKey: string; description: string };
 export type BranchOption = {
@@ -38,7 +40,11 @@ export const permissionScopes = [
   { key: 'ASSIGNED', label: 'Được giao' },
   { key: 'BRANCH', label: 'Chi nhánh' },
   { key: 'ALL', label: 'Toàn hệ thống' },
-];
+] as const satisfies readonly { key: AccessScope; label: string }[];
+
+export function toRolePermissionInput(permissions: readonly RolePermissionRecord[]): RolePermission[] {
+  return permissions.map(({ permissionKey, scope }) => ({ permissionKey, scope }));
+}
 
 export const permissionGroupLabels: Record<string, string> = {
   'access-control': 'Quản trị truy cập',

@@ -43,7 +43,26 @@ Trang **Khách hàng** cung cấp các thao tác trong phạm vi được cấp 
 3. Người có quyền `plans.manage` có thể chọn **Tạo kế hoạch**, chọn chi nhánh đang hoạt động, khoảng thời gian và khai báo một hoặc nhiều chỉ tiêu với đơn vị/mục tiêu.
 4. Người có quyền `plans.manage` có thể chỉnh sửa ngày bắt đầu/kết thúc, trạng thái và thêm hoặc gỡ các chi nhánh áp dụng. Chi nhánh được thêm phải đang hoạt động và nằm trong phạm vi được cấp.
 5. Tài khoản có role `ADMIN` hoặc `OPERATOR` toàn hệ thống mới được xóa kế hoạch. Hệ thống yêu cầu xác nhận; thao tác xóa là xóa mềm, ẩn kế hoạch khỏi danh sách nhưng giữ dữ liệu trong cơ sở dữ liệu.
-6. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Giao task, cập nhật tiến độ và xem KPI chưa triển khai.
+6. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Chuyển kế hoạch sang **Đang thực hiện** trước khi tạo task.
+
+## Công việc, kết quả và KPI
+
+1. Mở **Công việc**. Trang cần `tasks.read` và `plans.read`; KPI tải thành công khi tài khoản có `kpi.read` trên toàn bộ chi nhánh của kế hoạch. Nếu thiếu phạm vi, trang báo lỗi KPI.
+2. Chọn kế hoạch đang thực hiện. Hàng đợi mặc định chỉ hiển thị công việc chưa hoàn tất; có thể chuyển sang **Tất cả** hoặc lọc theo chi nhánh. Chọn task để xem người nhận, hạn chót và lịch sử revision.
+3. Người có `tasks.manage` có thể chọn **Tạo task**, chỉ tiêu, chi nhánh và hạn chót. Nếu có `users.read` thì có thể chọn người nhận; nếu không, task được giao cho người tạo.
+4. Người có `tasks.submit` nộp số thực đạt, ngày thực hiện và giải trình. Đơn vị được cố định theo chỉ tiêu. Mỗi lần nộp tạo revision mới và chờ xác minh; không thể nộp tiếp khi revision mới nhất đang chờ duyệt.
+5. Người có `tasks.verify` có thể xác minh revision mới nhất, yêu cầu bổ sung hoặc từ chối. Hai quyết định sau bắt buộc có lý do; người nộp không thể tự xác minh. Khi cần bổ sung hoặc bị từ chối, người được phép nộp có thể tạo revision tiếp theo.
+6. KPI chỉ cộng revision mới nhất đã xác minh. Revision đã xác minh vẫn có thể được nộp bản điều chỉnh mới; KPI cập nhật theo revision mới sau khi revision đó được xác minh.
+
+Task result đã có quan hệ metadata tới file evidence, nhưng chưa có luồng upload/private storage hoặc download nên nhân viên chưa thể đính kèm file từ giao diện. API chỉ cho liên kết file đã quét, còn hạn và cùng chi nhánh; upload chỉ được bật sau khi cấu hình/duyệt scanner, retention, quyền xóa và legal hold. Không gửi thông tin nhạy cảm trong phần giải trình.
+
+## Dữ liệu mẫu trong development/test
+
+- Khi khởi động Docker Compose với `.env.dev` hoặc `.env.test`, migration chạy trước, sau đó seed chạy trước API/worker. Seed tạo dữ liệu mẫu tổng hợp cho các bảng nghiệp vụ phù hợp khi bảng đó chưa có dữ liệu; bảng đã có dữ liệu được giữ nguyên. Chạy lại seed không nhân đôi các fixture mẫu.
+- Dữ liệu mẫu bao phủ khách hàng, phân công, lịch sử trạng thái, hồ sơ vay, kế hoạch, task, kết quả và xác minh. Nếu không có chi nhánh đang hoạt động hoặc kế hoạch mẫu hợp lệ, seed ghi rõ phần nào bị bỏ qua thay vì tạo liên kết nghiệp vụ không hợp lệ.
+- Không tạo session/OTP giả lập, audit nghiệp vụ giả lập hoặc file evidence. Upload/download evidence vẫn bị khóa cho tới khi cấu hình đầy đủ chính sách bảo mật.
+- Tên, số điện thoại, email, số liệu KPI và nội dung hợp đồng trong fixture đều là dữ liệu giả; không dùng như dữ liệu khách hàng hoặc điều khoản tài chính thực.
+- Sample seed chỉ chạy với `NODE_ENV=development` hoặc `NODE_ENV=test`. Production không tự tạo dữ liệu mẫu.
 
 ## Lưu ý
 

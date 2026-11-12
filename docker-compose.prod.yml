@@ -7,9 +7,16 @@ services:
     ports: !reset []
   web:
     ports: !reset []
+  toolbox:
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
 
 volumes:
   postgres_data:
     name: hf_crm_prod_postgres_data
   redis_data:
     name: hf_crm_prod_redis_data
+  toolbox_node_modules:
+    name: hf_crm_prod_toolbox_node_modules

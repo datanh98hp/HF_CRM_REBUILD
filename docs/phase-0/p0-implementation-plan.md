@@ -1,7 +1,7 @@
 # Finance CRM — Kế hoạch triển khai P0
 
-**Trạng thái:** P0-0/P0-1 có nền code; backend P0-2 đã triển khai trên dev; P0-3 đã bắt đầu với kế hoạch/chỉ tiêu. Các hạng mục còn lại và cổng nghiệm thu được ghi tại từng giai đoạn.
-**Cập nhật:** 2026-11-11
+**Trạng thái:** P0-0/P0-1 có nền code; backend P0-2 đã triển khai trên dev; P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/tasks` theo wireframe B và quan hệ metadata evidence. Migration task/result/KPI và evidence đã áp dụng trên PostgreSQL test riêng; upload/download binary và nghiệm thu môi trường mục tiêu còn mở.
+**Cập nhật:** 2026-11-12
 **Phạm vi căn cứ:** `AGENT.md`, `mvp-scope.md`, `decision-log.md` và scaffold hiện tại.
 
 **Kế hoạch theo từng file:** [Mục lục các giai đoạn P0](p0/README.md).
@@ -12,7 +12,7 @@ Phạm vi nghiệp vụ chính đã đủ rõ để bắt đầu P0 theo từng 
 
 Backend đã có nền PostgreSQL/Redis, auth/RBAC/audit và lát cắt customer/loan P0-2. Migration P0-2 đã áp dụng trên PostgreSQL dev/test; 19 unit tests và 18 integration assertions đạt. Yêu cầu mới xác nhận một MANAGE/chi nhánh, OTP CUSTOMER khi hoàn thành hợp đồng và tiếp nhận hợp đồng ngoài có idempotency/20 bản ghi mỗi trang. P0-2 chưa đóng: các quy tắc này chưa triển khai; còn cần chốt matrix/grants chi tiết, quyền ghi parent-child, OTP provider, schema/allowlist và giao diện P0-6.
 
-P0-3 hiện có nền tạo/liệt kê kế hoạch và metric target theo chi nhánh, có permission scope và audit. Task/result/verification/KPI chưa triển khai; migration mới chưa apply trên PostgreSQL. Theo yêu cầu hiện tại, CI pipeline nằm ngoài phạm vi tiếp tục triển khai.
+P0-3 có API nền cho kế hoạch, task, phiên bản kết quả, xác minh, KPI và quan hệ metadata evidence; migration task/result/KPI cùng evidence đã áp dụng trên PostgreSQL test riêng. UI `/tasks` đã dựng theo wireframe B. Typecheck API/web và 48 unit tests đạt; migration evidence cùng các FK/CHECK constraints đã xác nhận. Probe trực quan 375px, upload/download binary và nghiệm thu môi trường mục tiêu còn mở. Theo yêu cầu hiện tại, CI pipeline nằm ngoài phạm vi tiếp tục triển khai.
 
 ## 2. Phạm vi P0 đề xuất
 

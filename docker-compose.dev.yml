@@ -2,20 +2,37 @@ services:
   migrate:
     environment:
       NODE_ENV: development
+  seed:
+    profiles: !override []
+    environment:
+      NODE_ENV: development
   api:
     environment:
       NODE_ENV: development
+    depends_on:
+      seed:
+        condition: service_completed_successfully
     ports: !override
       - "127.0.0.1:${API_PORT:-3001}:3001"
   worker:
     environment:
       NODE_ENV: development
+    depends_on:
+      seed:
+        condition: service_completed_successfully
   web:
     ports: !override
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
+  toolbox:
+    env_file:
+      - .env.dev
+    environment:
+      NODE_ENV: development
 
 volumes:
   postgres_data:
     name: hf_crm_dev_postgres_data
   redis_data:
     name: hf_crm_dev_redis_data
+  toolbox_node_modules:
+    name: hf_crm_dev_toolbox_node_modules

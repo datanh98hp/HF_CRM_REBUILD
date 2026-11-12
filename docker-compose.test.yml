@@ -9,6 +9,7 @@ services:
     environment:
       NODE_ENV: test
   seed:
+    profiles: !override []
     environment:
       NODE_ENV: test
   api:
@@ -17,20 +18,34 @@ services:
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       CUSTOMER_OTP_TEST_MODE: ${CUSTOMER_OTP_TEST_MODE:-mock}
+    depends_on:
+      seed:
+        condition: service_completed_successfully
     ports: !override
       - "127.0.0.1:${API_PORT:-3002}:3001"
   worker:
     environment:
       NODE_ENV: test
+    depends_on:
+      seed:
+        condition: service_completed_successfully
   web:
     build:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3002}
     ports: !override
       - "127.0.0.1:${WEB_PORT:-3002}:3000"
+  toolbox:
+    env_file:
+      - .env.test
+    environment:
+      NODE_ENV: test
+      API_BASE_URL: http://api:3001/api/v1
 
 volumes:
   postgres_data:
     name: hf_crm_test_postgres_data
   redis_data:
     name: hf_crm_test_redis_data
+  toolbox_node_modules:
+    name: hf_crm_test_toolbox_node_modules

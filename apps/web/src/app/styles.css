@@ -1076,3 +1076,24 @@
     @apply font-sans;
   }
 }
+
+* { --scrollbar-thumb: transparent; }
+*:hover { --scrollbar-thumb: color-mix(in srgb, var(--foreground) 16%, transparent); }
+.is-scrolling { --scrollbar-thumb: color-mix(in srgb, var(--foreground) 28%, transparent); }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--foreground) 40%, transparent); }
+
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *:hover { scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent; }
+  .is-scrolling { scrollbar-color: color-mix(in srgb, var(--foreground) 28%, transparent) transparent; }
+}
+
+.scrollbar-clean {
+  scrollbar-width: none;
+}
+.scrollbar-clean::-webkit-scrollbar {
+  display: none;
+}

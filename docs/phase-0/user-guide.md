@@ -41,7 +41,9 @@ Trang **Khách hàng** cung cấp các thao tác trong phạm vi được cấp 
 1. Mở **Kế hoạch** để xem các kế hoạch trong phạm vi được cấp quyền.
 2. Chọn một kế hoạch để xem chi nhánh, thời gian và các chỉ tiêu mục tiêu.
 3. Người có quyền `plans.manage` có thể chọn **Tạo kế hoạch**, chọn chi nhánh đang hoạt động, khoảng thời gian và khai báo một hoặc nhiều chỉ tiêu với đơn vị/mục tiêu.
-4. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Hiện chưa có thao tác sửa hoặc kích hoạt kế hoạch, giao task, cập nhật tiến độ hay xem KPI.
+4. Người có quyền `plans.manage` có thể chỉnh sửa ngày bắt đầu/kết thúc, trạng thái và thêm hoặc gỡ các chi nhánh áp dụng. Chi nhánh được thêm phải đang hoạt động và nằm trong phạm vi được cấp.
+5. Tài khoản có role `ADMIN` hoặc `OPERATOR` toàn hệ thống mới được xóa kế hoạch. Hệ thống yêu cầu xác nhận; thao tác xóa là xóa mềm, ẩn kế hoạch khỏi danh sách nhưng giữ dữ liệu trong cơ sở dữ liệu.
+6. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Giao task, cập nhật tiến độ và xem KPI chưa triển khai.
 
 ## Lưu ý
 

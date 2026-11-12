@@ -38,7 +38,7 @@ P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and wo
 3. Start PostgreSQL and Redis with `docker compose up -d postgres redis`.
 4. Install locked dependencies with `npm ci`.
 5. Generate Prisma client and apply the P0-1 schema: `npm run db:generate` then `npm run db:migrate:dev`.
-6. Seed the permission catalog/system roles and initial operator: `npm run db:seed`. In development the runner generates the Prisma client and builds before seeding; the production Docker image uses its prebuilt client. It loads `.env.dev`, `.env.test`, or `.env.prod` based on `NODE_ENV`, while explicit shell/container variables take precedence.
+6. Seed the permission catalog/system roles and initial operator: `npm run db:seed`. In development the runner generates the Prisma client and builds before seeding; when the plans table is empty it also seeds four demo plans against active branches, without replacing existing plans. Demo plans are never seeded in test or production. The production Docker image uses its prebuilt client. It loads `.env.dev`, `.env.test`, or `.env.prod` based on `NODE_ENV`, while explicit shell/container variables take precedence.
 7. Start API: `npm run dev:api` (default `http://localhost:3001`).
 8. Start background worker in another terminal: `npm run dev:worker`.
 9. Start web: `npm run dev:web` (default `http://localhost:3000`).

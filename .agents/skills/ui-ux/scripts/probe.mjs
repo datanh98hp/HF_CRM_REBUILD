@@ -4,7 +4,7 @@
 //
 //   node probe.mjs <url> [--widths 375,768,1024,1280,1440,1920] [--out <thư mục>] [--dark] [--wait 800] [--dpr 1]
 //                        [--sweep [1440,375,20]] [--wireframe <link phương án đã chọn>] [--quick]
-//                        [--dynamic-widths 1280,375|none]
+//                        [--dynamic-widths 1280,375|none] [--storage-state <tệp Playwright>] [--login]
 //
 // Phép đo động (Tab, rê chuột, bấm, mở lớp nổi) chiếm phần lớn thời gian mà ít đổi theo bề rộng, nên mặc định
 // chỉ chạy ở các khổ mobile, khổ gần 768 và gần 1280 nhất; khổ khác đo trang đứng yên.
@@ -50,7 +50,7 @@ const maxTabStops = 160;
 const maxFocusChecksPerKind = 2;
 
 function parseArgs(argv) {
-  const options = { url: "", widths: defaultWidths, out: "", isDark: false, waitMs: 800, dpr: 1, playwrightDir: "", sweep: null, wireframeUrl: "", isQuick: false, isStress: false, dynamicWidths: null };
+  const options = { url: "", widths: defaultWidths, out: "", isDark: false, waitMs: 800, dpr: 1, playwrightDir: "", sweep: null, wireframeUrl: "", isQuick: false, isStress: false, dynamicWidths: null, storageState: "", isAuthenticated: false };
   const rest = [...argv];
 
   while (rest.length > 0) {
@@ -66,6 +66,8 @@ function parseArgs(argv) {
     else if (arg === "--wait") options.waitMs = Number(rest.shift());
     else if (arg === "--dpr") options.dpr = Number(rest.shift());
     else if (arg === "--pw") options.playwrightDir = rest.shift();
+    else if (arg === "--storage-state") options.storageState = rest.shift();
+    else if (arg === "--login") options.isAuthenticated = true;
     else if (arg === "--wireframe") options.wireframeUrl = rest.shift();
     else if (arg === "--quick") options.isQuick = true;
     else if (arg === "--stress") options.isStress = true;
@@ -124,6 +126,31 @@ async function launchBrowser(chromium) {
     // Chưa tải Chromium của Playwright thì dùng Chrome đã cài trên máy.
     return chromium.launch({ channel: "chrome" });
   }
+}
+
+function createProbeContext(browser, options, contextOptions) {
+  return browser.newContext({
+    ...(options.storageState ? { storageState: options.storageState } : {}),
+    ...contextOptions,
+  });
+}
+
+async function authenticateProbePage(page, options, url) {
+  if (!options.isAuthenticated) return;
+  const target = new URL(url);
+  if (target.origin !== new URL(options.url).origin) return;
+
+  const username = process.env.PROBE_USERNAME;
+  const password = process.env.PROBE_PASSWORD;
+  if (!username || !password) {
+    throw new Error("--login requires PROBE_USERNAME and PROBE_PASSWORD environment variables");
+  }
+
+  await page.goto(new URL("/login", target).href, { waitUntil: "load" });
+  await page.locator("#username").fill(username);
+  await page.locator("#password").fill(password);
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await page.waitForURL((current) => current.origin === target.origin && current.pathname !== "/login", { timeout: 15_000 });
 }
 
 // ---------- Các phép đo, chạy trong trang ----------
@@ -3201,7 +3228,7 @@ async function takeFullScreenshot(page, path) {
 
 async function probeWidth(browser, options, width) {
   const isMobile = width < mobileWidthLimit;
-  const context = await browser.newContext({
+  const context = await createProbeContext(browser, options, {
     viewport: { width, height: isMobile ? 812 : 900 },
     deviceScaleFactor: options.dpr,
     isMobile,
@@ -3211,6 +3238,7 @@ async function probeWidth(browser, options, width) {
   const page = await context.newPage();
   const consoleErrors = [];
 
+  await authenticateProbePage(page, options, options.url);
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text().slice(0, 200));
   });
@@ -3934,7 +3962,7 @@ async function probeOpenerLayers(page, options, width) {
 // lượt quét (không giả lập màn chạm): lượt này chỉ tìm chỗ vỡ bố cục, cỡ bấm đã đo ở các khổ cố định.
 async function sweepWidths(browser, options) {
   const { from, to, step } = options.sweep;
-  const context = await browser.newContext({
+  const context = await createProbeContext(browser, options, {
     viewport: { width: from, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: options.isDark ? "dark" : "light",
@@ -3943,6 +3971,7 @@ async function sweepWidths(browser, options) {
   const sweepDir = join(options.out, options.isDark ? "sweep-dark" : "sweep");
   mkdirSync(sweepDir, { recursive: true });
 
+  await authenticateProbePage(page, options, options.url);
   await page.goto(options.url, { waitUntil: "load" });
   await page.addStyleTag({ content: freezeMotionCss });
   if (options.isDark) await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -4679,13 +4708,14 @@ function diffLayoutAnchors(wireframeAnchors, buildAnchors, shouldCompareColors) 
 }
 
 async function openForAnchors(browser, options, url, width, screenshotPath) {
-  const context = await browser.newContext({
+  const context = await createProbeContext(browser, options, {
     viewport: { width, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: options.isDark ? "dark" : "light",
   });
   const page = await context.newPage();
 
+  await authenticateProbePage(page, options, url);
   await page.goto(url, { waitUntil: "load" });
   await page.addStyleTag({ content: freezeMotionCss });
   await page.waitForTimeout(options.waitMs);

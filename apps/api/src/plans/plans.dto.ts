@@ -2,8 +2,10 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsDateString,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -13,6 +15,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PlanStatus } from '../generated/prisma/client.js';
 
 export class PlanMetricDto {
   @IsString()
@@ -40,8 +43,12 @@ export class CreatePlanDto {
   @Length(1, 1000)
   description?: string;
 
-  @IsUUID()
-  branchId!: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  branchIds!: string[];
 
   @IsDateString()
   periodStart!: string;
@@ -55,6 +62,34 @@ export class CreatePlanDto {
   @ValidateNested({ each: true })
   @Type(() => PlanMetricDto)
   metrics!: PlanMetricDto[];
+}
+
+export class UpdatePlanDto {
+  @IsOptional()
+  @IsDateString()
+  periodStart?: string;
+
+  @IsOptional()
+  @IsDateString()
+  periodEnd?: string;
+
+  @IsOptional()
+  @IsEnum(PlanStatus)
+  status?: PlanStatus;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  addBranchIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  removeBranchIds?: string[];
 }
 
 export class PlanListQueryDto {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Plus, RotateCw, Trash2 } from 'lucide-react';
+import { Pencil, Plus, RotateCw, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,11 +34,10 @@ type Plan = {
   id: string;
   name: string;
   description: string | null;
-  branchId: string;
-  branch: Pick<BranchOption, 'id' | 'code' | 'name'>;
+  branches: Pick<BranchOption, 'id' | 'code' | 'name'>[];
   periodStart: string;
   periodEnd: string;
-  status: string;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
   metrics: PlanMetric[];
 };
@@ -64,6 +63,10 @@ function formatDate(value: string) {
     year: 'numeric',
     timeZone: 'Asia/Ho_Chi_Minh',
   }).format(new Date(value));
+}
+
+function dateInputValue(value: string) {
+  return value.slice(0, 10);
 }
 
 function formatTarget(value: number) {
@@ -101,9 +104,12 @@ function useDelayedLoading(isLoading: boolean) {
 }
 
 export function PlansPage() {
-  const { session, can } = useCrmSession();
+  const { session, staff, can } = useCrmSession();
   const canReadPlans = can('plans.read');
   const canManagePlans = can('plans.manage');
+  const canDeletePlans = Boolean(staff?.roles.some((role) =>
+    ['ADMIN', 'OPERATOR'].includes(role.key) && role.scope.global,
+  ));
   const canReadBranches = can('branches.read');
   const accessToken = session?.accessToken;
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -116,8 +122,14 @@ export function PlansPage() {
   const [branchesError, setBranchesError] = useState('');
   const [branchesRequestVersion, setBranchesRequestVersion] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [editError, setEditError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [notice, setNotice] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -125,12 +137,19 @@ export function PlansPage() {
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [metrics, setMetrics] = useState<MetricDraft[]>([emptyMetric()]);
+  const [editPeriodStart, setEditPeriodStart] = useState('');
+  const [editPeriodEnd, setEditPeriodEnd] = useState('');
+  const [editStatus, setEditStatus] = useState<Plan['status']>('DRAFT');
+  const [editBranchIds, setEditBranchIds] = useState<string[]>([]);
+  const [branchToAdd, setBranchToAdd] = useState('');
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.status === 'ACTIVE'),
     [branches],
   );
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
+  const selectedBranchIds = selectedPlan?.branches.map((branch) => branch.id) ?? [];
+  const addableBranches = activeBranches.filter((branch) => !editBranchIds.includes(branch.id));
   const showPlanSkeleton = useDelayedLoading(loadingPlans);
 
   useEffect(() => {
@@ -214,6 +233,81 @@ export function PlansPage() {
     setCreateError('');
   }
 
+  function openEditDialog(plan: Plan) {
+    setEditPeriodStart(dateInputValue(plan.periodStart));
+    setEditPeriodEnd(dateInputValue(plan.periodEnd));
+    setEditStatus(plan.status);
+    setEditBranchIds(plan.branches.map((branch) => branch.id));
+    setBranchToAdd('');
+    setEditError('');
+    setEditDialogOpen(true);
+  }
+
+  async function updatePlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !selectedPlan) {
+      setEditError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      return;
+    }
+    if (!editPeriodStart || !editPeriodEnd || editPeriodStart >= editPeriodEnd) {
+      setEditError('Ngày kết thúc phải sau ngày bắt đầu.');
+      return;
+    }
+
+    const currentBranchIds = selectedPlan.branches.map((branch) => branch.id);
+    const addBranchIds = editBranchIds.filter((id) => !currentBranchIds.includes(id));
+    const removeBranchIds = currentBranchIds.filter((id) => !editBranchIds.includes(id));
+    setEditing(true);
+    setEditError('');
+    try {
+      const updated = await request<Plan>(`/plans/${selectedPlan.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          periodStart: new Date(`${editPeriodStart}T00:00:00.000Z`).toISOString(),
+          periodEnd: new Date(`${editPeriodEnd}T00:00:00.000Z`).toISOString(),
+          status: editStatus,
+          addBranchIds,
+          removeBranchIds,
+        }),
+      }, accessToken);
+      setPlans((current) => sortPlans(current.map((plan) => plan.id === updated.id ? updated : plan)));
+      setSelectedPlanId(updated.id);
+      setNotice('Đã cập nhật kế hoạch.');
+      setEditDialogOpen(false);
+    } catch (cause) {
+      setEditError(cause instanceof Error ? cause.message : 'Không thể cập nhật kế hoạch.');
+    } finally {
+      setEditing(false);
+    }
+  }
+
+  async function deletePlan() {
+    if (!accessToken || !selectedPlan || !canDeletePlans) {
+      setDeleteError('Chỉ quản trị viên hoặc vận hành hệ thống toàn hệ thống mới được phép xóa kế hoạch.');
+      return;
+    }
+
+    const deletedPlanId = selectedPlan.id;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await request<{ id: string; deletedAt: string }>(`/plans/${deletedPlanId}`, {
+        method: 'DELETE',
+      }, accessToken);
+      const remaining = sortPlans(plans.filter((plan) => plan.id !== deletedPlanId));
+      setPlans(remaining);
+      setSelectedPlanId((currentSelectedId) =>
+        currentSelectedId === deletedPlanId ? remaining[0]?.id ?? null : currentSelectedId,
+      );
+      setNotice('Đã xóa kế hoạch.');
+      setDeleteDialogOpen(false);
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : 'Không thể xóa kế hoạch.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken) {
@@ -263,7 +357,7 @@ export function PlansPage() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || undefined,
-          branchId,
+          branchIds: [branchId],
           periodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString(),
           periodEnd: new Date(`${periodEnd}T00:00:00.000Z`).toISOString(),
           metrics: normalizedMetrics,
@@ -382,7 +476,7 @@ export function PlansPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {activeBranches.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                          <SelectItem key={branch.id} value={branch.id} className="mb-1">{branch.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -488,6 +582,141 @@ export function PlansPage() {
           )}
         </div>
 
+        {canManagePlans && selectedPlan && (
+          <Dialog
+            open={editDialogOpen}
+            disablePointerDismissal
+            onOpenChange={(open, details) => {
+              if (open || details.reason === 'close-press') {
+                setEditDialogOpen(open);
+                if (!open) setEditError('');
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-xl" closeLabel="Đóng">
+              <DialogHeader className="pr-10">
+                <DialogTitle>Chỉnh sửa kế hoạch</DialogTitle>
+                <DialogDescription>{selectedPlan.name}</DialogDescription>
+              </DialogHeader>
+              {editError && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{editError}</p>}
+              <form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => { void updatePlan(event); }}>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-plan-start">Ngày bắt đầu</Label>
+                  <Input
+                    id="edit-plan-start"
+                    type="date"
+                    className="bg-white"
+                    value={editPeriodStart}
+                    onChange={(event) => setEditPeriodStart(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-plan-end">Ngày kết thúc</Label>
+                  <Input
+                    id="edit-plan-end"
+                    type="date"
+                    className="bg-white"
+                    value={editPeriodEnd}
+                    onChange={(event) => setEditPeriodEnd(event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="edit-plan-status">Trạng thái</Label>
+                  <Select value={editStatus} onValueChange={(value) => { if (value) setEditStatus(value as Plan['status']); }}>
+                    <SelectTrigger id="edit-plan-status" className="w-full bg-white">
+                      <SelectValue>{statusLabels[editStatus]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(statusLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value} className="mb-1">{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="edit-plan-branch">Chi nhánh áp dụng</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {editBranchIds.map((id) => {
+                      const branch = activeBranches.find((item) => item.id === id)
+                        ?? selectedPlan.branches.find((item) => item.id === id);
+                      if (!branch) return null;
+                      return (
+                        <span className="inline-flex min-w-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-sm" key={id}>
+                          <span className="max-w-64 truncate" title={branch.name}>{branch.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Xóa chi nhánh ${branch.name}`}
+                            onClick={() => setEditBranchIds((current) => current.filter((branchId) => branchId !== id))}
+                          >
+                            <X aria-hidden="true" />
+                          </Button>
+                        </span>
+                      );
+                    })}
+                    {editBranchIds.length === 0 && (
+                      <span className="text-sm text-muted-foreground">Chưa áp dụng cho chi nhánh nào.</span>
+                    )}
+                  </div>
+                  <Select value={branchToAdd} onValueChange={(value) => {
+                    if (!value) return;
+                    setEditBranchIds((current) => current.includes(value) ? current : [...current, value]);
+                    setBranchToAdd('');
+                  }}>
+                    <SelectTrigger id="edit-plan-branch" className="w-full bg-white" disabled={addableBranches.length === 0}>
+                      <SelectValue placeholder={addableBranches.length ? 'Thêm chi nhánh áp dụng' : 'Không còn chi nhánh để thêm'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addableBranches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id} className="mb-1">{branch.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end sm:col-span-2">
+                  <Button type="submit" disabled={editing}>
+                    {editing ? 'Đang lưu…' : 'Lưu thay đổi'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {canDeletePlans && selectedPlan && (
+          <Dialog
+            open={deleteDialogOpen}
+            disablePointerDismissal
+            onOpenChange={(open, details) => {
+              if (open || details.reason === 'close-press') {
+                setDeleteDialogOpen(open);
+                if (!open) setDeleteError('');
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-md" closeLabel="Đóng">
+              <DialogHeader className="pr-10">
+                <DialogTitle>Xóa kế hoạch?</DialogTitle>
+                <DialogDescription>
+                  Kế hoạch <strong className="break-words text-foreground">{selectedPlan.name}</strong> sẽ được ẩn khỏi danh sách. Dữ liệu được giữ lại.
+                </DialogDescription>
+              </DialogHeader>
+              {deleteError && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{deleteError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" disabled={deleting} onClick={() => setDeleteDialogOpen(false)}>
+                  Hủy
+                </Button>
+                <Button type="button" disabled={deleting} onClick={() => { void deletePlan(); }}>
+                  {deleting ? 'Đang xóa…' : 'Xóa kế hoạch'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
         {notice && <p className="text-sm text-emerald-800" role="status">{notice}</p>}
         {loadingPlans && <span className="sr-only" role="status">Đang tải danh sách kế hoạch.</span>}
 
@@ -538,19 +767,21 @@ export function PlansPage() {
                 Chưa có kế hoạch nào trong phạm vi này.
               </p>
             ) : (
-              <CardContent className="max-h-[min(68vh,680px)] divide-y overflow-y-auto p-0">
+              <CardContent className="max-h-none divide-y overflow-y-auto p-0 lg:max-h-[min(68vh,680px)]">
                 {plans.map((plan) => (
                   <button
                     key={plan.id}
                     type="button"
-                    className={`grid w-full min-w-0 gap-2 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedPlanId === plan.id ? 'bg-muted/70' : 'bg-card'}`}
+                    className={`grid w-full min-w-0 gap-2 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedPlanId === plan.id ? 'bg-accent hover:bg-accent' : 'bg-card hover:bg-primary/10'}`}
                     aria-current={selectedPlanId === plan.id ? 'true' : undefined}
                     onClick={() => setSelectedPlanId(plan.id)}
                   >
-                    <strong className="line-clamp-2 break-words text-sm font-medium">{plan.name}</strong>
-                    <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>{plan.branch.name}</span>
-                      <span>{formatDate(plan.periodStart)} – {formatDate(plan.periodEnd)}</span>
+                    <strong className="line-clamp-1 break-words text-sm font-medium md:line-clamp-2" title={plan.name}>{plan.name}</strong>
+                    <span className="flex min-w-0 flex-nowrap items-center gap-x-3 text-xs text-muted-foreground md:flex-wrap md:gap-y-1">
+                      <span className="min-w-0 flex-1 truncate md:flex-none md:overflow-visible md:text-clip md:whitespace-normal">
+                        {plan.branches.map((branch) => branch.name).join(', ') || 'Chưa gán chi nhánh'}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap">{formatDate(plan.periodStart)} – {formatDate(plan.periodEnd)}</span>
                     </span>
                     <Badge variant={plan.status === 'DRAFT' ? 'outline' : 'secondary'} className="w-fit">
                       {statusLabels[plan.status] ?? plan.status}
@@ -588,16 +819,38 @@ export function PlansPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 space-y-2">
                     <h2 className="break-words text-lg font-semibold tracking-tight">{selectedPlan.name}</h2>
-                    <p className="text-sm text-muted-foreground">{selectedPlan.branch.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedPlan.branches.map((branch) => branch.name).join(', ') || 'Chưa gán chi nhánh'}
+                    </p>
                   </div>
-                  <Badge variant={selectedPlan.status === 'DRAFT' ? 'outline' : 'secondary'} className="w-fit shrink-0">
-                    {statusLabels[selectedPlan.status] ?? selectedPlan.status}
-                  </Badge>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <Badge variant={selectedPlan.status === 'DRAFT' ? 'outline' : 'secondary'} className="w-fit">
+                      {statusLabels[selectedPlan.status] ?? selectedPlan.status}
+                    </Badge>
+                    {canManagePlans && (
+                      <Button type="button" variant="outline" onClick={() => openEditDialog(selectedPlan)}>
+                        <Pencil data-icon="inline-start" />
+                        Chỉnh sửa
+                      </Button>
+                    )}
+                    {canDeletePlans && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => { setDeleteError(''); setDeleteDialogOpen(true); }}
+                      >
+                        <Trash2 data-icon="inline-start" />
+                        Xóa
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid gap-3 border-y py-4 sm:grid-cols-3">
                   <div className="grid gap-1">
-                    <span className="text-xs text-muted-foreground">Chi nhánh</span>
-                    <strong className="text-sm font-medium">{selectedPlan.branch.name}</strong>
+                    <span className="text-xs text-muted-foreground">Chi nhánh áp dụng</span>
+                    <strong className="text-sm font-medium">
+                      {selectedPlan.branches.map((branch) => branch.name).join(', ') || 'Chưa gán chi nhánh'}
+                    </strong>
                   </div>
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Ngày bắt đầu</span>

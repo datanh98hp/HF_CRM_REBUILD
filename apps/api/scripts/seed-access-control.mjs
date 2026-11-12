@@ -51,6 +51,90 @@ async function passwordHash(value) {
   return `scrypt$32768$8$1$${salt.toString('base64url')}$${Buffer.from(key).toString('base64url')}`;
 }
 
+async function seedDevelopmentPlans(tx, createdById) {
+  if (configuredNodeEnv !== 'development' || await tx.plan.count() > 0) return;
+
+  const branches = await tx.branch.findMany({
+    where: { status: 'ACTIVE' },
+    orderBy: { code: 'asc' },
+    take: 2,
+  });
+  if (branches.length === 0) {
+    throw new Error('Cannot seed demo plans without an active branch');
+  }
+
+  const primaryBranch = branches.find(({ code, name }) =>
+    /HCM|Hồ Chí Minh/i.test(`${code} ${name}`),
+  ) ?? branches[0];
+  const secondaryBranch = branches.find(({ id }) => id !== primaryBranch.id) ?? primaryBranch;
+  const fixtures = [
+    {
+      id: 'bca1f523-fd92-4a81-83ca-68a7a4be4004',
+      name: 'Tăng trưởng khách hàng & hoàn thiện hồ sơ vay cá nhân — khu vực Đông Nam Bộ quý IV/2026',
+      description: 'Theo dõi lượt tư vấn và số hồ sơ hoàn thiện trong quý IV/2026.',
+      branch: primaryBranch,
+      periodStart: '2026-10-01',
+      periodEnd: '2026-12-31',
+      status: 'ACTIVE',
+      metrics: [
+        { name: 'Lượt tư vấn', unit: 'lượt', target: 420 },
+        { name: 'Hồ sơ hoàn thiện', unit: 'hồ sơ', target: 96 },
+      ],
+    },
+    {
+      id: 'bca1f523-fd92-4a81-83ca-68a7a4be4003',
+      name: 'Mở rộng tệp khách hàng ưu tiên',
+      description: 'Mục tiêu phát triển khách hàng ưu tiên và tiếp nhận hồ sơ vay.',
+      branch: secondaryBranch,
+      periodStart: '2026-10-01',
+      periodEnd: '2026-12-31',
+      status: 'DRAFT',
+      metrics: [
+        { name: 'Khách hàng mới', unit: 'khách', target: 0 },
+        { name: 'Hồ sơ vay', unit: 'hồ sơ', target: 35 },
+      ],
+    },
+    {
+      id: 'bca1f523-fd92-4a81-83ca-68a7a4be4002',
+      name: 'Chăm sóc hồ sơ cần bổ sung',
+      description: 'Rà soát và hỗ trợ hoàn thiện các hồ sơ còn thiếu thông tin.',
+      branch: primaryBranch,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-09-30',
+      status: 'ARCHIVED',
+      metrics: [{ name: 'Hồ sơ xử lý', unit: 'hồ sơ', target: 125 }],
+    },
+    {
+      id: 'bca1f523-fd92-4a81-83ca-68a7a4be4001',
+      name: 'Kết nối đối tác và rà soát hồ sơ khu vực miền Tây',
+      description: 'Tổng kết mục tiêu giải ngân và phối hợp đối tác trong nửa đầu năm.',
+      branch: secondaryBranch,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-06-30',
+      status: 'ARCHIVED',
+      metrics: [{ name: 'Giải ngân mục tiêu', unit: '₫', target: 1_284_500_000 }],
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    await tx.plan.create({
+      data: {
+        id: fixture.id,
+        name: fixture.name,
+        description: fixture.description,
+        createdById,
+        periodStart: new Date(`${fixture.periodStart}T00:00:00.000Z`),
+        periodEnd: new Date(`${fixture.periodEnd}T00:00:00.000Z`),
+        status: fixture.status,
+        branches: { create: [{ branchId: fixture.branch.id }] },
+        metrics: { create: fixture.metrics },
+      },
+    });
+  }
+
+  process.stdout.write('Seeded four development-only demo plans.\n');
+}
+
 try {
   await prisma.$transaction(async (tx) => {
     for (const permission of permissionCatalog) {
@@ -133,6 +217,8 @@ try {
         },
       });
     }
+
+    await seedDevelopmentPlans(tx, admin.id);
   });
   process.stdout.write('Access control catalog and bootstrap operator are ready.\n');
 } finally {

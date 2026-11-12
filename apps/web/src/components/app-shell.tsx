@@ -147,7 +147,7 @@ export function AppShell({
           <span className="crm-brand-name">Finance CRM</span>
           {!mobile && (
             <Button
-              className="crm-sidebar-toggle"
+              className="crm-sidebar-toggle hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               variant="ghost"
               size="icon-sm"
               type="button"
@@ -242,7 +242,7 @@ export function AppShell({
       <div className="crm-workspace-main">
         <header className="crm-topbar">
           <Button
-            className="crm-menu-toggle"
+            className="crm-menu-toggle hover:bg-primary hover:text-primary-foreground aria-expanded:hover:!bg-primary aria-expanded:hover:!text-primary-foreground"
             variant="ghost"
             size="icon"
             type="button"

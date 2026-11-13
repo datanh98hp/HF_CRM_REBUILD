@@ -18,7 +18,7 @@ export class MockCustomerTokenDto {
 
 export class ChangePasswordDto {
   @IsString()
-  @Length(12, 256)
+  @Length(8, 256)
   currentPassword!: string;
 
   @IsString()

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Pencil, Plus, RotateCw, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, RotateCw, Send, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -30,29 +31,41 @@ type PlanMetric = {
   target: number;
 };
 
+type PlanApproval = {
+  id: string;
+  version: number;
+  decision: 'APPROVED' | 'REJECTED';
+  reason: string | null;
+  createdAt: string;
+  reviewer: { id: string; username: string; displayName: string };
+};
+
 type Plan = {
   id: string;
   name: string;
   description: string | null;
+  createdById: string;
   branches: Pick<BranchOption, 'id' | 'code' | 'name'>[];
   periodStart: string;
   periodEnd: string;
-  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'ARCHIVED';
+  approvalVersion: number;
   createdAt: string;
   metrics: PlanMetric[];
+  approvals: PlanApproval[];
 };
 
-type MetricDraft = {
-  name: string;
-  unit: string;
-  target: string;
-};
+type CatalogItem = { id: string; name: string; unit: string; isActive: boolean };
+type MetricDraft = { catalogId: string; target: string };
+type ApprovalDecision = 'APPROVED' | 'REJECTED';
 
-const emptyMetric = (): MetricDraft => ({ name: '', unit: '', target: '' });
+const emptyMetric = (): MetricDraft => ({ catalogId: '', target: '' });
 
 const statusLabels: Record<string, string> = {
   DRAFT: 'Bản nháp',
+  PENDING_APPROVAL: 'Chờ duyệt',
   ACTIVE: 'Đang thực hiện',
+  REJECTED: 'Bị từ chối',
   ARCHIVED: 'Đã lưu trữ',
 };
 
@@ -67,6 +80,10 @@ function formatDate(value: string) {
 
 function dateInputValue(value: string) {
   return value.slice(0, 10);
+}
+
+function dateStartIso(value: string) {
+  return new Date(`${value}T00:00:00.000Z`).toISOString();
 }
 
 function formatTarget(value: number) {
@@ -107,6 +124,11 @@ export function PlansPage() {
   const { session, staff, can } = useCrmSession();
   const canReadPlans = can('plans.read');
   const canManagePlans = can('plans.manage');
+  const canApprovePlans = can('plans.approve');
+  const canManageCatalog = Boolean(
+    can('plans.catalog.manage')
+    && staff?.roles.some((role) => ['ADMIN', 'OPERATOR'].includes(role.key) && role.scope.global),
+  );
   const canDeletePlans = Boolean(staff?.roles.some((role) =>
     ['ADMIN', 'OPERATOR'].includes(role.key) && role.scope.global,
   ));
@@ -117,6 +139,10 @@ export function PlansPage() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [plansError, setPlansError] = useState('');
   const [plansRequestVersion, setPlansRequestVersion] = useState(0);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogRequestVersion, setCatalogRequestVersion] = useState(0);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [branchesError, setBranchesError] = useState('');
@@ -124,12 +150,18 @@ export function PlansPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [approvalDecision, setApprovalDecision] = useState<ApprovalDecision | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [createError, setCreateError] = useState('');
   const [editError, setEditError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [approvalError, setApprovalError] = useState('');
+  const [approvalReason, setApprovalReason] = useState('');
   const [notice, setNotice] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -139,13 +171,16 @@ export function PlansPage() {
   const [metrics, setMetrics] = useState<MetricDraft[]>([emptyMetric()]);
   const [editPeriodStart, setEditPeriodStart] = useState('');
   const [editPeriodEnd, setEditPeriodEnd] = useState('');
-  const [editStatus, setEditStatus] = useState<Plan['status']>('DRAFT');
   const [editBranchIds, setEditBranchIds] = useState<string[]>([]);
   const [branchToAdd, setBranchToAdd] = useState('');
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.status === 'ACTIVE'),
     [branches],
+  );
+  const activeCatalogItems = useMemo(
+    () => catalogItems.filter((item) => item.isActive),
+    [catalogItems],
   );
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
   const selectedBranchIds = selectedPlan?.branches.map((branch) => branch.id) ?? [];
@@ -181,6 +216,32 @@ export function PlansPage() {
 
     return () => { active = false; };
   }, [accessToken, canReadPlans, plansRequestVersion]);
+
+  useEffect(() => {
+    let active = true;
+    setCatalogItems([]);
+    setCatalogError('');
+    if (!accessToken || !canReadPlans) {
+      setLoadingCatalog(false);
+      return () => { active = false; };
+    }
+
+    setLoadingCatalog(true);
+    void request<CatalogItem[]>('/plans/metric-catalog', {}, accessToken)
+      .then((items) => {
+        if (active) setCatalogItems(items);
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          setCatalogError(cause instanceof Error ? cause.message : 'Không thể tải danh mục KPI.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingCatalog(false);
+      });
+
+    return () => { active = false; };
+  }, [accessToken, canReadPlans, catalogRequestVersion]);
 
   useEffect(() => {
     if (!accessToken || !canReadBranches) {
@@ -236,7 +297,6 @@ export function PlansPage() {
   function openEditDialog(plan: Plan) {
     setEditPeriodStart(dateInputValue(plan.periodStart));
     setEditPeriodEnd(dateInputValue(plan.periodEnd));
-    setEditStatus(plan.status);
     setEditBranchIds(plan.branches.map((branch) => branch.id));
     setBranchToAdd('');
     setEditError('');
@@ -263,9 +323,8 @@ export function PlansPage() {
       const updated = await request<Plan>(`/plans/${selectedPlan.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          periodStart: new Date(`${editPeriodStart}T00:00:00.000Z`).toISOString(),
-          periodEnd: new Date(`${editPeriodEnd}T00:00:00.000Z`).toISOString(),
-          status: editStatus,
+          periodStart: dateStartIso(editPeriodStart),
+          periodEnd: dateStartIso(editPeriodEnd),
           addBranchIds,
           removeBranchIds,
         }),
@@ -308,6 +367,62 @@ export function PlansPage() {
     }
   }
 
+  async function submitPlanForApproval(plan: Plan) {
+    if (!accessToken || !canManagePlans) return;
+    setApprovalSubmitting(true);
+    setApprovalError('');
+    try {
+      const updated = await request<Plan>(`/plans/${plan.id}/submissions`, { method: 'POST' }, accessToken);
+      setPlans((current) => sortPlans(current.map((item) => item.id === updated.id ? updated : item)));
+      setSelectedPlanId(updated.id);
+      setNotice('Đã gửi kế hoạch để phê duyệt.');
+    } catch (cause) {
+      setApprovalError(cause instanceof Error ? cause.message : 'Không thể gửi kế hoạch để phê duyệt.');
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  }
+
+  async function reviewPlan(decision: ApprovalDecision, reason = '') {
+    if (!accessToken || !selectedPlan || !canApprovePlans) return;
+    setApprovalSubmitting(true);
+    setApprovalError('');
+    try {
+      const updated = await request<Plan>(`/plans/${selectedPlan.id}/approvals`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, ...(reason.trim() ? { reason: reason.trim() } : {}) }),
+      }, accessToken);
+      setPlans((current) => sortPlans(current.map((item) => item.id === updated.id ? updated : item)));
+      setSelectedPlanId(updated.id);
+      setNotice(decision === 'APPROVED' ? 'Đã duyệt kế hoạch.' : 'Đã từ chối kế hoạch.');
+      setApprovalDialogOpen(false);
+      setApprovalDecision(null);
+      setApprovalReason('');
+    } catch (cause) {
+      setApprovalError(cause instanceof Error ? cause.message : 'Không thể cập nhật quyết định phê duyệt.');
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  }
+
+  async function archivePlan(plan: Plan) {
+    if (!accessToken || !canManagePlans || plan.status !== 'ACTIVE') return;
+    setArchiving(true);
+    setApprovalError('');
+    try {
+      const updated = await request<Plan>(`/plans/${plan.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'ARCHIVED' }),
+      }, accessToken);
+      setPlans((current) => sortPlans(current.map((item) => item.id === updated.id ? updated : item)));
+      setNotice('Đã lưu trữ kế hoạch.');
+    } catch (cause) {
+      setApprovalError(cause instanceof Error ? cause.message : 'Không thể lưu trữ kế hoạch.');
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken) {
@@ -316,11 +431,9 @@ export function PlansPage() {
     }
 
     const normalizedMetrics = metrics.map((metric) => ({
-      name: metric.name.trim(),
-      unit: metric.unit.trim(),
+      catalogId: metric.catalogId,
       target: Number(metric.target),
     }));
-    const metricNames = normalizedMetrics.map((metric) => metric.name.toLocaleLowerCase('vi-VN'));
 
     if (name.trim().length < 2 || name.trim().length > 160) {
       setCreateError('Tên kế hoạch cần có từ 2 đến 160 ký tự.');
@@ -334,14 +447,14 @@ export function PlansPage() {
       setCreateError('Ngày kết thúc phải sau ngày bắt đầu.');
       return;
     }
-    if (new Set(metricNames).size !== metricNames.length) {
-      setCreateError('Tên chỉ tiêu không được trùng lặp.');
+    if (new Set(normalizedMetrics.map((metric) => metric.catalogId)).size !== normalizedMetrics.length) {
+      setCreateError('Mỗi hạng mục chỉ được chọn một lần trong cùng kế hoạch.');
       return;
     }
     if (normalizedMetrics.some((metric) =>
-      metric.name.length < 2 || metric.name.length > 160 || metric.unit.length < 1 || metric.unit.length > 40,
+      !activeCatalogItems.some((item) => item.id === metric.catalogId),
     )) {
-      setCreateError('Tên chỉ tiêu cần có 2–160 ký tự và đơn vị cần có 1–40 ký tự.');
+      setCreateError('Hãy chọn hạng mục đang hoạt động trong danh mục KPI.');
       return;
     }
     if (normalizedMetrics.some((metric) => !Number.isFinite(metric.target) || metric.target < 0)) {
@@ -358,8 +471,8 @@ export function PlansPage() {
           name: name.trim(),
           description: description.trim() || undefined,
           branchIds: [branchId],
-          periodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString(),
-          periodEnd: new Date(`${periodEnd}T00:00:00.000Z`).toISOString(),
+          periodStart: dateStartIso(periodStart),
+          periodEnd: dateStartIso(periodEnd),
           metrics: normalizedMetrics,
         }),
       }, accessToken);
@@ -411,6 +524,20 @@ export function PlansPage() {
                 </Button>
               </div>
             )}
+            {canManagePlans && catalogError && (
+              <div className="flex flex-wrap items-center gap-2 pt-1" role="alert">
+                <p className="text-sm text-destructive">{catalogError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCatalogRequestVersion((version) => version + 1)}
+                >
+                  <RotateCw data-icon="inline-start" />
+                  Tải lại danh mục
+                </Button>
+              </div>
+            )}
           </div>
           {canManagePlans && (
             <Dialog
@@ -427,7 +554,7 @@ export function PlansPage() {
                 render={
                   <Button
                     type="button"
-                    disabled={!canReadBranches || loadingBranches || Boolean(branchesError) || activeBranches.length === 0}
+                    disabled={!canReadBranches || loadingBranches || Boolean(branchesError) || activeBranches.length === 0 || loadingCatalog || Boolean(catalogError) || activeCatalogItems.length === 0}
                   >
                     <Plus data-icon="inline-start" />
                     Tạo kế hoạch
@@ -441,6 +568,23 @@ export function PlansPage() {
                     Nhập thông tin kỳ kế hoạch và các chỉ tiêu cần theo dõi.
                   </DialogDescription>
                 </DialogHeader>
+                {loadingCatalog && <p className="text-sm text-muted-foreground" role="status">Đang tải danh mục hạng mục KPI…</p>}
+                {catalogError && (
+                  <div className="flex flex-wrap items-center gap-2" role="alert">
+                    <p className="text-sm text-destructive">{catalogError}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCatalogRequestVersion((version) => version + 1)}>
+                      <RotateCw data-icon="inline-start" />
+                      Tải lại
+                    </Button>
+                  </div>
+                )}
+                {!loadingCatalog && !catalogError && activeCatalogItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Chưa có hạng mục KPI đang hoạt động. {canManageCatalog
+                      ? <a className="font-medium text-foreground underline-offset-4 hover:underline" href="/plans/catalog">Mở danh mục để tạo mới.</a>
+                      : 'Vui lòng liên hệ quản trị viên để bổ sung danh mục.'}
+                  </p>
+                )}
                 {createError && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{createError}</p>}
                 <form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => { void createPlan(event); }}>
                   <div className="grid gap-2 sm:col-span-2">
@@ -469,7 +613,7 @@ export function PlansPage() {
                   <div className="grid gap-2 sm:col-span-2">
                     <Label htmlFor="plan-branch">Chi nhánh</Label>
                     <Select value={branchId} onValueChange={(value) => setBranchId(value ?? '')}>
-                      <SelectTrigger id="plan-branch" className="w-full bg-white">
+                      <SelectTrigger id="plan-branch" className="w-full data-[size=default]:h-11 md:data-[size=default]:h-10 bg-card">
                         <SelectValue placeholder="Chọn chi nhánh">
                           {activeBranches.find((branch) => branch.id === branchId)?.name}
                         </SelectValue>
@@ -486,7 +630,7 @@ export function PlansPage() {
                     <Input
                       id="plan-start"
                       type="date"
-                      className="bg-white"
+                      className="bg-card"
                       value={periodStart}
                       onChange={(event) => setPeriodStart(event.target.value)}
                       required
@@ -497,7 +641,7 @@ export function PlansPage() {
                     <Input
                       id="plan-end"
                       type="date"
-                      className="bg-white"
+                      className="bg-card"
                       value={periodEnd}
                       onChange={(event) => setPeriodEnd(event.target.value)}
                       required
@@ -510,43 +654,43 @@ export function PlansPage() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={metrics.length >= 100}
+                        disabled={metrics.length >= 100 || metrics.length >= activeCatalogItems.length}
                         onClick={() => setMetrics((current) => [...current, emptyMetric()])}
                       >
                         <Plus data-icon="inline-start" />
                         Thêm chỉ tiêu
                       </Button>
                     </div>
-                    {metrics.map((metric, index) => (
-                      <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_minmax(0,0.65fr)_auto]" key={index}>
+                    {metrics.map((metric, index) => {
+                      const chosenElsewhere = new Set(
+                        metrics.filter((_, metricIndex) => metricIndex !== index).map((item) => item.catalogId),
+                      );
+                      const availableCatalogItems = activeCatalogItems.filter(
+                        (item) => item.id === metric.catalogId || !chosenElsewhere.has(item.id),
+                      );
+                      const chosenItem = activeCatalogItems.find((item) => item.id === metric.catalogId);
+                      return (
+                      <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_auto]" key={index}>
                         <div className="grid min-w-0 gap-2">
-                          <Label htmlFor={`metric-name-${index}`}>Tên chỉ tiêu</Label>
-                          <Input
-                            id={`metric-name-${index}`}
-                            className="bg-white"
-                            value={metric.name}
-                            onChange={(event) => updateMetric(index, 'name', event.target.value)}
-                            minLength={2}
-                            maxLength={160}
-                            required
-                          />
-                        </div>
-                        <div className="grid min-w-0 gap-2">
-                          <Label htmlFor={`metric-unit-${index}`}>Đơn vị</Label>
-                          <Input
-                            id={`metric-unit-${index}`}
-                            className="bg-white"
-                            value={metric.unit}
-                            onChange={(event) => updateMetric(index, 'unit', event.target.value)}
-                            maxLength={40}
-                            required
-                          />
+                          <Label htmlFor={`metric-catalog-${index}`}>Hạng mục</Label>
+                          <Select value={metric.catalogId} onValueChange={(value) => updateMetric(index, 'catalogId', value ?? '')}>
+                            <SelectTrigger id={`metric-catalog-${index}`} className="w-full data-[size=default]:h-11 md:data-[size=default]:h-10 bg-card" disabled={activeCatalogItems.length === 0}>
+                              <SelectValue placeholder="Chọn hạng mục">
+                                {chosenItem ? `${chosenItem.name} · ${chosenItem.unit}` : undefined}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableCatalogItems.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>{item.name} · {item.unit}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="grid min-w-0 gap-2">
                           <Label htmlFor={`metric-target-${index}`}>Mục tiêu</Label>
                           <Input
                             id={`metric-target-${index}`}
-                            className="bg-white"
+                            className="bg-card"
                             type="number"
                             min="0"
                             max="9999999999999"
@@ -569,10 +713,10 @@ export function PlansPage() {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                   <div className="flex justify-end sm:col-span-2">
-                    <Button type="submit" disabled={submitting || !branchId || !canManagePlans}>
+                    <Button type="submit" disabled={submitting || !branchId || !canManagePlans || loadingCatalog || Boolean(catalogError) || activeCatalogItems.length === 0}>
                       {submitting ? 'Đang tạo…' : 'Tạo kế hoạch'}
                     </Button>
                   </div>
@@ -605,7 +749,7 @@ export function PlansPage() {
                   <Input
                     id="edit-plan-start"
                     type="date"
-                    className="bg-white"
+                    className="bg-card"
                     value={editPeriodStart}
                     onChange={(event) => setEditPeriodStart(event.target.value)}
                     required
@@ -616,24 +760,11 @@ export function PlansPage() {
                   <Input
                     id="edit-plan-end"
                     type="date"
-                    className="bg-white"
+                    className="bg-card"
                     value={editPeriodEnd}
                     onChange={(event) => setEditPeriodEnd(event.target.value)}
                     required
                   />
-                </div>
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="edit-plan-status">Trạng thái</Label>
-                  <Select value={editStatus} onValueChange={(value) => { if (value) setEditStatus(value as Plan['status']); }}>
-                    <SelectTrigger id="edit-plan-status" className="w-full bg-white">
-                      <SelectValue>{statusLabels[editStatus]}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(statusLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value} className="mb-1">{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor="edit-plan-branch">Chi nhánh áp dụng</Label>
@@ -666,7 +797,7 @@ export function PlansPage() {
                     setEditBranchIds((current) => current.includes(value) ? current : [...current, value]);
                     setBranchToAdd('');
                   }}>
-                    <SelectTrigger id="edit-plan-branch" className="w-full bg-white" disabled={addableBranches.length === 0}>
+                    <SelectTrigger id="edit-plan-branch" className="w-full data-[size=default]:h-11 md:data-[size=default]:h-10 bg-card" disabled={addableBranches.length === 0}>
                       <SelectValue placeholder={addableBranches.length ? 'Thêm chi nhánh áp dụng' : 'Không còn chi nhánh để thêm'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -681,6 +812,55 @@ export function PlansPage() {
                     {editing ? 'Đang lưu…' : 'Lưu thay đổi'}
                   </Button>
                 </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {canApprovePlans && (
+          <Dialog
+            open={approvalDialogOpen}
+            disablePointerDismissal
+            onOpenChange={(open, details) => {
+              if (open || details.reason === 'close-press') {
+                setApprovalDialogOpen(open);
+                if (!open) {
+                  setApprovalDecision(null);
+                  setApprovalReason('');
+                  setApprovalError('');
+                }
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-lg" closeLabel="Đóng">
+              <DialogHeader className="pr-10">
+                <DialogTitle>Từ chối kế hoạch</DialogTitle>
+                <DialogDescription>
+                  Vui lòng nêu lý do để người tạo có thể điều chỉnh và gửi lại kế hoạch.
+                </DialogDescription>
+              </DialogHeader>
+              {approvalError && <p className="text-sm text-destructive" role="alert">{approvalError}</p>}
+              <form className="grid gap-4" onSubmit={(event) => {
+                event.preventDefault();
+                if (approvalDecision === 'REJECTED') void reviewPlan('REJECTED', approvalReason);
+              }}>
+                <div className="grid gap-2">
+                  <Label htmlFor="plan-rejection-reason">Lý do từ chối <span className="text-red-600">*</span></Label>
+                  <Textarea
+                    id="plan-rejection-reason"
+                    className="min-h-24 bg-card"
+                    value={approvalReason}
+                    onChange={(event) => setApprovalReason(event.target.value)}
+                    minLength={1}
+                    maxLength={1000}
+                    required
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={approvalSubmitting || !approvalReason.trim()}>
+                    {approvalSubmitting ? 'Đang gửi…' : 'Từ chối kế hoạch'}
+                  </Button>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
@@ -827,6 +1007,54 @@ export function PlansPage() {
                     <Badge variant={selectedPlan.status === 'DRAFT' ? 'outline' : 'secondary'} className="w-fit">
                       {statusLabels[selectedPlan.status] ?? selectedPlan.status}
                     </Badge>
+                    {canManagePlans && (selectedPlan.status === 'DRAFT' || selectedPlan.status === 'REJECTED') && (
+                      <Button
+                        type="button"
+                        disabled={approvalSubmitting}
+                        onClick={() => { void submitPlanForApproval(selectedPlan); }}
+                      >
+                        <Send data-icon="inline-start" />
+                        {selectedPlan.status === 'REJECTED' ? 'Gửi lại duyệt' : 'Gửi duyệt'}
+                      </Button>
+                    )}
+                    {canApprovePlans && selectedPlan.status === 'PENDING_APPROVAL' && selectedPlan.createdById !== staff?.id && (
+                      <>
+                        <Button
+                          type="button"
+                          disabled={approvalSubmitting}
+                          onClick={() => { void reviewPlan('APPROVED'); }}
+                        >
+                          <Check data-icon="inline-start" />
+                          Duyệt
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={approvalSubmitting}
+                          onClick={() => {
+                            setApprovalDecision('REJECTED');
+                            setApprovalReason('');
+                            setApprovalError('');
+                            setApprovalDialogOpen(true);
+                          }}
+                        >
+                          Từ chối
+                        </Button>
+                      </>
+                    )}
+                    {canApprovePlans && selectedPlan.status === 'PENDING_APPROVAL' && selectedPlan.createdById === staff?.id && (
+                      <span className="text-xs text-muted-foreground">Người tạo không thể tự duyệt</span>
+                    )}
+                    {canManagePlans && selectedPlan.status === 'ACTIVE' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={archiving}
+                        onClick={() => { void archivePlan(selectedPlan); }}
+                      >
+                        {archiving ? 'Đang lưu trữ…' : 'Lưu trữ'}
+                      </Button>
+                    )}
                     {canManagePlans && (
                       <Button type="button" variant="outline" onClick={() => openEditDialog(selectedPlan)}>
                         <Pencil data-icon="inline-start" />
@@ -845,6 +1073,9 @@ export function PlansPage() {
                     )}
                   </div>
                 </div>
+                {approvalError && (
+                  <p className="text-sm text-destructive" role="alert">{approvalError}</p>
+                )}
                 <div className="grid gap-3 border-y py-4 sm:grid-cols-3">
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Chi nhánh áp dụng</span>
@@ -882,9 +1113,30 @@ export function PlansPage() {
                     <p className="text-sm text-muted-foreground">Kế hoạch này chưa có chỉ tiêu.</p>
                   )}
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Tiến độ và KPI chưa khả dụng ở lát cắt hiện tại.
+                    Tiến độ và KPI được theo dõi trong trang Công việc.
                   </p>
                 </div>
+                {selectedPlan.approvals.length > 0 && (
+                  <section className="grid gap-3 border-t pt-4" aria-labelledby="plan-approval-history">
+                    <h3 id="plan-approval-history" className="text-sm font-semibold">Lịch sử phê duyệt</h3>
+                    <ol className="grid gap-3">
+                      {selectedPlan.approvals.map((approval) => (
+                        <li className="grid gap-1 border-l-2 border-border pl-3" key={approval.id}>
+                          <p className="text-sm font-medium">
+                            {approval.decision === 'APPROVED' ? 'Đã duyệt' : 'Đã từ chối'}
+                            <span className="font-normal text-muted-foreground"> · {approval.reviewer.displayName}</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Lần gửi {approval.version} · {formatDate(approval.createdAt)}
+                          </p>
+                          {approval.reason && (
+                            <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{approval.reason}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                )}
               </CardContent>
             ) : (
               <CardContent className="grid min-h-60 place-items-center p-6 text-center">

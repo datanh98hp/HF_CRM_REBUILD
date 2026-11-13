@@ -67,8 +67,15 @@ enum LoanContractStatus {
 
 enum PlanStatus {
   DRAFT
+  PENDING_APPROVAL
   ACTIVE
+  REJECTED
   ARCHIVED
+}
+
+enum PlanApprovalDecision {
+  APPROVED
+  REJECTED
 }
 
 enum TaskStatus {
@@ -151,8 +158,10 @@ model User {
   createdPlans Plan[] @relation("PlanCreator")
   createdTasks Task[] @relation("TaskCreator")
   assignedTasks Task[] @relation("TaskAssignee")
+  taskAssignments TaskAssignment[] @relation("TaskAssignmentAssignee")
   submittedTaskResults TaskResult[] @relation("TaskResultSubmitter")
   reviewedTaskResults TaskVerification[] @relation("TaskResultReviewer")
+  reviewedPlans PlanApproval[] @relation("PlanApprovalReviewer")
   uploadedEvidenceFiles FileAsset[] @relation("EvidenceFileUploader")
   linkedTaskResultEvidence TaskResultEvidence[] @relation("TaskResultEvidenceLinker")
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
@@ -441,16 +450,33 @@ model Plan {
   periodStart DateTime     @db.Timestamptz(3)
   periodEnd   DateTime     @db.Timestamptz(3)
   status      PlanStatus   @default(DRAFT)
+  approvalVersion Int      @default(0)
   deletedAt   DateTime?    @db.Timestamptz(3)
   createdBy   User          @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Restrict)
   branches    PlanBranch[]
   metrics     PlanMetric[]
+  approvals   PlanApproval[]
   tasks       Task[]
   createdAt   DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
 
   @@index([periodStart, periodEnd, deletedAt])
   @@index([createdById, createdAt])
+}
+
+model PlanApproval {
+  id        String               @id @default(uuid()) @db.Uuid
+  planId    String               @db.Uuid
+  reviewerId String              @db.Uuid
+  version   Int
+  decision  PlanApprovalDecision
+  reason    String?              @db.VarChar(1000)
+  plan      Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  reviewer  User                 @relation("PlanApprovalReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@unique([planId, version])
+  @@index([reviewerId, createdAt])
 }
 
 model PlanBranch {
@@ -464,19 +490,35 @@ model PlanBranch {
   @@index([branchId, planId])
 }
 
+model PlanMetricCatalog {
+  id        String       @id @default(uuid()) @db.Uuid
+  key       String       @unique @db.VarChar(80)
+  name      String       @db.VarChar(160)
+  unit      String       @db.VarChar(40)
+  isActive  Boolean      @default(true)
+  metrics   PlanMetric[]
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([isActive, name])
+}
+
 model PlanMetric {
   id        String   @id @default(uuid()) @db.Uuid
   planId    String   @db.Uuid
+  catalogId String?  @db.Uuid
   name      String   @db.VarChar(160)
   unit      String   @db.VarChar(40)
   target    Decimal  @db.Decimal(16, 3)
   plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  catalog   PlanMetricCatalog? @relation(fields: [catalogId], references: [id], onDelete: Restrict)
   tasks     Task[]
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@unique([planId, name])
   @@index([planId])
+  @@index([catalogId])
 }
 
 model Task {
@@ -487,14 +529,15 @@ model Task {
   title        String     @db.VarChar(160)
   description  String?    @db.VarChar(2000)
   createdById  String     @db.Uuid
-  assigneeId   String     @db.Uuid
+  assigneeId   String?    @db.Uuid
   dueAt        DateTime?  @db.Timestamptz(3)
   status       TaskStatus @default(TODO)
   plan         Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
   metric       PlanMetric @relation(fields: [metricId], references: [id], onDelete: Restrict)
   branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  assignee     User       @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  assignee     User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  assignments  TaskAssignment[]
   results      TaskResult[]
   createdAt    DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
@@ -503,9 +546,27 @@ model Task {
   @@index([assigneeId, status, dueAt])
 }
 
+model TaskAssignment {
+  id         String     @id @default(uuid()) @db.Uuid
+  taskId     String     @db.Uuid
+  assigneeId String     @db.Uuid
+  target     Decimal?   @db.Decimal(16, 3)
+  status     TaskStatus @default(TODO)
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  assignee   User       @relation("TaskAssignmentAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  results    TaskResult[]
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@unique([taskId, assigneeId])
+  @@index([assigneeId, status])
+  @@index([taskId, status])
+}
+
 model TaskResult {
   id             String           @id @default(uuid()) @db.Uuid
   taskId         String           @db.Uuid
+  assignmentId   String           @db.Uuid
   revision       Int
   submittedById  String           @db.Uuid
   reportedValue  Decimal          @db.Decimal(16, 3)
@@ -513,12 +574,14 @@ model TaskResult {
   narrative      String           @db.VarChar(4000)
   occurredAt     DateTime         @db.Timestamptz(3)
   task           Task             @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  assignment     TaskAssignment   @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
   submittedBy    User             @relation("TaskResultSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
   verification   TaskVerification?
   evidenceFiles  TaskResultEvidence[]
   createdAt      DateTime         @default(now()) @db.Timestamptz(3)
 
-  @@unique([taskId, revision])
+  @@unique([assignmentId, revision])
+  @@index([taskId])
 }
 
 model TaskVerification {

@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsDateString,
@@ -9,10 +11,23 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
 import { TaskVerificationStatus } from '../generated/prisma/client.js';
+import { KpiPeriodType } from './plans.dto.js';
+
+export class KpiQueryDto {
+  @IsOptional()
+  @IsEnum(KpiPeriodType)
+  periodType = KpiPeriodType.PLAN;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date?: string;
+}
 
 export class CreateTaskDto {
   @IsUUID()
@@ -30,9 +45,18 @@ export class CreateTaskDto {
   @Length(1, 2000)
   description?: string;
 
-  @IsOptional()
-  @IsUUID()
-  assigneeId?: string;
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 3 })
+  @Min(0)
+  @Max(9999999999999)
+  target!: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  assigneeIds!: string[];
 
   @IsOptional()
   @IsDateString()

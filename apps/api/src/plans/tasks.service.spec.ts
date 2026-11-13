@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import {
+  AccessScope,
   BranchStatus,
   FileScanStatus,
   PlanStatus,
@@ -12,6 +13,7 @@ import {
   TaskStatus,
   TaskVerificationStatus,
 } from '../generated/prisma/client.js';
+import { KpiPeriodType } from './plans.dto.js';
 import { TasksService } from './tasks.service.js';
 
 describe('TasksService', () => {
@@ -19,6 +21,8 @@ describe('TasksService', () => {
   const branchId = 'branch-id';
   const planId = 'plan-id';
   const taskId = 'task-id';
+  const assignmentId = 'assignment-id';
+  const secondAssigneeId = 'second-staff-id';
   const resultId = 'result-id';
   const metricId = 'metric-id';
   const plan = () => ({
@@ -38,9 +42,11 @@ describe('TasksService', () => {
     title: 'Call customers',
     description: null,
     createdById: actor.id,
-    assigneeId: actor.id,
+    assigneeId: null,
     dueAt: null,
     status: TaskStatus.TODO,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     metric: { unit: 'calls' },
     plan: {
       periodStart: new Date('2026-01-01T00:00:00.000Z'),
@@ -48,6 +54,21 @@ describe('TasksService', () => {
       deletedAt: null,
     },
     results: [],
+  });
+  const assignment = (overrides: Record<string, unknown> = {}) => ({
+    id: assignmentId,
+    taskId,
+    assigneeId: actor.id,
+    target: new Prisma.Decimal(10),
+    status: TaskStatus.TODO,
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    assignee: { id: actor.id, username: 'staff', displayName: 'Staff' },
+    task: {
+      ...task(),
+      metric: { unit: 'calls' },
+    },
+    results: [],
+    ...overrides,
   });
   let prisma: any;
   let access: any;
@@ -63,11 +84,30 @@ describe('TasksService', () => {
           ...data,
           metric: { id: metricId, name: 'Calls', unit: 'calls' },
           branch: { id: branchId, code: 'NORTH', name: 'North Branch' },
-          assignee: { id: actor.id, username: 'staff', displayName: 'Staff' },
           createdBy: { id: actor.id, username: 'staff', displayName: 'Staff' },
-          results: [],
+        })),
+        findUniqueOrThrow: jest.fn(async () => ({
+          ...task(),
+          metric: { id: metricId, name: 'Calls', unit: 'calls' },
+          branch: { id: branchId, code: 'NORTH', name: 'North Branch' },
+          createdBy: { id: actor.id, username: 'staff', displayName: 'Staff' },
+          assignments: [
+            assignment({
+              assignee: { id: actor.id, username: 'staff', displayName: 'Staff' },
+            }),
+            assignment({
+              id: 'second-assignment-id',
+              assigneeId: secondAssigneeId,
+              assignee: { id: secondAssigneeId, username: 'second', displayName: 'Second Staff' },
+            }),
+          ],
         })),
         update: jest.fn(async () => task()),
+      },
+      taskAssignment: {
+        createMany: jest.fn(async () => undefined),
+        update: jest.fn(async () => assignment()),
+        count: jest.fn(async () => 1),
       },
       taskResult: {
         create: jest.fn(async ({ data }: any) => ({
@@ -91,28 +131,47 @@ describe('TasksService', () => {
         findFirst: jest.fn(async () => null),
         findUnique: jest.fn(async () => task()),
       },
+      taskAssignment: {
+        findMany: jest.fn(async () => []),
+        findUnique: jest.fn(async () => assignment()),
+        findFirst: jest.fn(async () => assignment()),
+      },
       taskResult: { findUnique: jest.fn(async () => null) },
       fileAsset: { findMany: jest.fn(async () => []) },
-      user: { findFirst: jest.fn(async () => ({ id: actor.id })) },
+      user: {
+        findFirst: jest.fn(async () => ({ id: actor.id })),
+        findMany: jest.fn(async ({ where }: any) => where.id.in.map((id: string) => ({ id }))),
+      },
       $transaction: jest.fn(async (callback: (transaction: any) => Promise<unknown>) => callback(tx)),
     };
     access = {
       assertResourceAccess: jest.fn(async () => undefined),
       assertPermission: jest.fn(async () => undefined),
       hasResourceAccess: jest.fn(async () => true),
+      hasPermission: jest.fn(async () => true),
     };
     audit = { write: jest.fn(async () => undefined) };
     service = new TasksService(prisma, access, audit);
   });
 
-  it('creates a task only for a metric and branch in an active plan', async () => {
+  it('creates one assignment with its own target for each eligible recipient', async () => {
     const result = await service.create(actor, planId, {
       metricId,
       branchId,
       title: ' Call customers ',
+      assigneeIds: [actor.id, secondAssigneeId],
+      target: 10,
     });
 
-    expect(result).toMatchObject({ title: 'Call customers', status: TaskStatus.TODO });
+    expect(result).toHaveLength(2);
+    expect(result.map(({ target }) => target)).toEqual([10, 10]);
+    expect(result.map(({ assignee: recipient }) => recipient.id)).toEqual([actor.id, secondAssigneeId]);
+    expect(tx.taskAssignment.createMany).toHaveBeenCalledWith({
+      data: [
+        { taskId, assigneeId: actor.id, target: new Prisma.Decimal(10) },
+        { taskId, assigneeId: secondAssigneeId, target: new Prisma.Decimal(10) },
+      ],
+    });
     expect(access.assertResourceAccess).toHaveBeenCalledWith(
       actor.id,
       'tasks.manage',
@@ -128,7 +187,49 @@ describe('TasksService', () => {
       metricId: 'other-metric',
       branchId,
       title: 'Invalid metric',
+      assigneeIds: [actor.id],
+      target: 10,
     })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects recipients who are not active members of the selected branch', async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await expect(service.create(actor, planId, {
+      metricId,
+      branchId,
+      title: 'Call customers',
+      assigneeIds: [secondAssigneeId],
+      target: 10,
+    })).rejects.toMatchObject({
+      response: { code: 'TASK_ASSIGNEES_OUTSIDE_BRANCH' },
+    });
+    expect(tx.task.create).not.toHaveBeenCalled();
+  });
+
+  it('lists only each assignment visible to the requesting employee', async () => {
+    const taskWithAssignments = {
+      ...task(),
+      metric: { id: metricId, name: 'Calls', unit: 'calls' },
+      branch: { id: branchId, code: 'NORTH', name: 'North Branch' },
+      createdBy: { id: actor.id, username: 'staff', displayName: 'Staff' },
+      assignments: [
+        assignment(),
+        assignment({
+          id: 'other-assignment-id',
+          assigneeId: secondAssigneeId,
+          assignee: { id: secondAssigneeId, username: 'other', displayName: 'Other Staff' },
+        }),
+      ],
+    };
+    prisma.task.findMany.mockResolvedValue([taskWithAssignments]);
+    access.hasResourceAccess.mockImplementation(async (_id: string, _key: string, _scope: unknown, resource: any) =>
+      resource.assigneeId === actor.id,
+    );
+
+    await expect(service.list(actor, planId)).resolves.toMatchObject([
+      { id: assignmentId, assignee: { id: actor.id } },
+    ]);
   });
 
   it('rejects mismatched result units and dates outside the plan period', async () => {
@@ -200,13 +301,12 @@ describe('TasksService', () => {
   });
 
   it('submits a result as a new immutable revision and marks it pending review', async () => {
-    prisma.task.findUnique.mockResolvedValue({
-      ...task(),
+    prisma.taskAssignment.findUnique.mockResolvedValue(assignment({
       results: [{
         revision: 1,
         verification: { status: TaskVerificationStatus.NEEDS_INFO },
       }],
-    });
+    }));
 
     const result = await service.submitResult(actor, taskId, {
       reportedValue: 4.5,
@@ -221,8 +321,17 @@ describe('TasksService', () => {
       verificationStatus: TaskVerificationStatus.PENDING_VERIFICATION,
     });
     expect(tx.taskResult.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ revision: 2, reportedUnit: 'calls' }),
+      data: expect.objectContaining({
+        taskId,
+        assignmentId,
+        revision: 2,
+        reportedUnit: 'calls',
+      }),
     }));
+    expect(tx.taskAssignment.update).toHaveBeenCalledWith({
+      where: { id: assignmentId },
+      data: { status: TaskStatus.IN_PROGRESS },
+    });
     expect(tx.task.update).toHaveBeenCalledWith({
       where: { id: taskId },
       data: { status: TaskStatus.IN_PROGRESS },
@@ -230,10 +339,9 @@ describe('TasksService', () => {
   });
 
   it('blocks duplicate submissions while a result is pending verification', async () => {
-    prisma.task.findUnique.mockResolvedValue({
-      ...task(),
+    prisma.taskAssignment.findUnique.mockResolvedValue(assignment({
       results: [{ revision: 1, verification: null }],
-    });
+    }));
 
     await expect(service.submitResult(actor, taskId, {
       reportedValue: 4.5,
@@ -245,14 +353,13 @@ describe('TasksService', () => {
   });
 
   it('preserves verified results and accepts later corrections as a new revision', async () => {
-    prisma.task.findUnique.mockResolvedValue({
-      ...task(),
+    prisma.taskAssignment.findUnique.mockResolvedValue(assignment({
       status: TaskStatus.COMPLETED,
       results: [{
         revision: 3,
         verification: { status: TaskVerificationStatus.VERIFIED },
       }],
-    });
+    }));
 
     await service.submitResult(actor, taskId, {
       reportedValue: 6,
@@ -264,6 +371,10 @@ describe('TasksService', () => {
     expect(tx.taskResult.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ revision: 4 }),
     }));
+    expect(tx.taskAssignment.update).toHaveBeenCalledWith({
+      where: { id: assignmentId },
+      data: { status: TaskStatus.IN_PROGRESS },
+    });
     expect(tx.task.update).toHaveBeenCalledWith({
       where: { id: taskId },
       data: { status: TaskStatus.IN_PROGRESS },
@@ -274,14 +385,17 @@ describe('TasksService', () => {
     const reviewResult = {
       id: resultId,
       taskId,
+      assignmentId,
       submittedById: actor.id,
+      assignment: {
+        assigneeId: secondAssigneeId,
+        results: [{ id: resultId }],
+      },
       task: {
         id: taskId,
         createdById: 'creator-id',
-        assigneeId: 'assignee-id',
         branchId,
         plan: { deletedAt: null },
-        results: [{ id: resultId }],
       },
       verification: null,
     };
@@ -306,9 +420,42 @@ describe('TasksService', () => {
     expect(tx.taskVerification.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: TaskVerificationStatus.NEEDS_INFO }),
     }));
+    expect(tx.taskAssignment.update).toHaveBeenCalledWith({
+      where: { id: assignmentId },
+      data: { status: TaskStatus.IN_PROGRESS },
+    });
   });
 
-  it('counts only the latest verified result for scoped KPI totals', async () => {
+  it('completes only the verified recipient assignment while peers remain open', async () => {
+    prisma.taskResult.findUnique.mockResolvedValue({
+      id: resultId,
+      taskId,
+      assignmentId,
+      submittedById: 'another-staff-id',
+      assignment: {
+        assigneeId: actor.id,
+        results: [{ id: resultId }],
+      },
+      task: { id: taskId, branchId, plan: { deletedAt: null } },
+      verification: null,
+    });
+    tx.taskAssignment.count.mockResolvedValue(1);
+
+    await service.verifyResult(actor, resultId, {
+      status: TaskVerificationStatus.VERIFIED,
+    });
+
+    expect(tx.taskAssignment.update).toHaveBeenCalledWith({
+      where: { id: assignmentId },
+      data: { status: TaskStatus.COMPLETED },
+    });
+    expect(tx.task.update).toHaveBeenCalledWith({
+      where: { id: taskId },
+      data: { status: TaskStatus.IN_PROGRESS },
+    });
+  });
+
+  it('keeps the previous verified revision in KPI while a newer adjustment is pending', async () => {
     prisma.plan.findFirst.mockResolvedValue({
       ...plan(),
       metrics: [{
@@ -318,22 +465,16 @@ describe('TasksService', () => {
         target: new Prisma.Decimal(20),
       }],
     });
-    prisma.task.findMany.mockResolvedValue([
+    prisma.taskAssignment.findMany.mockResolvedValue([
       {
-        metricId,
+        target: new Prisma.Decimal(10),
+        task: { metricId },
         results: [{
           reportedValue: new Prisma.Decimal(5),
-          verification: { status: TaskVerificationStatus.VERIFIED },
+          occurredAt: new Date('2026-02-01T00:00:00.000Z'),
         }],
       },
-      {
-        metricId,
-        results: [{
-          reportedValue: new Prisma.Decimal(7),
-          verification: { status: TaskVerificationStatus.PENDING_VERIFICATION },
-        }],
-      },
-      { metricId, results: [] },
+      { target: new Prisma.Decimal(10), task: { metricId }, results: [] },
     ]);
 
     await expect(service.kpi(actor, planId)).resolves.toEqual([{
@@ -345,8 +486,113 @@ describe('TasksService', () => {
       remaining: 15,
       achievementRate: 25,
     }]);
-    expect(prisma.task.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { planId, branchId: { in: [branchId] } },
+    expect(prisma.taskAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { task: { planId, branchId: { in: [branchId] } } },
+      select: expect.objectContaining({
+        results: expect.objectContaining({
+          where: { verification: { is: { status: TaskVerificationStatus.VERIFIED } } },
+        }),
+      }),
     }));
+  });
+
+  it('filters monthly KPI by Asia/Ho_Chi_Minh occurrence-date boundaries', async () => {
+    prisma.plan.findFirst.mockResolvedValue({
+      ...plan(),
+      metrics: [{
+        id: metricId,
+        name: 'Calls',
+        unit: 'calls',
+        target: new Prisma.Decimal(20),
+      }],
+    });
+    prisma.taskAssignment.findMany.mockResolvedValue([
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(8),
+          occurredAt: new Date('2026-02-28T16:59:59.999Z'),
+        }],
+      },
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(10),
+          occurredAt: new Date('2026-02-28T17:00:00.000Z'),
+        }],
+      },
+    ]);
+
+    await expect(service.kpi(actor, planId, {
+      periodType: KpiPeriodType.MONTH,
+      date: '2026-02-18',
+    })).resolves.toMatchObject([
+      { metricId, verifiedTotal: 8, remaining: 12, achievementRate: 40 },
+    ]);
+  });
+
+  it('limits personal KPI totals and target to the requesting employee assignments', async () => {
+    access.hasPermission.mockImplementation(async (_id: string, _key: string, scope: AccessScope) =>
+      scope === AccessScope.ASSIGNED,
+    );
+    prisma.taskAssignment.findMany.mockResolvedValue([
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(3),
+          occurredAt: new Date('2026-02-01T00:00:00.000Z'),
+        }],
+      },
+    ]);
+
+    await expect(service.kpi(actor, planId)).resolves.toMatchObject([
+      {
+        metricId,
+        target: 10,
+        verifiedTotal: 3,
+        remaining: 7,
+        achievementRate: 30,
+      },
+    ]);
+    expect(prisma.taskAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        task: { planId, branchId: { in: [branchId] } },
+        assigneeId: actor.id,
+      },
+    }));
+  });
+
+  it('does not present a partial target when a legacy personal assignment has no target', async () => {
+    access.hasPermission.mockImplementation(async (_id: string, _key: string, scope: AccessScope) =>
+      scope === AccessScope.ASSIGNED,
+    );
+    prisma.taskAssignment.findMany.mockResolvedValue([
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [],
+      },
+      {
+        target: null,
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(3),
+          occurredAt: new Date('2026-02-01T00:00:00.000Z'),
+        }],
+      },
+    ]);
+
+    await expect(service.kpi(actor, planId)).resolves.toMatchObject([
+      {
+        metricId,
+        target: null,
+        verifiedTotal: 3,
+        remaining: null,
+        achievementRate: null,
+      },
+    ]);
   });
 });

@@ -551,30 +551,48 @@ async function seedTasks(tx, roles, createdById, branch, adviser) {
     process.stdout.write('Seeded three sample tasks.\n');
   }
 
-  if (await tx.taskResult.count() === 0) {
-    const tasks = await tx.task.findMany({
-      where: { id: { in: sampleTaskIds } },
-      select: { id: true },
+  const tasks = await tx.task.findMany({
+    where: { id: { in: sampleTaskIds }, assigneeId: { not: null } },
+    select: { id: true, assigneeId: true, status: true, createdAt: true, updatedAt: true },
+  });
+  if (tasks.length > 0) {
+    await tx.taskAssignment.createMany({
+      data: tasks.map((task) => ({
+        id: task.id,
+        taskId: task.id,
+        assigneeId: task.assigneeId,
+        target: 30,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      })),
+      skipDuplicates: true,
     });
-    if (tasks.length > 0) {
-      await tx.taskResult.createMany({
-        data: tasks.flatMap(({ id }) => {
-          const index = sampleTaskIds.indexOf(id);
-          if (index !== 1 && index !== 2) return [];
-          return [{
-            id: sampleTaskResultIds[index - 1],
-            taskId: id,
-            revision: 1,
-            submittedById: submitter.id,
-            reportedValue: index === 1 ? 18 : 24,
-            reportedUnit: metric.unit,
-            narrative: 'Số liệu giả phục vụ kiểm thử giao diện và luồng xác minh.',
-            occurredAt: new Date(index === 1 ? '2026-11-11T09:00:00.000Z' : '2026-10-29T09:00:00.000Z'),
-          }];
-        }),
-      });
-      process.stdout.write('Seeded sample task results.\n');
-    }
+    await tx.taskAssignment.updateMany({
+      where: { taskId: { in: tasks.map(({ id }) => id) }, target: null },
+      data: { target: 30 },
+    });
+  }
+
+  if (await tx.taskResult.count() === 0 && tasks.length > 0) {
+    await tx.taskResult.createMany({
+      data: tasks.flatMap(({ id }) => {
+        const index = sampleTaskIds.indexOf(id);
+        if (index !== 1 && index !== 2) return [];
+        return [{
+          id: sampleTaskResultIds[index - 1],
+          taskId: id,
+          assignmentId: id,
+          revision: 1,
+          submittedById: submitter.id,
+          reportedValue: index === 1 ? 18 : 24,
+          reportedUnit: metric.unit,
+          narrative: 'Số liệu giả phục vụ kiểm thử giao diện và luồng xác minh.',
+          occurredAt: new Date(index === 1 ? '2026-11-11T09:00:00.000Z' : '2026-10-29T09:00:00.000Z'),
+        }];
+      }),
+    });
+    process.stdout.write('Seeded sample task results.\n');
   }
 
   const removedPendingSampleVerifications = await tx.taskVerification.deleteMany({
@@ -639,6 +657,24 @@ try {
       await tx.permission.upsert({ where: { key: permission.key }, create: permission, update: permission });
     }
 
+    const planMetricCatalog = [
+      ['new_customers', 'Khách hàng mới', 'khách hàng'],
+      ['outreach_attempts', 'Lượt tiếp cận', 'lượt'],
+      ['consultations', 'Lượt tư vấn', 'lượt'],
+      ['loan_applications_received', 'Hồ sơ tiếp nhận', 'hồ sơ'],
+      ['loan_applications_completed', 'Hồ sơ hoàn thiện', 'hồ sơ'],
+      ['loan_applications_approved', 'Hồ sơ được duyệt', 'hồ sơ'],
+      ['loans_disbursed', 'Khoản giải ngân', 'khoản'],
+      ['disbursement_amount', 'Giá trị giải ngân', 'VND'],
+    ];
+    for (const [key, name, unit] of planMetricCatalog) {
+      await tx.planMetricCatalog.upsert({
+        where: { key },
+        create: { key, name, unit },
+        update: {},
+      });
+    }
+
     const systemRoles = [
       ['OPERATOR', 'Platform operator'],
       ['ADMIN', 'Administrator'],
@@ -660,9 +696,12 @@ try {
       'customers.read', 'customers.manage', 'customers.assign', 'customers.duplicates.review',
       'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read', 'loan-contracts.manage',
       'loan-contracts.review', 'loan-contracts.status.manage', 'loan-contracts.ingest',
+      'plans.read', 'plans.manage', 'plans.approve',
+      'tasks.read', 'tasks.manage', 'tasks.submit', 'tasks.verify', 'kpi.read',
     ];
     const advisingPermissions = [
       'customers.read', 'customers.manage', 'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read',
+      'plans.read', 'plans.manage', 'tasks.read', 'tasks.submit', 'kpi.read',
     ];
     const defaults = new Map([
       ['OPERATOR', permissionCatalog.map(({ key }) => [key, AccessScope.ALL])],

@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldCheck,
+  Tags,
   UserRound,
   UsersRound,
   X,
@@ -21,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'tasks' | null;
+type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -33,6 +34,7 @@ type ShellProps = {
   canReadRoles: boolean;
   canReadCustomers: boolean;
   canAccessPlans: boolean;
+  canReadPlanCatalog: boolean;
   canReadTasks: boolean;
   busy: boolean;
   contractCompletionOtp?: CapabilityNotice;
@@ -64,6 +66,7 @@ export function AppShell({
   canReadRoles,
   canReadCustomers,
   canAccessPlans,
+  canReadPlanCatalog,
   canReadTasks,
   busy,
   onNavigate,
@@ -113,6 +116,7 @@ export function AppShell({
       items: [
         ...(canReadTasks ? [{ key: 'tasks', label: 'Công việc', icon: CheckSquare, section: 'tasks' as const }] : []),
         ...(canAccessPlans ? [{ key: 'plans', label: 'Kế hoạch', icon: ChartNoAxesColumn, section: 'plans' as const }] : []),
+        ...(canReadPlanCatalog ? [{ key: 'catalog', label: 'Danh mục KPI', icon: Tags, section: 'catalog' as const }] : []),
       ],
     },
     {
@@ -136,6 +140,8 @@ export function AppShell({
           ? 'Vai trò & quyền'
           : activeSection === 'plans'
             ? 'Kế hoạch'
+          : activeSection === 'catalog'
+            ? 'Danh mục KPI'
           : activeSection === 'tasks'
             ? 'Công việc'
           : 'Tài khoản của tôi';

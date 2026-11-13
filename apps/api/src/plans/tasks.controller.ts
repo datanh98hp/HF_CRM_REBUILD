@@ -1,9 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentActor } from '../common/actor-context.js';
 import type { ActorContext, ActorRequest } from '../common/actor-context.js';
 import { RequirePermission } from '../common/auth-metadata.js';
-import { CreateTaskDto, SubmitTaskResultDto, VerifyTaskResultDto } from './tasks.dto.js';
+import {
+  CreateTaskDto,
+  KpiQueryDto,
+  SubmitTaskResultDto,
+  VerifyTaskResultDto,
+} from './tasks.dto.js';
 import { TasksService } from './tasks.service.js';
 
 @Controller()
@@ -59,7 +64,8 @@ export class TasksController {
   kpi(
     @CurrentActor() actor: ActorContext,
     @Param('planId', new ParseUUIDPipe()) planId: string,
+    @Query() query: KpiQueryDto,
   ) {
-    return this.tasks.kpi(actor, planId);
+    return this.tasks.kpi(actor, planId, query);
   }
 }

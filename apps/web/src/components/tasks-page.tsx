@@ -45,7 +45,7 @@ type Plan = {
   name: string;
   periodStart: string;
   periodEnd: string;
-  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'ARCHIVED';
   branches: PlanBranch[];
   metrics: PlanMetric[];
 };
@@ -54,9 +54,9 @@ type Kpi = {
   metricId: string;
   name: string;
   unit: string;
-  target: number;
+  target: number | null;
   verifiedTotal: number;
-  remaining: number;
+  remaining: number | null;
   achievementRate: number | null;
 };
 
@@ -95,12 +95,14 @@ type TaskResult = {
 };
 type TaskRecord = {
   id: string;
+  taskId: string;
   planId: string;
   metricId: string;
   branchId: string;
   title: string;
   description: string | null;
   status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+  target: number | null;
   dueAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -113,9 +115,9 @@ type TaskRecord = {
 
 type TaskView = 'OPEN' | 'ALL';
 type ReviewDecision = 'NEEDS_INFO' | 'REJECTED';
+type KpiPeriodType = 'PLAN' | 'MONTH' | 'QUARTER' | 'YEAR';
 
 const ALL_BRANCHES = '__all__';
-const SELF_ASSIGNMENT = '__self__';
 
 const verificationLabels: Record<string, string> = {
   NOT_SUBMITTED: 'Chưa nộp',
@@ -164,6 +166,11 @@ function dateKey(value: Date) {
   const month = Number(parts.find((part) => part.type === 'month')?.value);
   const day = Number(parts.find((part) => part.type === 'day')?.value);
   return Date.UTC(year, month - 1, day);
+}
+
+function currentVnMonth() {
+  const date = new Date(dateKey(new Date()));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 function dueLabel(dueAt: string | null) {
@@ -220,21 +227,27 @@ function KpiCard({ item, spanClass }: { item: Kpi; spanClass?: string }) {
       <div className="min-w-0">
         <p className="text-sm font-medium text-muted-foreground">{item.name}</p>
         <p className="mt-1 break-words text-lg font-semibold tabular-nums text-foreground sm:text-xl">
-          {formatNumber(item.verifiedTotal)} / {formatNumber(item.target)} {item.unit}
+          {item.target === null
+            ? `${formatNumber(item.verifiedTotal)} ${item.unit}`
+            : `${formatNumber(item.verifiedTotal)} / ${formatNumber(item.target)} ${item.unit}`}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {item.unit} · mục tiêu {formatNumber(item.target)}
+          {item.target === null ? 'Chưa được giao mục tiêu cá nhân' : `${item.unit} · mục tiêu được giao`}
         </p>
       </div>
       <div
         className="h-2 overflow-hidden rounded-full bg-muted"
-        role="progressbar"
-        aria-label={`Tiến độ ${item.name}`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress}
+        {...(rate !== null ? {
+          role: 'progressbar',
+          'aria-label': `Tiến độ ${item.name}`,
+          'aria-valuemin': 0,
+          'aria-valuemax': 100,
+          'aria-valuenow': progress,
+        } : { 'aria-hidden': true })}
       >
-        <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
+        {rate !== null && (
+          <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
+        )}
       </div>
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>Đã xác minh</span>
@@ -423,6 +436,9 @@ export function TasksPage() {
   const canVerifyTasks = can('tasks.verify');
   const canReadKpi = can('kpi.read');
   const canReadUsers = can('users.read');
+  const kpiScopes = staff?.permissions.find(({ key }) => key === 'kpi.read')?.scopes ?? [];
+  const personalKpiOnly = kpiScopes.includes('ASSIGNED')
+    && !kpiScopes.some((scope) => scope === 'BRANCH' || scope === 'ALL');
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -436,6 +452,8 @@ export function TasksPage() {
   const [kpis, setKpis] = useState<Kpi[]>([]);
   const [loadingKpis, setLoadingKpis] = useState(false);
   const [kpiError, setKpiError] = useState('');
+  const [kpiPeriodType, setKpiPeriodType] = useState<KpiPeriodType>('MONTH');
+  const [kpiMonth, setKpiMonth] = useState(currentVnMonth);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [taskView, setTaskView] = useState<TaskView>('OPEN');
   const [branchFilter, setBranchFilter] = useState(ALL_BRANCHES);
@@ -443,6 +461,7 @@ export function TasksPage() {
   const [assignableUsers, setAssignableUsers] = useState<ManagedUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState('');
+  const [usersRequestVersion, setUsersRequestVersion] = useState(0);
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskCreating, setTaskCreating] = useState(false);
@@ -453,8 +472,15 @@ export function TasksPage() {
     title: '',
     description: '',
     dueAt: '',
-    assigneeId: SELF_ASSIGNMENT,
+    assigneeIds: [] as string[],
+    target: '',
   });
+  const branchRecipients = useMemo(
+    () => assignableUsers.filter((user) => user.roleGrants.some(
+      ({ branch, role }) => branch?.id === taskDraft.branchId && role.key !== 'CUSTOMER',
+    )),
+    [assignableUsers, taskDraft.branchId],
+  );
 
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [resultSubmitting, setResultSubmitting] = useState(false);
@@ -466,6 +492,7 @@ export function TasksPage() {
   const [actionError, setActionError] = useState('');
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
+  const selectedMetric = selectedPlan?.metrics.find(({ id }) => id === taskDraft.metricId);
   const branchFilteredTasks = useMemo(
     () => tasks.filter((task) => branchFilter === ALL_BRANCHES || task.branchId === branchFilter),
     [branchFilter, tasks],
@@ -549,9 +576,14 @@ export function TasksPage() {
         if (active) setLoadingTasks(false);
       });
 
-    if (canReadKpi) {
+    if (canReadKpi && kpiPeriodType !== 'PLAN' && !/^\d{4}-(0[1-9]|1[0-2])$/.test(kpiMonth)) {
+      setKpiError('Chọn tháng tham chiếu hợp lệ để xem KPI.');
+      setLoadingKpis(false);
+    } else if (canReadKpi) {
       setLoadingKpis(true);
-      void request<Kpi[]>(`/plans/${selectedPlanId}/kpi`, {}, accessToken)
+      const query = new URLSearchParams({ periodType: kpiPeriodType });
+      if (kpiPeriodType !== 'PLAN') query.set('date', `${kpiMonth}-01`);
+      void request<Kpi[]>(`/plans/${selectedPlanId}/kpi?${query.toString()}`, {}, accessToken)
         .then((nextKpis) => { if (active) setKpis(nextKpis); })
         .catch((cause: unknown) => {
           if (active) setKpiError(errorMessage(cause, 'Không thể tải KPI đã xác minh.'));
@@ -564,7 +596,7 @@ export function TasksPage() {
     }
 
     return () => { active = false; };
-  }, [accessToken, canReadKpi, refreshVersion, selectedPlanId]);
+  }, [accessToken, canReadKpi, kpiMonth, kpiPeriodType, refreshVersion, selectedPlanId]);
 
   useEffect(() => {
     setTaskView('OPEN');
@@ -599,7 +631,7 @@ export function TasksPage() {
       });
 
     return () => { active = false; };
-  }, [accessToken, canManageTasks, canReadUsers]);
+  }, [accessToken, canManageTasks, canReadUsers, usersRequestVersion]);
 
   useEffect(() => {
     if (!visibleTasks.length) {
@@ -622,7 +654,8 @@ export function TasksPage() {
       title: '',
       description: '',
       dueAt: '',
-      assigneeId: SELF_ASSIGNMENT,
+      assigneeIds: [],
+      target: '',
     });
     setTaskFormError('');
     setTaskDialogOpen(true);
@@ -647,6 +680,23 @@ export function TasksPage() {
       setTaskFormError('Hãy chọn một chi nhánh trong kế hoạch.');
       return;
     }
+    if (!canReadUsers) {
+      setTaskFormError('Bạn cần quyền xem nhân viên để chọn người nhận công việc.');
+      return;
+    }
+    if (!branchRecipients.length || !taskDraft.assigneeIds.length) {
+      setTaskFormError('Hãy chọn ít nhất một nhân viên trong chi nhánh.');
+      return;
+    }
+    if (taskDraft.assigneeIds.some((id) => !branchRecipients.some((user) => user.id === id))) {
+      setTaskFormError('Danh sách người nhận không còn hợp lệ. Hãy chọn lại nhân viên.');
+      return;
+    }
+    const targetValue = Number(taskDraft.target);
+    if (!/^\d+(?:\.\d{1,3})?$/.test(taskDraft.target) || !Number.isFinite(targetValue) || targetValue < 0) {
+      setTaskFormError('Chỉ tiêu giao phải là số không âm, tối đa 3 chữ số thập phân.');
+      return;
+    }
     if (taskDraft.description.trim().length > 2000) {
       setTaskFormError('Mô tả không được vượt quá 2.000 ký tự.');
       return;
@@ -659,20 +709,22 @@ export function TasksPage() {
     setTaskCreating(true);
     setTaskFormError('');
     try {
-      const created = await request<TaskRecord>(`/plans/${selectedPlan.id}/tasks`, {
+      const created = await request<TaskRecord[]>(`/plans/${selectedPlan.id}/tasks`, {
         method: 'POST',
         body: JSON.stringify({
           metricId: taskDraft.metricId,
           branchId: taskDraft.branchId,
           title,
+          assigneeIds: taskDraft.assigneeIds,
+          target: targetValue,
           ...(taskDraft.description.trim() ? { description: taskDraft.description.trim() } : {}),
-          ...(taskDraft.assigneeId !== SELF_ASSIGNMENT ? { assigneeId: taskDraft.assigneeId } : {}),
           ...(taskDraft.dueAt ? { dueAt: new Date(`${taskDraft.dueAt}T00:00:00.000Z`).toISOString() } : {}),
         }),
       }, accessToken);
-      setSelectedTaskId(created.id);
+      if (!created.length) throw new Error('Máy chủ không trả về danh sách công việc đã giao.');
+      setSelectedTaskId(created[0].id);
       setTaskDialogOpen(false);
-      setNotice('Đã tạo và giao công việc.');
+      setNotice(`Đã tạo công việc cho ${created.length} nhân viên.`);
       setRefreshVersion((current) => current + 1);
     } catch (cause) {
       setTaskFormError(errorMessage(cause, 'Không thể tạo công việc.'));
@@ -897,7 +949,60 @@ export function TasksPage() {
               </header>
 
               {canReadKpi && (
-                <section className="border-b border-border p-4 sm:p-5" aria-label="KPI đã xác minh">
+                <section
+                  className="border-b border-border p-4 sm:p-5"
+                  aria-label={personalKpiOnly ? 'KPI cá nhân' : 'KPI đã xác minh'}
+                >
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="space-y-1">
+                      <h3 className="text-base font-semibold">
+                        {personalKpiOnly ? 'KPI cá nhân' : 'KPI đã xác minh'}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {personalKpiOnly
+                          ? 'Chỉ hiển thị kết quả và mục tiêu được giao cho bạn.'
+                          : 'Chỉ tính kết quả đã được xác minh trong kỳ đã chọn.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="kpi-period-type">Kỳ tổng hợp</Label>
+                        <Select
+                          value={kpiPeriodType}
+                          onValueChange={(value) => {
+                            if (value === 'PLAN' || value === 'MONTH' || value === 'QUARTER' || value === 'YEAR') {
+                              setKpiPeriodType(value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger id="kpi-period-type" className="w-40 data-[size=default]:h-11 md:data-[size=default]:h-10 bg-card">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PLAN">Toàn kỳ kế hoạch</SelectItem>
+                            <SelectItem value="MONTH">Theo tháng</SelectItem>
+                            <SelectItem value="QUARTER">Theo quý</SelectItem>
+                            <SelectItem value="YEAR">Theo năm</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {kpiPeriodType !== 'PLAN' && (
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="kpi-reference-month">
+                            {kpiPeriodType === 'MONTH' ? 'Tháng' : 'Tháng tham chiếu'}
+                          </Label>
+                          <Input
+                            id="kpi-reference-month"
+                            type="month"
+                            className="w-40 bg-card"
+                            value={kpiMonth}
+                            onChange={(event) => setKpiMonth(event.target.value)}
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {loadingKpis ? (
                     <div className="grid grid-cols-2 gap-3 xl:grid-cols-3" aria-busy="true">
                       {[0, 1, 2].map((item) => (
@@ -1046,6 +1151,14 @@ export function TasksPage() {
                         <div className="min-w-0 rounded-lg border border-border p-3">
                           <dt className="text-xs text-muted-foreground">Người nhận</dt>
                           <dd className="mt-1 break-words text-sm font-medium">{selectedTask.assignee.displayName}</dd>
+                        </div>
+                        <div className="min-w-0 rounded-lg border border-border p-3">
+                          <dt className="text-xs text-muted-foreground">Mục tiêu cá nhân</dt>
+                          <dd className="mt-1 break-words text-sm font-medium">
+                            {selectedTask.target === null
+                              ? 'Chưa đặt'
+                              : `${formatNumber(selectedTask.target)} ${selectedTask.metric.unit}`}
+                          </dd>
                         </div>
                         <div className="min-w-0 rounded-lg border border-border p-3">
                           <dt className="text-xs text-muted-foreground">Hạn chót</dt>
@@ -1207,7 +1320,9 @@ export function TasksPage() {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Tạo task</DialogTitle>
-            <DialogDescription>Task được gắn với một chỉ tiêu và chi nhánh trong kế hoạch đang chọn.</DialogDescription>
+            <DialogDescription>
+              Một nội dung công việc sẽ được tạo thành nhiệm vụ riêng cho từng nhân viên được chọn.
+            </DialogDescription>
           </DialogHeader>
           <form className="flex flex-col gap-4" onSubmit={(event) => { void createTask(event); }}>
             <div className="space-y-1.5">
@@ -1237,7 +1352,11 @@ export function TasksPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="task-branch">Chi nhánh <span className="text-red-600">*</span></Label>
-                <Select value={taskDraft.branchId} onValueChange={(value) => setTaskDraft((current) => ({ ...current, branchId: value ?? '' }))}>
+                <Select value={taskDraft.branchId} onValueChange={(value) => setTaskDraft((current) => ({
+                  ...current,
+                  branchId: value ?? '',
+                  assigneeIds: [],
+                }))}>
                   <SelectTrigger id="task-branch" className="h-11 w-full bg-card text-base md:h-10 md:text-sm">
                     <SelectValue placeholder="Chọn chi nhánh" />
                   </SelectTrigger>
@@ -1249,33 +1368,134 @@ export function TasksPage() {
                 </Select>
               </div>
             </div>
-            {canReadUsers ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="task-assignee">Người nhận</Label>
-                <Select
-                  value={taskDraft.assigneeId}
-                  onValueChange={(value) => setTaskDraft((current) => ({ ...current, assigneeId: value ?? SELF_ASSIGNMENT }))}
-                >
-                  <SelectTrigger id="task-assignee" className="h-11 w-full bg-card text-base md:h-10 md:text-sm">
-                    <SelectValue placeholder="Chọn người nhận" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SELF_ASSIGNMENT}>Giao cho tôi</SelectItem>
-                    {assignableUsers
-                      .filter((user) => user.id !== staff?.id)
-                      .map((user) => (
-                        <SelectItem key={user.id} value={user.id}>{user.displayName} · @{user.username}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {loadingUsers && <p className="text-xs text-muted-foreground" role="status">Đang tải nhân viên…</p>}
-                {usersError && <p className="text-xs text-amber-800" role="status">{usersError} Task vẫn có thể được giao cho bạn.</p>}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Task sẽ được giao cho bạn. Cần quyền <code>users.read</code> để chọn người nhận khác.
+            <fieldset className="min-w-0 space-y-2" disabled={!taskDraft.branchId || loadingUsers || taskCreating}>
+              <legend className="flex w-full items-center justify-between gap-3 text-sm font-medium">
+                <span>
+                  Nhân viên nhận việc <span className="text-red-600">*</span>
+                </span>
+                <span className="text-xs font-normal tabular-nums text-muted-foreground">
+                  {taskDraft.assigneeIds.length}/100 đã chọn
+                </span>
+              </legend>
+              {!canReadUsers ? (
+                <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground" role="alert">
+                  Bạn cần quyền xem nhân viên để chọn người nhận.
+                </p>
+              ) : usersError ? (
+                <div className="flex flex-col items-start gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
+                  <p className="text-sm text-muted-foreground">{usersError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="shrink-0"
+                    onClick={() => setUsersRequestVersion((current) => current + 1)}
+                  >
+                    Thử tải lại
+                  </Button>
+                </div>
+              ) : loadingUsers ? (
+                <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground" role="status">
+                  Đang tải danh sách nhân viên…
+                </p>
+              ) : !taskDraft.branchId ? (
+                <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
+                  Chọn chi nhánh trước để xem nhân viên có thể nhận việc.
+                </p>
+              ) : branchRecipients.length === 0 ? (
+                <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">
+                  Chi nhánh chưa có nhân viên phù hợp để giao việc.
+                </p>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <div className="flex min-h-11 items-center justify-between gap-3 border-b border-border px-3">
+                    <p className="min-w-0 text-xs text-muted-foreground">
+                      Chọn nhân viên trong chi nhánh này
+                    </p>
+                    {branchRecipients.length <= 100 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        className="shrink-0"
+                        onClick={() => setTaskDraft((current) => ({
+                          ...current,
+                          assigneeIds: current.assigneeIds.length === branchRecipients.length
+                            ? []
+                            : branchRecipients.map(({ id }) => id),
+                        }))}
+                      >
+                        {taskDraft.assigneeIds.length === branchRecipients.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="max-h-52 overflow-y-auto p-1 scrollbar-clean">
+                    {branchRecipients.map((user) => {
+                      const checked = taskDraft.assigneeIds.includes(user.id);
+                      const selectionLimitReached = taskDraft.assigneeIds.length >= 100 && !checked;
+                      return (
+                        <label
+                          key={user.id}
+                          className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm transition-colors hover:bg-muted ${selectionLimitReached ? 'cursor-not-allowed opacity-50' : ''}`}
+                        >
+                          <span className="relative inline-flex size-5 shrink-0">
+                            <input
+                              type="checkbox"
+                              className="peer absolute inset-0 size-5 cursor-pointer appearance-none rounded-md border-[1.5px] border-border-strong bg-card outline-hidden transition-colors not-checked:hover:border-foreground checked:border-primary checked:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              checked={checked}
+                              disabled={selectionLimitReached}
+                              onChange={(event) => {
+                                const isChecked = event.target.checked;
+                                setTaskDraft((current) => ({
+                                  ...current,
+                                  assigneeIds: isChecked
+                                    ? [...current.assigneeIds, user.id]
+                                    : current.assigneeIds.filter((id) => id !== user.id),
+                                }));
+                              }}
+                            />
+                            <Check
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0 m-auto size-3.5 stroke-[3] text-primary-foreground opacity-0 peer-checked:opacity-100"
+                            />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{user.displayName}</span>
+                            <span className="block truncate text-xs text-muted-foreground">@{user.username}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {branchRecipients.length > 100 && (
+                    <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                      Mỗi lần giao tối đa 100 nhân viên.
+                    </p>
+                  )}
+                </div>
+              )}
+            </fieldset>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-target">
+                Chỉ tiêu cho mỗi nhân viên
+                {selectedMetric?.unit ? ` (${selectedMetric.unit})` : ''}
+                {' '}<span className="text-red-600">*</span>
+              </Label>
+              <Input
+                id="task-target"
+                type="number"
+                min="0"
+                max="9999999999999"
+                step="0.001"
+                className="h-11 bg-card text-base md:h-10 md:text-sm"
+                value={taskDraft.target}
+                onChange={(event) => setTaskDraft((current) => ({ ...current, target: event.target.value }))}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Cùng một chỉ tiêu được áp dụng riêng cho từng nhân viên đã chọn.
               </p>
-            )}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="task-due">Hạn chót</Label>
               <Input

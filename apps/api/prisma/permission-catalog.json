@@ -24,6 +24,8 @@
   { "key": "loan-applications.assign", "groupKey": "loans", "description": "Assign loan applications within granted scope | Phân công hồ sơ vay trong phạm vi được cấp." },
   { "key": "plans.read", "groupKey": "plans", "description": "Read plans within granted scope | Xem kế hoạch trong phạm vi được cấp." },
   { "key": "plans.manage", "groupKey": "plans", "description": "Create plans and targets within granted scope | Tạo kế hoạch và chỉ tiêu trong phạm vi được cấp." },
+  { "key": "plans.approve", "groupKey": "plans", "description": "Approve or reject plans within granted scope | Duyệt hoặc từ chối kế hoạch trong phạm vi được cấp." },
+  { "key": "plans.catalog.manage", "groupKey": "plans", "description": "Manage the shared plan metric catalog | Quản lý danh mục hạng mục và đơn vị đo dùng chung." },
   { "key": "tasks.read", "groupKey": "plans", "description": "Read tasks within granted scope | Xem công việc trong phạm vi được cấp." },
   { "key": "tasks.manage", "groupKey": "plans", "description": "Create and assign tasks within granted scope | Tạo và giao công việc trong phạm vi được cấp." },
   { "key": "tasks.submit", "groupKey": "plans", "description": "Submit task results within granted scope | Nộp kết quả công việc trong phạm vi được cấp." },

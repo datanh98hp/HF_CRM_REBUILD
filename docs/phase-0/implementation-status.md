@@ -1,14 +1,14 @@
     # Finance CRM — Báo cáo triển khai nền tảng đầu tiên
 
-> **Cập nhật trạng thái 2026-11-12:** Trạng thái nghiệp vụ và tiến độ hiện tại; các phần chi tiết bên dưới là báo cáo nền lịch sử, không thay thế nội dung cập nhật này.
+> **Cập nhật trạng thái 2026-11-13:** Trạng thái nghiệp vụ và tiến độ hiện tại; các phần chi tiết bên dưới là báo cáo nền lịch sử, không thay thế nội dung cập nhật này.
 >
 > - **P0-0/P0-1:** Nền dữ liệu, auth, RBAC/audit và API quản trị đã có. Quyền thao tác vẫn phụ thuộc vào grants/scope được cấu hình và xác thực tại backend.
 > - **Quản lý chi nhánh:** Chi nhánh được tạo chưa có quản lý nhưng phải ở trạng thái INACTIVE. Chỉ kích hoạt khi đã có quản lý đang hoạt động và cha (nếu có) ACTIVE. Cấp `MANAGE` chỉ qua luồng phân công quản lý; role grant thông thường không cấp được quyền này. Khi quản lý bị gỡ hoặc tài khoản quản lý bị vô hiệu hóa, chi nhánh cùng các hậu duệ ACTIVE tự chuyển INACTIVE, có audit.
 > - **P0-2:** Backend customer/assignment/duplicate review/loan request/contract cùng các luồng đã mô tả tại [P0-2](p0/p0-2-customer-loan-workflow.md); migration và kiểm thử trên PostgreSQL Docker test đã được ghi nhận trong báo cáo trước.
-> - **P0-3:** API kế hoạch/task/kết quả theo phiên bản/xác minh có audit/KPI và giao diện `/tasks` theo wireframe B đã có; permission task/KPI đã thêm vào catalog. Quan hệ metadata `FileAsset` ↔ `TaskResultEvidence` đã triển khai; hai migration P0-3 đã áp dụng trên PostgreSQL test riêng. Typecheck, 48 unit tests và production Docker builds API/web đạt. Upload/download binary, probe trực quan 375px và nghiệm thu môi trường mục tiêu còn mở.
+> - **P0-3:** API kế hoạch/task/kết quả theo phiên bản/xác minh có audit/KPI, danh mục KPI, duyệt/từ chối plan và bộ lọc kỳ KPI đã có. Giao việc theo nhóm lưu nội dung task dùng chung và assignment, target, trạng thái, kết quả riêng từng nhân viên; UI `/tasks` chọn nhân viên theo chi nhánh. Migration/seed đã áp dụng trên đúng database local dev/test; kiểm tra role grants xác nhận ADMIN/OPERATOR `ALL`, MANAGE `BRANCH`, ADVISING `ASSIGNED` cho task/KPI theo ma trận đã định. Đã xác minh KPI catalog 8 mục và mọi task result có assignment. Production không thay đổi. API/web typecheck và build, 9 API test suites/62 tests, Prisma validate đạt. Chưa probe `/tasks` sau thay đổi; upload/download binary và nghiệm thu môi trường production còn mở.
 > - **P0-6:** Có các màn staff theo route riêng, gồm khách hàng, tài khoản nhân viên, chi nhánh, vai trò/quyền và các màn xác thực/hồ sơ. Luồng customer/loan staff là lát cắt đang có; CUSTOMER PWA, chat realtime UI và các luồng P0-6 còn lại chưa hoàn tất. Xem [P0-6](p0/p0-6-web-pwa.md) và [hướng dẫn sử dụng](user-guide.md).
-> - **Kiểm tra gần nhất:** Prisma validate/generate, typecheck API/web và 7 suites/48 unit tests đạt. Migration evidence áp dụng với exit code 0; các FK/CHECK constraints đã xác nhận. Production Docker builds của API và web đạt, route `/tasks` có trong build output. Build web qua dev toolbox thất bại do `NODE_ENV=development`; production Docker build thành công. Test PostgreSQL chạy dưới Compose project riêng, sau đó containers được dọn mà không xóa volume; database development không bị đổi.
-> - **Còn mở:** nghiệm thu toàn bộ P0-6, xác nhận quyền/grants và cây chi nhánh thật trên môi trường mục tiêu, cấu hình OTP/provider CUSTOMER và các cổng production trong P0-1/P0-2.
+> - **Kiểm tra gần nhất:** Prisma validate, API/web typecheck và build, 9 suites/62 API unit tests, seed-script syntax và `git diff --check` đạt. Các migration P0-3 còn thiếu đã áp dụng và seed thành công trên database dev/test đã xác minh; database production không bị thay đổi.
+> - **Còn mở:** nghiệm thu toàn bộ P0-6, xác nhận quyền/grants và cây chi nhánh thật trên môi trường mục tiêu, probe `/plans` và `/tasks` sau khi database test được migrate/seed cùng viewport 375px, cấu hình OTP/provider CUSTOMER và các cổng production trong P0-1/P0-2.
 
 **Ngày:** 2026-11-05
 
@@ -16,7 +16,7 @@
 
 **Chuẩn bị P0:** Xem [kế hoạch triển khai tổng](p0-implementation-plan.md) và [mục lục các giai đoạn P0](p0/README.md) để biết thứ tự module, tiêu chí nghiệm thu và cổng dữ liệu thật.
 
-**Yêu cầu được bổ sung sau scaffold:** Giai đoạn 0 bổ sung chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có preview/kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với xác minh thủ công và upload file vào MVP. Trạng thái hiện tại: P0-2 đã có một phần backend customer/loan; P0-3 có API/migration task-result-KPI, UI task/KPI tại `/tasks` theo wireframe B và quan hệ metadata evidence; upload/download binary cùng nghiệm thu môi trường mục tiêu còn mở; chat realtime và CUSTOMER PWA vẫn còn mở.
+**Yêu cầu được bổ sung sau scaffold:** Giai đoạn 0 bổ sung chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có preview/kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với phê duyệt plan, xác minh thủ công và upload file vào MVP. Trạng thái hiện tại: P0-2 đã có một phần backend customer/loan; P0-3 có API/migration task-result-KPI, catalog KPI, luồng duyệt plan, UI riêng `/plans`, `/plans/catalog`, `/tasks` theo bố cục B và quan hệ metadata evidence; upload/download binary, probe đã đăng nhập và nghiệm thu môi trường mục tiêu còn mở; chat realtime và CUSTOMER PWA vẫn còn mở.
 
 ## Đã triển khai
 
@@ -33,7 +33,7 @@
 - Giao diện khởi tạo bằng tiếng Việt nêu phạm vi CRM lõi đã được xác nhận, không hiển thị dữ liệu khách hàng giả.
 - PostgreSQL và Redis local qua Docker Compose, chỉ bind cổng vào loopback; `.env.example` chứa placeholder và được gitignore khi sao chép.
 - Ba unit test cho liveness/readiness đã chạy thành công sau khi chuyển readiness sang Prisma và Redis.
-- Schema khách hàng/nghiệp vụ chưa có. Role ngoài OPERATOR được seed không quyền mặc định để chủ quản trị cấu hình; cây chi nhánh thật, OTP provider, quốc gia phone, metric/đơn vị KPI, scanner/retention vẫn cần thiết lập trước khi bật chức năng tương ứng.
+- Schema khách hàng/nghiệp vụ chưa có. Role ngoài OPERATOR được seed không quyền mặc định để chủ quản trị cấu hình; cây chi nhánh thật, OTP provider, quốc gia phone, grants/scope trên môi trường mục tiêu, scanner/retention vẫn cần thiết lập trước khi bật chức năng tương ứng.
 
 ## Kiểm tra đã chạy
 
@@ -60,12 +60,12 @@
 
 ## Chưa triển khai / còn chặn
 
-- Cấu hình ma trận role permission cụ thể trước khi provision nhân viên; migration/seed P0-1 chưa được xác nhận trên PostgreSQL production.
-- Customer/assignment/care-history APIs còn mở; P0-3 đã có API/UI task/KPI và metadata evidence relation, còn upload/download binary, kiểm tra UI thật và nghiệm thu runtime trên môi trường mục tiêu.
+- Xác nhận/cấu hình ma trận role permission trên PostgreSQL production; môi trường production chưa được seed hoặc migrate trong lượt này.
+- Customer/assignment/care-history APIs còn mở; P0-3 đã có API/UI catalog, plan approval, task/KPI và metadata evidence relation, còn upload/download binary, probe giao diện có dữ liệu thật và nghiệm thu runtime trên môi trường mục tiêu.
 - Schema/migration của các module nghiệp vụ CRM và kiểm thử tích hợp với PostgreSQL/Redis thật.
-- Các giá trị cấu hình còn cần thiết lập được liệt kê trong [decision log](decision-log.md), gồm danh mục trường hợp đồng/gói vay, KPI/dashboard catalog, retention file/audit, vận hành production và thông số pháp lý. Nguồn yêu cầu vay từ CUSTOMER hoặc ADVISING đã xác định; private blob storage, scanner/quarantine, download có scope/RBAC, xóa/legal hold, dashboard trực quan và catalog KPI dùng chung chưa triển khai. Lược đồ per-message compact JSON đã được chốt ở Giai đoạn 0 nhưng chưa triển khai trong code.
+- Các giá trị cấu hình còn cần thiết lập được liệt kê trong [decision log](decision-log.md), gồm danh mục trường hợp đồng/gói vay, KPI/dashboard catalog, retention file/audit, vận hành production và thông số pháp lý. Nguồn yêu cầu vay từ CUSTOMER hoặc ADVISING đã xác định; private blob storage, scanner/quarantine, download có scope/RBAC, xóa/legal hold và dashboard trực quan chưa triển khai. Lược đồ per-message compact JSON đã được chốt ở Giai đoạn 0 nhưng chưa triển khai trong code.
 - Vulnerability/container scan và migration/backup/restore checks; CI pipeline được bỏ qua theo yêu cầu.
 
 ## Kết luận trạng thái
 
-P0-0 và code/schema/migration P0-1 đã được tạo; migration P0-3 cho plan/branch-scope chạy trên development, migration task/result/KPI và evidence chạy trên PostgreSQL test riêng. Prisma validate/generate, typecheck, 48 unit tests và production Docker builds API/web đạt. UI task/KPI đã có theo wireframe B nhưng chưa probe trực quan ở 375px; binary evidence và nghiệm thu môi trường mục tiêu chưa hoàn tất. Chưa xem nền tảng là production-ready.
+P0-0 và code/schema/migration P0-1 đã được tạo; các migration P0-3 và seed hiện áp dụng trên database dev/test. Catalog KPI, quy trình duyệt plan, lọc kỳ KPI và các route frontend riêng `/plans`, `/plans/catalog`, `/tasks` đã nối với API thật. Migration/seed production chưa thực hiện. API/web typecheck và build cùng 9 API suites/62 tests đạt trong lần kiểm tra gần nhất. Chưa probe luồng đã đăng nhập ở 375px; binary evidence và nghiệm thu production chưa hoàn tất. Chưa xem nền tảng là production-ready.

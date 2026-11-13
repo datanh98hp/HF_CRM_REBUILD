@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { AccessScope, BranchStatus, PlanStatus, Prisma } from '../generated/prisma/client.js';
+import {
+  AccessScope,
+  BranchStatus,
+  PlanApprovalDecision,
+  PlanStatus,
+  Prisma,
+} from '../generated/prisma/client.js';
 import { PlansService } from './plans.service.js';
 
 describe('PlansService', () => {
   const actor = { id: 'staff-id', type: 'STAFF' as const };
   const branchId = 'branch-id';
   const childBranchId = 'child-branch-id';
+  const catalogId = 'catalog-id';
   const planRecord = () => ({
     id: 'plan-id',
     name: 'Quarterly outreach',
@@ -15,6 +22,7 @@ describe('PlansService', () => {
     periodStart: new Date('2026-01-01T00:00:00.000Z'),
     periodEnd: new Date('2026-04-01T00:00:00.000Z'),
     status: PlanStatus.DRAFT,
+    approvalVersion: 0,
     deletedAt: null,
     branches: [{
       planId: 'plan-id',
@@ -33,6 +41,7 @@ describe('PlansService', () => {
     tx = {
       plan: {
         findFirst: jest.fn(async () => planRecord()),
+        findUniqueOrThrow: jest.fn(async () => planRecord()),
         create: jest.fn(async ({ data }: any) => ({
           id: 'plan-id',
           ...data,
@@ -55,6 +64,13 @@ describe('PlansService', () => {
         createMany: jest.fn(async () => ({ count: 1 })),
         deleteMany: jest.fn(async () => ({ count: 1 })),
       },
+      planApproval: {
+        create: jest.fn(async ({ data }: any) => ({ id: 'approval-id', ...data })),
+      },
+      planMetricCatalog: {
+        create: jest.fn(async ({ data }: any) => ({ id: catalogId, ...data, isActive: true })),
+        update: jest.fn(async ({ data }: any) => ({ id: catalogId, ...data })),
+      },
     };
     prisma = {
       branch: {
@@ -73,8 +89,23 @@ describe('PlansService', () => {
         findUnique: jest.fn(async () => ({ id: branchId, parentId: null })),
       },
       userRoleGrant: {
-        findMany: jest.fn(async () => [{ branchId }]),
+        findMany: jest.fn(async () => [{
+          branchId,
+          role: { permissions: [{ scope: AccessScope.BRANCH }] },
+        }]),
         findFirst: jest.fn(async () => null),
+      },
+      taskAssignment: {
+        findMany: jest.fn(async () => []),
+      },
+      planMetricCatalog: {
+        findMany: jest.fn(async () => [{ id: catalogId, name: 'Customer calls', unit: 'calls' }]),
+        findUnique: jest.fn(async () => ({
+          id: catalogId,
+          name: 'Customer calls',
+          unit: 'calls',
+          isActive: true,
+        })),
       },
       plan: {
         findMany: jest.fn(async () => []),
@@ -97,7 +128,7 @@ describe('PlansService', () => {
       branchIds: [branchId],
       periodStart: '2026-01-01T00:00:00.000Z',
       periodEnd: '2026-04-01T00:00:00.000Z',
-      metrics: [{ name: 'Customer calls', unit: 'calls', target: 12.5 }],
+      metrics: [{ catalogId, target: 12.5 }],
     });
 
     expect(result).toMatchObject({
@@ -109,7 +140,7 @@ describe('PlansService', () => {
       actor.id,
       'plans.manage',
       undefined,
-      { branchId },
+      { ownerId: actor.id, assigneeId: actor.id, branchId },
     );
     expect(tx.plan.create).toHaveBeenCalled();
     expect(audit.write).toHaveBeenCalledWith(tx, expect.objectContaining({
@@ -126,20 +157,20 @@ describe('PlansService', () => {
       branchIds: [branchId],
       periodStart: '2026-04-01T00:00:00.000Z',
       periodEnd: '2026-01-01T00:00:00.000Z',
-      metrics: [{ name: 'Calls', unit: 'count', target: 1 }],
+      metrics: [{ catalogId, target: 1 }],
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.branch.findMany).not.toHaveBeenCalled();
   });
 
-  it('rejects duplicate metric names and inactive branches', async () => {
+  it('rejects duplicate catalog metrics and inactive branches', async () => {
     await expect(service.create(actor, {
       name: 'Duplicate metrics',
       branchIds: [branchId],
       periodStart: '2026-01-01T00:00:00.000Z',
       periodEnd: '2026-04-01T00:00:00.000Z',
       metrics: [
-        { name: 'Calls', unit: 'count', target: 1 },
-        { name: ' calls ', unit: 'count', target: 2 },
+        { catalogId, target: 1 },
+        { catalogId, target: 2 },
       ],
     })).rejects.toBeInstanceOf(ConflictException);
 
@@ -149,8 +180,114 @@ describe('PlansService', () => {
       branchIds: [branchId],
       periodStart: '2026-01-01T00:00:00.000Z',
       periodEnd: '2026-04-01T00:00:00.000Z',
-      metrics: [{ name: 'Calls', unit: 'count', target: 1 }],
+      metrics: [{ catalogId, target: 1 }],
     })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('submits a draft plan into approval and records the submission version', async () => {
+    tx.plan.findUniqueOrThrow.mockResolvedValue({
+      ...planRecord(),
+      status: PlanStatus.PENDING_APPROVAL,
+      approvalVersion: 1,
+    });
+
+    await expect(service.submitForApproval(actor, 'plan-id')).resolves.toMatchObject({
+      status: PlanStatus.PENDING_APPROVAL,
+      approvalVersion: 1,
+    });
+    expect(tx.plan.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'plan-id',
+        deletedAt: null,
+        status: PlanStatus.DRAFT,
+        approvalVersion: 0,
+      },
+      data: { status: PlanStatus.PENDING_APPROVAL, approvalVersion: 1 },
+    });
+    expect(audit.write).toHaveBeenCalledWith(tx, expect.objectContaining({
+      action: 'plan.submitted_for_approval',
+      afterState: { status: PlanStatus.PENDING_APPROVAL, approvalVersion: 1 },
+    }));
+  });
+
+  it('requires an independent reviewer and reason to reject a plan', async () => {
+    prisma.plan.findFirst.mockResolvedValue({
+      ...planRecord(),
+      createdById: 'plan-creator-id',
+      status: PlanStatus.PENDING_APPROVAL,
+      approvalVersion: 1,
+    });
+    tx.plan.findUniqueOrThrow.mockResolvedValue({
+      ...planRecord(),
+      createdById: 'plan-creator-id',
+      status: PlanStatus.REJECTED,
+      approvalVersion: 1,
+    });
+
+    await expect(service.reviewApproval(actor, 'plan-id', {
+      decision: PlanApprovalDecision.REJECTED,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    prisma.plan.findFirst.mockResolvedValueOnce({
+      ...planRecord(),
+      status: PlanStatus.PENDING_APPROVAL,
+      approvalVersion: 1,
+    });
+    await expect(service.reviewApproval(actor, 'plan-id', {
+      decision: PlanApprovalDecision.APPROVED,
+    })).rejects.toBeInstanceOf(ForbiddenException);
+
+    await service.reviewApproval(
+      { id: 'manager-id', type: 'STAFF' },
+      'plan-id',
+      { decision: PlanApprovalDecision.REJECTED, reason: 'Chỉ tiêu cần điều chỉnh' },
+    );
+    expect(tx.planApproval.create).toHaveBeenCalledWith({
+      data: {
+        planId: 'plan-id',
+        reviewerId: 'manager-id',
+        version: 1,
+        decision: PlanApprovalDecision.REJECTED,
+        reason: 'Chỉ tiêu cần điều chỉnh',
+      },
+    });
+    expect(tx.plan.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: PlanStatus.PENDING_APPROVAL, approvalVersion: 1 }),
+      data: { status: PlanStatus.REJECTED },
+    }));
+  });
+
+  it('does not allow direct activation outside approval or catalog changes without global authority', async () => {
+    await expect(service.update(actor, 'plan-id', { status: PlanStatus.ACTIVE }))
+      .rejects.toBeInstanceOf(BadRequestException);
+
+    access.assertPermission.mockRejectedValueOnce(new ForbiddenException());
+    await expect(service.createMetricCatalogItem(actor, {
+      key: 'local_metric',
+      name: 'Local metric',
+      unit: 'count',
+    })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('shows inactive catalog entries only to globally scoped catalog managers', async () => {
+    access.hasPermission.mockResolvedValue(false);
+
+    await service.listMetricCatalog(actor);
+    expect(access.hasPermission).toHaveBeenCalledWith(
+      actor.id,
+      'plans.catalog.manage',
+      AccessScope.ALL,
+    );
+    expect(prisma.planMetricCatalog.findMany).toHaveBeenLastCalledWith({
+      where: { isActive: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
+
+    access.hasPermission.mockResolvedValue(true);
+    await service.listMetricCatalog(actor);
+    expect(prisma.planMetricCatalog.findMany).toHaveBeenLastCalledWith({
+      where: {},
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+    });
   });
 
   it('limits plan lists to branches where the actor has read scope', async () => {
@@ -164,10 +301,42 @@ describe('PlansService', () => {
     expect(prisma.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         deletedAt: null,
-        branches: { some: { branchId: { in: expect.arrayContaining([branchId, childBranchId]) } } },
+        OR: expect.arrayContaining([
+          { branches: { some: { branchId: { in: expect.arrayContaining([branchId, childBranchId]) } } } },
+        ]),
       },
     }));
-    expect(prisma.plan.findMany.mock.calls[0][0].where.branches.some.branchId.in).not.toContain('unrelated-branch-id');
+    expect(prisma.plan.findMany.mock.calls[0][0].where.OR[0].branches.some.branchId.in)
+      .not.toContain('unrelated-branch-id');
+  });
+
+  it('includes only plans where an assigned-scope employee has a personal task', async () => {
+    access.hasPermission.mockResolvedValue(false);
+    prisma.userRoleGrant.findMany.mockResolvedValue([{
+      branchId,
+      role: { permissions: [{ scope: AccessScope.ASSIGNED }] },
+    }]);
+    prisma.taskAssignment.findMany.mockResolvedValue([{
+      task: { planId: 'assigned-plan-id', branchId },
+    }]);
+    prisma.plan.findMany.mockResolvedValue([{
+      ...planRecord(),
+      id: 'assigned-plan-id',
+      createdById: 'another-staff-id',
+    }]);
+
+    await expect(service.list(actor, { take: 50 })).resolves.toMatchObject([
+      { id: 'assigned-plan-id', branches: [{ id: branchId }] },
+    ]);
+    expect(prisma.taskAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ assigneeId: actor.id }),
+    }));
+    expect(prisma.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        deletedAt: null,
+        OR: [{ id: { in: ['assigned-plan-id'] } }],
+      },
+    }));
   });
 
   it('does not allow customer actors to create or read staff plans', async () => {
@@ -178,16 +347,20 @@ describe('PlansService', () => {
       branchIds: [branchId],
       periodStart: '2026-01-01T00:00:00.000Z',
       periodEnd: '2026-04-01T00:00:00.000Z',
-      metrics: [{ name: 'Calls', unit: 'count', target: 1 }],
+      metrics: [{ catalogId, target: 1 }],
     })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('updates dates, status and branch associations atomically with an audit event', async () => {
+    prisma.plan.findFirst.mockResolvedValueOnce({
+      ...planRecord(),
+      status: PlanStatus.ACTIVE,
+    });
     const updatedRecord = {
       ...planRecord(),
       periodStart: new Date('2026-02-01T00:00:00.000Z'),
       periodEnd: new Date('2026-05-01T00:00:00.000Z'),
-      status: PlanStatus.ACTIVE,
+      status: PlanStatus.ARCHIVED,
       branches: [
         planRecord().branches[0],
         {
@@ -202,12 +375,12 @@ describe('PlansService', () => {
     const result = await service.update(actor, 'plan-id', {
       periodStart: '2026-02-01T00:00:00.000Z',
       periodEnd: '2026-05-01T00:00:00.000Z',
-      status: PlanStatus.ACTIVE,
+      status: PlanStatus.ARCHIVED,
       addBranchIds: [childBranchId],
     });
 
     expect(result).toMatchObject({
-      status: PlanStatus.ACTIVE,
+      status: PlanStatus.ARCHIVED,
       branches: [{ id: branchId }, { id: childBranchId }],
     });
     expect(tx.planBranch.createMany).toHaveBeenCalledWith({
@@ -215,8 +388,8 @@ describe('PlansService', () => {
     });
     expect(audit.write).toHaveBeenCalledWith(tx, expect.objectContaining({
       action: 'plan.updated',
-      beforeState: expect.objectContaining({ status: PlanStatus.DRAFT }),
-      afterState: expect.objectContaining({ status: PlanStatus.ACTIVE }),
+      beforeState: expect.objectContaining({ status: PlanStatus.ACTIVE }),
+      afterState: expect.objectContaining({ status: PlanStatus.ARCHIVED }),
     }));
   });
 

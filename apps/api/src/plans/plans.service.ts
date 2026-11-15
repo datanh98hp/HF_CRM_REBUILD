@@ -31,6 +31,7 @@ function requestId(request?: ActorRequest): string | null {
 }
 
 const planInclude = {
+  createdBy: { select: { id: true, username: true, displayName: true } },
   branches: { include: { branch: { select: { id: true, code: true, name: true } } } },
   metrics: { orderBy: { name: 'asc' as const } },
   approvals: {
@@ -594,7 +595,13 @@ export class PlansService {
       throw new ConflictException({ code: 'PLAN_NOT_PENDING_APPROVAL' });
     }
     if (current.createdById === actor.id) {
-      throw new ForbiddenException({ code: 'PLAN_CREATOR_CANNOT_APPROVE' });
+      const adminGrant = await this.prisma.userRoleGrant.findFirst({
+        where: { userId: actor.id, branchId: null, role: { key: { in: ['ADMIN', 'OPERATOR'] } } },
+        select: { id: true },
+      });
+      if (!adminGrant) {
+        throw new ForbiddenException({ code: 'PLAN_CREATOR_CANNOT_APPROVE' });
+      }
     }
     await this.assertPlanBranchAccess(
       actor.id,

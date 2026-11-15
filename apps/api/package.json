@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand",
     "test:integration": "node scripts/test-p0-2-integration.mjs",
+    "test:integration:p0-3": "node scripts/test-p0-3-integration.mjs",
     "test:watch": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
   },
   "dependencies": {

@@ -11,6 +11,8 @@ import {
   AccessScope,
   CustomerStatus,
   DuplicateReviewStatus,
+  LoanContractStatus,
+  LoanProductStatus,
   LoanRequestSource,
   Prisma,
 } from '../generated/prisma/client.js';
@@ -20,18 +22,32 @@ import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../database/prisma.service.js';
 import {
   AssignCustomerDto,
+  BulkAssignCustomersDto,
   ChangeCustomerStatusDto,
   CreateCustomerDto,
   CreateLoanContractDto,
+  CreateLoanProductDto,
   ContractListQueryDto,
   ExternalLoanContractDto,
   CreateLoanRequestDto,
+  CalculateLoanProductDto,
   CustomerListQueryDto,
+  LoanProductListQueryDto,
   ResolveDuplicateDto,
+  SetLoanProductFormulaDto,
+  SetLoanProductStatusDto,
+  UpdateLoanProductDto,
   UpdateCustomerDto,
   UpdateLoanRequestStatusDto,
 } from './customer.dto.js';
 import { normalizeVietnamesePhone, normalizeVietnamesePhoneSearch } from './phone-normalizer.js';
+import {
+  evaluateLoanFormula,
+  LoanFormulaError,
+  normalizeLoanFormulaInputs,
+  validateLoanFormula,
+  validateLoanFormulaVariables,
+} from './loan-formula.js';
 
 type CustomerRecord = Prisma.CustomerGetPayload<{
   include: { assignments: { where: { endedAt: null }; select: { adviserId: true; assignedAt: true } } };
@@ -212,6 +228,67 @@ export class CustomersService {
     });
   }
 
+  async bulkAssign(actor: ActorContext, dto: BulkAssignCustomersDto, request?: ActorRequest) {
+    this.assertStaff(actor);
+    const customers = await Promise.all(dto.customerIds.map((id) => this.customerOrThrow(id)));
+    for (const customer of customers) {
+      await this.assertCustomerAccess(actor, 'customers.assign', customer);
+    }
+    for (const branchId of new Set(customers.map(({ branchId }) => branchId))) {
+      await this.assertAdviserInBranch(dto.adviserId, branchId);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const currentCustomers = await tx.customer.findMany({
+        where: { id: { in: dto.customerIds } },
+        include: { assignments: { where: { endedAt: null }, select: { adviserId: true } } },
+      });
+      if (currentCustomers.length !== dto.customerIds.length) {
+        throw new NotFoundException({ code: 'CUSTOMER_NOT_FOUND' });
+      }
+
+      const results: Array<{ customerId: string; assignmentId: string | null; changed: boolean }> = [];
+      for (const customer of currentCustomers) {
+        const current = customer.assignments[0];
+        if (current?.adviserId === dto.adviserId) {
+          results.push({ customerId: customer.id, assignmentId: null, changed: false });
+          continue;
+        }
+        await tx.customerAssignment.updateMany({
+          where: { customerId: customer.id, endedAt: null },
+          data: { endedAt: new Date() },
+        });
+        const assignment = await tx.customerAssignment.create({
+          data: {
+            customerId: customer.id,
+            adviserId: dto.adviserId,
+            branchId: customer.branchId,
+            assignedById: actor.id,
+            isPrimary: true,
+          },
+        });
+        await this.audit.write(tx, {
+          actor,
+          action: 'customer.assigned',
+          targetType: 'customer',
+          targetId: customer.id,
+          branchId: customer.branchId,
+          reason: dto.reason.trim(),
+          afterState: { adviserId: dto.adviserId, assignmentId: assignment.id, bulk: true },
+          requestId: requestId(request),
+        });
+        results.push({ customerId: customer.id, assignmentId: assignment.id, changed: true });
+      }
+      return {
+        adviserId: dto.adviserId,
+        requestedCount: dto.customerIds.length,
+        assignedCount: results.filter(({ changed }) => changed).length,
+        unchangedCount: results.filter(({ changed }) => !changed).length,
+        items: results,
+      };
+    });
+  }
+
   async assignments(actor: ActorContext, customerId: string) {
     this.assertStaff(actor);
     const customer = await this.customerOrThrow(customerId);
@@ -267,6 +344,277 @@ export class CustomersService {
       if (await this.canReadLoanRequest(actor, row.customer)) output.push(this.serializeLoanRequest(row, actor.type === 'CUSTOMER'));
     }
     return output;
+  }
+
+  async listLoanProducts(actor: ActorContext, query: LoanProductListQueryDto) {
+    const customer = actor.type === 'CUSTOMER' ? await this.customerOrThrow(actor.id) : null;
+    if (actor.type === 'STAFF') this.assertStaff(actor);
+    if (query.branchId && actor.type === 'STAFF') {
+      await this.access.assertPermission(actor.id, 'loan-products.read', undefined, query.branchId);
+    }
+    const products = await this.prisma.loanProduct.findMany({
+      where: {
+        ...(query.branchId ? { branchId: query.branchId } : {}),
+        ...(query.status ? { status: query.status } : {}),
+      },
+      include: { branch: { select: { id: true, code: true, name: true } } },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
+    });
+    const visible = [];
+    for (const product of products) {
+      const allowed = customer
+        ? product.status === LoanProductStatus.ACTIVE && (!product.branchId || product.branchId === customer.branchId)
+        : await this.canReadLoanProduct(actor, product);
+      if (allowed) visible.push(this.serializeLoanProduct(product));
+    }
+    return visible;
+  }
+
+  async loanProductDetail(actor: ActorContext, productId: string) {
+    const product = await this.loanProductOrThrow(productId);
+    if (actor.type === 'CUSTOMER') {
+      const customer = await this.customerOrThrow(actor.id);
+      if (product.status !== LoanProductStatus.ACTIVE || (product.branchId && product.branchId !== customer.branchId)) {
+        throw new NotFoundException({ code: 'LOAN_PRODUCT_NOT_FOUND' });
+      }
+    } else {
+      await this.assertLoanProductAccess(actor, 'loan-products.read', product);
+    }
+    return this.serializeLoanProduct(product);
+  }
+
+  async createLoanProduct(actor: ActorContext, dto: CreateLoanProductDto, request?: ActorRequest) {
+    this.assertStaff(actor);
+    const branchId = dto.branchId ?? null;
+    if (branchId) {
+      await this.assertBranchManagePermission(actor, 'loan-products.manage', branchId);
+      await this.assertBranchExists(branchId);
+    } else {
+      await this.access.assertPermission(actor.id, 'loan-products.manage', AccessScope.ALL);
+    }
+    const minAmount = new Prisma.Decimal(dto.minAmount);
+    const maxAmount = new Prisma.Decimal(dto.maxAmount);
+    if (minAmount.isZero() || minAmount.greaterThan(maxAmount) || dto.minTermMonths > dto.maxTermMonths) {
+      throw new BadRequestException({ code: 'LOAN_PRODUCT_INVALID_LIMITS' });
+    }
+    try {
+      const product = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.loanProduct.create({
+          data: {
+            branchId,
+            code: dto.code.trim(),
+            name: dto.name.trim(),
+            loanType: dto.loanType.trim(),
+            source: dto.source.trim(),
+            description: dto.description?.trim(),
+            sourceUrl: dto.sourceUrl?.trim(),
+            thumbnailUrl: dto.thumbnailUrl?.trim(),
+            minTermMonths: dto.minTermMonths,
+            maxTermMonths: dto.maxTermMonths,
+            minAmount,
+            maxAmount,
+            annualInterestRate: new Prisma.Decimal(dto.annualInterestRate),
+            createdById: actor.id,
+          },
+          include: { branch: { select: { id: true, code: true, name: true } } },
+        });
+        await this.audit.write(tx, {
+          actor,
+          action: 'loan_product.created',
+          targetType: 'loan_product',
+          targetId: created.id,
+          branchId,
+          afterState: { code: created.code, name: created.name, status: created.status },
+          requestId: requestId(request),
+        });
+        return created;
+      });
+      return this.serializeLoanProduct(product);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException({ code: 'LOAN_PRODUCT_CODE_EXISTS' });
+      }
+      throw error;
+    }
+  }
+
+  async updateLoanProduct(actor: ActorContext, productId: string, dto: UpdateLoanProductDto, request?: ActorRequest) {
+    this.assertStaff(actor);
+    const product = await this.loanProductOrThrow(productId);
+    await this.assertLoanProductAccess(actor, 'loan-products.manage', product, true);
+    if (product.status === LoanProductStatus.ACTIVE) {
+      throw new ConflictException({ code: 'ACTIVE_LOAN_PRODUCT_IMMUTABLE' });
+    }
+    if (!Object.values(dto).some((value) => value !== undefined)) {
+      throw new BadRequestException({ code: 'LOAN_PRODUCT_UPDATE_EMPTY' });
+    }
+    const minAmount = dto.minAmount === undefined ? product.minAmount : new Prisma.Decimal(dto.minAmount);
+    const maxAmount = dto.maxAmount === undefined ? product.maxAmount : new Prisma.Decimal(dto.maxAmount);
+    const minTermMonths = dto.minTermMonths ?? product.minTermMonths;
+    const maxTermMonths = dto.maxTermMonths ?? product.maxTermMonths;
+    if (minAmount.isZero() || minAmount.greaterThan(maxAmount) || minTermMonths > maxTermMonths) {
+      throw new BadRequestException({ code: 'LOAN_PRODUCT_INVALID_LIMITS' });
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.loanProduct.update({
+        where: { id: product.id },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.loanType !== undefined ? { loanType: dto.loanType.trim() } : {}),
+          ...(dto.source !== undefined ? { source: dto.source.trim() } : {}),
+          ...(dto.description !== undefined ? { description: dto.description?.trim() ?? null } : {}),
+          ...(dto.sourceUrl !== undefined ? { sourceUrl: dto.sourceUrl?.trim() ?? null } : {}),
+          ...(dto.thumbnailUrl !== undefined ? { thumbnailUrl: dto.thumbnailUrl?.trim() ?? null } : {}),
+          minTermMonths,
+          maxTermMonths,
+          minAmount,
+          maxAmount,
+          ...(dto.annualInterestRate !== undefined ? { annualInterestRate: new Prisma.Decimal(dto.annualInterestRate) } : {}),
+        },
+        include: { branch: { select: { id: true, code: true, name: true } } },
+      });
+      await this.audit.write(tx, {
+        actor,
+        action: 'loan_product.updated',
+        targetType: 'loan_product',
+        targetId: row.id,
+        branchId: row.branchId,
+        beforeState: { name: product.name, minAmount: product.minAmount.toFixed(2), maxAmount: product.maxAmount.toFixed(2), status: product.status },
+        afterState: { name: row.name, minAmount: row.minAmount.toFixed(2), maxAmount: row.maxAmount.toFixed(2), status: row.status },
+        requestId: requestId(request),
+      });
+      return row;
+    });
+    return this.serializeLoanProduct(updated);
+  }
+
+  async setLoanProductStatus(actor: ActorContext, productId: string, dto: SetLoanProductStatusDto, request?: ActorRequest) {
+    this.assertStaff(actor);
+    const product = await this.loanProductOrThrow(productId);
+    await this.assertLoanProductAccess(actor, 'loan-products.publish', product, true);
+    if (product.status === dto.status) return this.serializeLoanProduct(product);
+    const allowedTransition = product.status === LoanProductStatus.DRAFT
+      ? [LoanProductStatus.ACTIVE, LoanProductStatus.INACTIVE].includes(dto.status)
+      : product.status === LoanProductStatus.ACTIVE && dto.status === LoanProductStatus.INACTIVE
+        || product.status === LoanProductStatus.INACTIVE && dto.status === LoanProductStatus.ACTIVE;
+    if (!allowedTransition) throw new ConflictException({ code: 'LOAN_PRODUCT_STATUS_TRANSITION_INVALID' });
+    if (dto.status === LoanProductStatus.ACTIVE) {
+      if (!product.currentFormulaVersion) throw new ConflictException({ code: 'LOAN_PRODUCT_FORMULA_REQUIRED' });
+      if (product.branchId) await this.assertBranchExists(product.branchId);
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.loanProduct.update({ where: { id: product.id }, data: { status: dto.status }, include: { branch: { select: { id: true, code: true, name: true } } } });
+      await this.audit.write(tx, {
+        actor,
+        action: 'loan_product.status.changed',
+        targetType: 'loan_product',
+        targetId: row.id,
+        branchId: row.branchId,
+        beforeState: { status: product.status },
+        afterState: { status: row.status },
+        requestId: requestId(request),
+      });
+      return row;
+    });
+    return this.serializeLoanProduct(updated);
+  }
+
+  async getLoanProductFormula(actor: ActorContext, productId: string) {
+    this.assertStaff(actor);
+    await this.access.assertPermission(actor.id, 'loan-products.formula.manage', AccessScope.ALL);
+    const product = await this.loanProductOrThrow(productId);
+    if (!product.currentFormulaVersion) return null;
+    return this.prisma.loanProductFormulaVersion.findUnique({
+      where: { productId_version: { productId, version: product.currentFormulaVersion } },
+    });
+  }
+
+  async setLoanProductFormula(actor: ActorContext, productId: string, dto: SetLoanProductFormulaDto, request?: ActorRequest) {
+    this.assertStaff(actor);
+    await this.access.assertPermission(actor.id, 'loan-products.formula.manage', AccessScope.ALL);
+    const product = await this.loanProductOrThrow(productId);
+    const variables = validateLoanFormulaVariables(dto.variables);
+    validateLoanFormula(dto.interestFormula, variables);
+    validateLoanFormula(dto.monthlyPaymentFormula, variables);
+    return this.prisma.$transaction(async (tx) => {
+      const version = product.currentFormulaVersion + 1;
+      const claimed = await tx.loanProduct.updateMany({
+        where: { id: product.id, currentFormulaVersion: product.currentFormulaVersion },
+        data: { currentFormulaVersion: { increment: 1 } },
+      });
+      if (claimed.count !== 1) throw new ConflictException({ code: 'LOAN_PRODUCT_FORMULA_VERSION_CHANGED' });
+      const formula = await tx.loanProductFormulaVersion.create({
+        data: {
+          productId: product.id,
+          version,
+          interestFormula: dto.interestFormula.trim(),
+          monthlyPaymentFormula: dto.monthlyPaymentFormula.trim(),
+          variables,
+          createdById: actor.id,
+        },
+      });
+      await this.audit.write(tx, {
+        actor,
+        action: 'loan_product.formula.version.created',
+        targetType: 'loan_product',
+        targetId: product.id,
+        branchId: product.branchId,
+        afterState: { version, variableCount: variables.length },
+        requestId: requestId(request),
+      });
+      return formula;
+    });
+  }
+
+  async calculateLoanProduct(actor: ActorContext, productId: string, dto: CalculateLoanProductDto) {
+    const product = await this.loanProductOrThrow(productId);
+    if (product.status !== LoanProductStatus.ACTIVE) throw new ConflictException({ code: 'LOAN_PRODUCT_NOT_ACTIVE' });
+    if (actor.type === 'CUSTOMER') {
+      const customer = await this.customerOrThrow(actor.id);
+      if (product.branchId && product.branchId !== customer.branchId) {
+        throw new NotFoundException({ code: 'LOAN_PRODUCT_NOT_FOUND' });
+      }
+    } else {
+      this.assertStaff(actor);
+      await this.access.assertPermission(actor.id, 'loan-contracts.manage', undefined, product.branchId ?? undefined);
+      await this.assertLoanProductAccess(actor, 'loan-products.read', product);
+    }
+    const principal = new Prisma.Decimal(dto.principal);
+    if (
+      principal.lessThan(product.minAmount)
+      || principal.greaterThan(product.maxAmount)
+      || dto.termMonths < product.minTermMonths
+      || dto.termMonths > product.maxTermMonths
+    ) {
+      throw new BadRequestException({ code: 'LOAN_PRODUCT_LIMITS_NOT_MET' });
+    }
+    const formula = await this.prisma.loanProductFormulaVersion.findUnique({
+      where: { productId_version: { productId: product.id, version: product.currentFormulaVersion } },
+    });
+    if (!formula) throw new ConflictException({ code: 'LOAN_PRODUCT_FORMULA_REQUIRED' });
+    const variables = validateLoanFormulaVariables(formula.variables);
+    const normalized = normalizeLoanFormulaInputs(variables, dto.formulaInputs, {
+      principal: principal.toFixed(2),
+      annualRatePercent: product.annualInterestRate.toString(),
+      termMonths: dto.termMonths,
+    });
+    const interest = evaluateLoanFormula(formula.interestFormula, normalized.values)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    const monthlyPayment = evaluateLoanFormula(formula.monthlyPaymentFormula, normalized.values)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    if (interest.isNegative() || monthlyPayment.isNegative()) {
+      throw new BadRequestException({ code: 'LOAN_FORMULA_NEGATIVE_RESULT' });
+    }
+    return {
+      productId: product.id,
+      formulaVersion: formula.version,
+      inputs: normalized.snapshot,
+      outputs: {
+        interestAmount: interest.toFixed(2),
+        monthlyPayment: monthlyPayment.toFixed(2),
+        totalRepayment: principal.plus(interest).toFixed(2),
+      },
+    };
   }
 
   async createLoanRequest(actor: ActorContext, dto: CreateLoanRequestDto, request?: ActorRequest) {

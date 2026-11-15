@@ -1,7 +1,7 @@
 # Finance CRM — Kế hoạch triển khai P0
 
-**Trạng thái:** P0-0/P0-1 có nền code; backend P0-2 đã triển khai trên dev; P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/tasks` theo wireframe B và quan hệ metadata evidence. Migration task/result/KPI và evidence đã áp dụng trên PostgreSQL test riêng; upload/download binary và nghiệm thu môi trường mục tiêu còn mở.
-**Cập nhật:** 2026-11-12
+**Trạng thái:** P0-0/P0-1 có nền code; backend P0-2 đã triển khai trên dev; P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/tasks` theo wireframe B và quan hệ metadata evidence. Seed dev đã sửa fixture kết quả chờ xác minh; kiểm tra giao diện bằng Admin xác nhận các thao tác xác minh, yêu cầu bổ sung và từ chối hiển thị đúng. Upload/download binary, probe 375px và nghiệm thu môi trường mục tiêu còn mở.
+**Cập nhật:** 2026-11-15
 **Phạm vi căn cứ:** `AGENT.md`, `mvp-scope.md`, `decision-log.md` và scaffold hiện tại.
 
 **Kế hoạch theo từng file:** [Mục lục các giai đoạn P0](p0/README.md).
@@ -12,7 +12,7 @@ Phạm vi nghiệp vụ chính đã đủ rõ để bắt đầu P0 theo từng 
 
 Backend đã có nền PostgreSQL/Redis, auth/RBAC/audit và lát cắt customer/loan P0-2. Migration P0-2 đã áp dụng trên PostgreSQL dev/test; 19 unit tests và 18 integration assertions đạt. Yêu cầu mới xác nhận một MANAGE/chi nhánh, OTP CUSTOMER khi hoàn thành hợp đồng và tiếp nhận hợp đồng ngoài có idempotency/20 bản ghi mỗi trang. P0-2 chưa đóng: các quy tắc này chưa triển khai; còn cần chốt matrix/grants chi tiết, quyền ghi parent-child, OTP provider, schema/allowlist và giao diện P0-6.
 
-P0-3 có API nền cho kế hoạch, task, phiên bản kết quả, xác minh, KPI và quan hệ metadata evidence; migration task/result/KPI cùng evidence đã áp dụng trên PostgreSQL test riêng. UI `/tasks` đã dựng theo wireframe B. Typecheck API/web và 48 unit tests đạt; migration evidence cùng các FK/CHECK constraints đã xác nhận. Probe trực quan 375px, upload/download binary và nghiệm thu môi trường mục tiêu còn mở. Theo yêu cầu hiện tại, CI pipeline nằm ngoài phạm vi tiếp tục triển khai.
+P0-3 có API nền cho kế hoạch, task, phiên bản kết quả, xác minh, KPI và quan hệ metadata evidence; migration task/result/KPI cùng evidence đã áp dụng trên PostgreSQL test riêng. Kiểm thử API/PostgreSQL P0-3 đạt 19 assertion: plan mới ở DRAFT, chỉ chuyển chờ duyệt sau khi gửi; Admin được duyệt thủ công plan do mình tạo, còn MANAGE không thể tự duyệt và Admin khác có thể duyệt. Luồng tiếp tục tới task, kết quả và KPI sau xác minh. API typecheck và unit tests của hai suite plans/tasks đạt. UI `/tasks` đã dựng theo wireframe B; trang dev được kiểm tra với tài khoản Admin sau khi seed dọn quan hệ xác minh pending sai cho fixture. Các nút xác minh, yêu cầu bổ sung và từ chối đã hiển thị. Migration evidence cùng các FK/CHECK constraints đã xác nhận. Probe 375px, kiểm thử UI end-to-end, upload/download binary và nghiệm thu môi trường mục tiêu còn mở. Theo yêu cầu hiện tại, CI pipeline nằm ngoài phạm vi tiếp tục triển khai.
 
 ## 2. Phạm vi P0 đề xuất
 

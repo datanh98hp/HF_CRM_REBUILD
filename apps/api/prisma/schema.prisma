@@ -56,6 +56,12 @@ enum LoanRequestStatus {
   CANCELLED
 }
 
+enum LoanProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
 enum LoanContractStatus {
   PENDING_REVIEW
   APPROVED
@@ -119,6 +125,7 @@ model Branch {
   auditEvents AuditEvent[]
   customers Customer[]
   customerAssignments CustomerAssignment[]
+  loanProducts LoanProduct[]
   loanRequests LoanRequest[]
   loanContracts LoanContract[]
   planBranches PlanBranch[]
@@ -149,6 +156,8 @@ model User {
   createdCustomers   Customer[]      @relation("CustomerCreator")
   customerAssignments CustomerAssignment[] @relation("CustomerAdviser")
   assignmentsCreated CustomerAssignment[] @relation("CustomerAssignmentCreator")
+  createdLoanProducts LoanProduct[] @relation("LoanProductCreator")
+  createdLoanProductFormulaVersions LoanProductFormulaVersion[] @relation("LoanProductFormulaVersionCreator")
   customerStatusChanges CustomerStatusHistory[] @relation("CustomerStatusActor")
   duplicateReviews DuplicateCandidate[] @relation("DuplicateReviewer")
   recordedLoanRequests LoanRequest[] @relation("LoanRequestRecorder")
@@ -353,6 +362,9 @@ model LoanRequest {
   id           String            @id @default(uuid()) @db.Uuid
   customerId   String            @db.Uuid
   branchId     String            @db.Uuid
+  productId    String?           @db.Uuid
+  requestedAmount Decimal?        @db.Decimal(18, 2)
+  requestedTermMonths Int?
   source       LoanRequestSource
   topic        String            @db.VarChar(200)
   notes        String?           @db.VarChar(4000)
@@ -360,7 +372,9 @@ model LoanRequest {
   recordedById String?           @db.Uuid
   customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branch       Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  product      LoanProduct?      @relation(fields: [productId], references: [id], onDelete: Restrict)
   recordedBy   User?             @relation("LoanRequestRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  contracts    LoanContract[]
   createdAt    DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
 
@@ -368,16 +382,72 @@ model LoanRequest {
   @@index([branchId, status, createdAt])
 }
 
+model LoanProduct {
+  id                    String           @id @default(uuid()) @db.Uuid
+  branchId              String?          @db.Uuid
+  code                  String           @unique @db.VarChar(80)
+  name                  String           @db.VarChar(200)
+  loanType              String           @db.VarChar(120)
+  source                String            @db.VarChar(200)
+  description           String?          @db.VarChar(4000)
+  sourceUrl             String?          @db.VarChar(2048)
+  thumbnailUrl          String?          @db.VarChar(2048)
+  minTermMonths         Int
+  maxTermMonths         Int
+  minAmount             Decimal          @db.Decimal(18, 2)
+  maxAmount             Decimal          @db.Decimal(18, 2)
+  annualInterestRate    Decimal          @default(0) @db.Decimal(9, 4)
+  status                LoanProductStatus @default(DRAFT)
+  currentFormulaVersion Int               @default(0)
+  createdById           String?          @db.Uuid
+  branch                Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy             User?            @relation("LoanProductCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  formulaVersions       LoanProductFormulaVersion[]
+  loanRequests          LoanRequest[]
+  contracts             LoanContract[]
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([branchId, status, name])
+}
+
+model LoanProductFormulaVersion {
+  id                   String   @id @default(uuid()) @db.Uuid
+  productId            String   @db.Uuid
+  version              Int
+  interestFormula      String   @db.VarChar(512)
+  monthlyPaymentFormula String  @db.VarChar(512)
+  variables            Json
+  createdById          String   @db.Uuid
+  product              LoanProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdBy            User     @relation("LoanProductFormulaVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  contracts            LoanContract[]
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([productId, version])
+  @@index([productId, createdAt])
+}
+
 model LoanContract {
   id                 String                      @id @default(uuid()) @db.Uuid
   customerId         String                      @db.Uuid
   branchId           String                      @db.Uuid
+  productId          String?                     @db.Uuid
+  loanRequestId      String?                     @db.Uuid
+  formulaVersionId   String?                     @db.Uuid
   contractNumber     String                      @unique @db.VarChar(120)
   packageCode        String?                     @db.VarChar(80)
   packageName        String                      @db.VarChar(200)
   packageVersion     String?                     @db.VarChar(40)
   loanType           String?                     @db.VarChar(120)
   termMonths         Int?
+  loanAmount         Decimal?                    @db.Decimal(18, 2)
+  annualInterestRate Decimal?                    @db.Decimal(9, 4)
+  interestAmount     Decimal?                    @db.Decimal(18, 2)
+  monthlyPayment     Decimal?                    @db.Decimal(18, 2)
+  formulaSnapshot    Json?
+  formulaInputs      Json?
+  formulaOutputs     Json?
   sourceSystem       String?                     @db.VarChar(80)
   externalContractId String?                     @db.VarChar(160)
   sourceUpdatedAt    DateTime?                   @db.Timestamptz(3)
@@ -393,6 +463,9 @@ model LoanContract {
   createdById        String?                     @db.Uuid
   customer           Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
   branch             Branch                      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  product            LoanProduct?                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  loanRequest        LoanRequest?                 @relation(fields: [loanRequestId], references: [id], onDelete: Restrict)
+  formulaVersion     LoanProductFormulaVersion?    @relation(fields: [formulaVersionId], references: [id], onDelete: Restrict)
   createdBy          User?                       @relation("LoanContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
   approvedBy         User?                       @relation("LoanContractApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   statusHistory      LoanContractStatusHistory[]

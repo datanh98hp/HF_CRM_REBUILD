@@ -19,6 +19,7 @@ describe('PlansService', () => {
     name: 'Quarterly outreach',
     description: null,
     createdById: actor.id,
+    createdBy: { id: actor.id, username: 'staff', displayName: 'Staff User' },
     periodStart: new Date('2026-01-01T00:00:00.000Z'),
     periodEnd: new Date('2026-04-01T00:00:00.000Z'),
     status: PlanStatus.DRAFT,
@@ -256,6 +257,37 @@ describe('PlansService', () => {
     }));
   });
 
+  it('allows a global administrator to manually approve their own submitted plan', async () => {
+    prisma.plan.findFirst.mockResolvedValue({
+      ...planRecord(),
+      status: PlanStatus.PENDING_APPROVAL,
+      approvalVersion: 1,
+    });
+    prisma.userRoleGrant.findFirst.mockResolvedValue({ id: 'admin-grant' });
+    tx.plan.findUniqueOrThrow.mockResolvedValue({
+      ...planRecord(),
+      status: PlanStatus.ACTIVE,
+      approvalVersion: 1,
+    });
+
+    await expect(service.reviewApproval(actor, 'plan-id', {
+      decision: PlanApprovalDecision.APPROVED,
+    })).resolves.toMatchObject({ status: PlanStatus.ACTIVE });
+    expect(prisma.userRoleGrant.findFirst).toHaveBeenCalledWith({
+      where: { userId: actor.id, branchId: null, role: { key: { in: ['ADMIN', 'OPERATOR'] } } },
+      select: { id: true },
+    });
+    expect(tx.planApproval.create).toHaveBeenCalledWith({
+      data: {
+        planId: 'plan-id',
+        reviewerId: actor.id,
+        version: 1,
+        decision: PlanApprovalDecision.APPROVED,
+        reason: null,
+      },
+    });
+  });
+
   it('does not allow direct activation outside approval or catalog changes without global authority', async () => {
     await expect(service.update(actor, 'plan-id', { status: PlanStatus.ACTIVE }))
       .rejects.toBeInstanceOf(BadRequestException);
@@ -296,9 +328,14 @@ describe('PlansService', () => {
     );
     prisma.plan.findMany.mockResolvedValue([planRecord()]);
 
-    await service.list(actor, { take: 50 });
+    await expect(service.list(actor, { take: 50 })).resolves.toMatchObject([
+      { createdBy: { id: actor.id, username: 'staff', displayName: 'Staff User' } },
+    ]);
 
     expect(prisma.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: expect.objectContaining({
+        createdBy: { select: { id: true, username: true, displayName: true } },
+      }),
       where: {
         deletedAt: null,
         OR: expect.arrayContaining([

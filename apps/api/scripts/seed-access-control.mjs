@@ -68,11 +68,10 @@ const sampleDataEnabled = ['development', 'test'].includes(
   process.env.NODE_ENV ?? fileEnvironment.NODE_ENV ?? '',
 );
 const samplePlanId = 'bca1f523-fd92-4a81-83ca-68a7a4be4004';
-const sampleCustomerIds = [
-  '8a5b2c10-1d67-4f91-a001-000000000001',
-  '8a5b2c10-1d67-4f91-a001-000000000002',
-  '8a5b2c10-1d67-4f91-a001-000000000003',
-];
+const sampleCustomerIds = Array.from(
+  { length: 100 },
+  (_, index) => `8a5b2c10-1d67-4f91-a001-${String(index + 1).padStart(12, '0')}`,
+);
 const sampleTaskIds = [
   '8a5b2c10-1d67-4f91-a002-000000000001',
   '8a5b2c10-1d67-4f91-a002-000000000002',
@@ -263,54 +262,96 @@ async function seedDevelopmentPlans(tx, createdById) {
 }
 
 async function seedSampleCustomers(tx, branch, createdById) {
-  if (await tx.customer.count() === 0) {
-    await tx.customer.createMany({
-      data: [
-        {
-          id: sampleCustomerIds[0],
-          fullName: 'Nguyễn Thị Phương Thảo',
-          normalizedName: 'nguyen thi phuong thao',
-          phone: '0000000001',
-          phoneNormalized: '0000000001',
-          email: 'phuong.thao@example.com',
-          emailNormalized: 'phuong.thao@example.com',
-          provenance: 'DEVELOPMENT_TEST_SAMPLE',
-          verificationStatus: CustomerVerificationStatus.UNVERIFIED,
-          status: CustomerStatus.CONTACTED,
-          branchId: branch.id,
-          createdById,
-        },
-        {
-          id: sampleCustomerIds[1],
-          fullName: 'Nguyễn Phương Thảo',
-          normalizedName: 'nguyen phuong thao',
-          phone: '0000000002',
-          phoneNormalized: '0000000002',
-          email: 'nguyen.phuong.thao@example.com',
-          emailNormalized: 'nguyen.phuong.thao@example.com',
-          provenance: 'DEVELOPMENT_TEST_SAMPLE',
-          verificationStatus: CustomerVerificationStatus.UNVERIFIED,
-          status: CustomerStatus.QUALIFIED,
-          branchId: branch.id,
-          createdById,
-        },
-        {
-          id: sampleCustomerIds[2],
-          fullName: 'Lê Quang Huy',
-          normalizedName: 'le quang huy',
-          phone: '0000000003',
-          phoneNormalized: '0000000003',
-          email: 'quang.huy@example.com',
-          emailNormalized: 'quang.huy@example.com',
-          provenance: 'DEVELOPMENT_TEST_SAMPLE',
-          verificationStatus: CustomerVerificationStatus.UNVERIFIED,
-          status: CustomerStatus.NEW,
-          branchId: branch.id,
-          createdById,
-        },
-      ],
-    });
-    process.stdout.write('Seeded three sample customers.\n');
+  const initialSamples = [
+    {
+      fullName: 'Nguyễn Thị Phương Thảo',
+      normalizedName: 'nguyen thi phuong thao',
+      phone: '0000000001',
+      email: 'phuong.thao@example.com',
+      status: CustomerStatus.CONTACTED,
+    },
+    {
+      fullName: 'Nguyễn Phương Thảo',
+      normalizedName: 'nguyen phuong thao',
+      phone: '0000000002',
+      email: 'nguyen.phuong.thao@example.com',
+      status: CustomerStatus.QUALIFIED,
+    },
+    {
+      fullName: 'Lê Quang Huy',
+      normalizedName: 'le quang huy',
+      phone: '0000000003',
+      email: 'quang.huy@example.com',
+      status: CustomerStatus.NEW,
+    },
+  ];
+  const sampleNames = [
+    'Nguyễn Thị Phương Thảo',
+    'Trần Minh Anh',
+    'Lê Quang Huy',
+    'Phạm Gia Bảo',
+    'Hoàng Ngọc Ánh',
+    'Vũ Thanh Tùng',
+    'Đặng Thu Hà',
+    'Bùi Quốc Bảo',
+    'Đỗ Khánh Linh',
+    'Phan Minh Đức',
+  ];
+  const sampleStatuses = [
+    CustomerStatus.NEW,
+    CustomerStatus.CONTACTED,
+    CustomerStatus.QUALIFIED,
+    CustomerStatus.IN_PROGRESS,
+  ];
+  const sampleCustomers = sampleCustomerIds.map((id, index) => {
+    const sampleNumber = index + 1;
+    const initialSample = initialSamples[index];
+    const fullName = initialSample
+      ? initialSample.fullName
+      : `${sampleNames[(index - initialSamples.length) % sampleNames.length]} (mẫu ${String(sampleNumber).padStart(3, '0')})`;
+    const normalizedName = initialSample
+      ? initialSample.normalizedName
+      : fullName.normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^a-zA-Z0-9]+/g, ' ')
+        .trim()
+        .toLowerCase();
+    const phone = initialSample?.phone ?? String(sampleNumber).padStart(10, '0');
+    const email = initialSample?.email ?? (
+      sampleNumber % 5 === 0
+        ? null
+        : `khach.hang.mau.${String(sampleNumber).padStart(3, '0')}@example.com`
+    );
+
+    return {
+      id,
+      fullName,
+      normalizedName,
+      phone,
+      phoneNormalized: phone,
+      email,
+      emailNormalized: email,
+      dateOfBirth: sampleNumber % 4 === 0
+        ? null
+        : new Date(Date.UTC(1980 + (sampleNumber % 25), sampleNumber % 12, 1 + (sampleNumber % 28))),
+      provenance: 'DEVELOPMENT_TEST_SAMPLE',
+      verificationStatus: CustomerVerificationStatus.UNVERIFIED,
+      status: initialSample?.status ?? sampleStatuses[index % sampleStatuses.length],
+      branchId: branch.id,
+      createdById,
+    };
+  });
+  const existingCustomers = await tx.customer.findMany({
+    where: { id: { in: sampleCustomerIds } },
+    select: { id: true },
+  });
+  const existingCustomerIds = new Set(existingCustomers.map(({ id }) => id));
+  const missingCustomers = sampleCustomers.filter(({ id }) => !existingCustomerIds.has(id));
+  if (missingCustomers.length > 0) {
+    await tx.customer.createMany({ data: missingCustomers, skipDuplicates: true });
+    process.stdout.write(`Seeded ${missingCustomers.length} of 100 sample customers.\n`);
   }
   return tx.customer.findMany({
     where: { id: { in: sampleCustomerIds } },
@@ -646,8 +687,9 @@ async function seedBusinessSamples(tx, roles, createdById) {
       );
 
   const customers = await seedSampleCustomers(tx, branches.primary, createdById);
-  await seedCustomerRelations(tx, customers, branches.primary, adviser, createdById);
-  await seedLoanRecords(tx, customers, branches.primary, createdById);
+  const relatedSampleCustomers = customers.filter(({ id }) => sampleCustomerIds.slice(0, 3).includes(id));
+  await seedCustomerRelations(tx, relatedSampleCustomers, branches.primary, adviser, createdById);
+  await seedLoanRecords(tx, relatedSampleCustomers, branches.primary, createdById);
   await seedTasks(tx, roles, createdById, branches.primary, adviser);
 }
 
@@ -696,11 +738,13 @@ try {
       'customers.read', 'customers.manage', 'customers.assign', 'customers.duplicates.review',
       'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read', 'loan-contracts.manage',
       'loan-contracts.review', 'loan-contracts.status.manage', 'loan-contracts.ingest',
+      'loan-products.read', 'loan-products.manage', 'loan-products.publish',
       'plans.read', 'plans.manage', 'plans.approve',
       'tasks.read', 'tasks.manage', 'tasks.submit', 'tasks.verify', 'kpi.read',
     ];
     const advisingPermissions = [
       'customers.read', 'customers.manage', 'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read',
+      'loan-contracts.manage', 'loan-products.read',
       'plans.read', 'plans.manage', 'tasks.read', 'tasks.submit', 'kpi.read',
     ];
     const defaults = new Map([

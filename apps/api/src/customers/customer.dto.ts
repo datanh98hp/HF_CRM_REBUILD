@@ -1,20 +1,29 @@
 import {
   IsDateString,
   IsEnum,
+  IsArray,
+  IsObject,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   Length,
   Matches,
   Max,
   Min,
+  IsUrl,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   CustomerStatus,
   CustomerVerificationStatus,
   DuplicateReviewStatus,
+  LoanContractStatus,
+  LoanProductStatus,
   LoanRequestSource,
   LoanRequestStatus,
 } from '../generated/prisma/client.js';
@@ -75,6 +84,17 @@ export class AssignCustomerDto {
   reason!: string;
 }
 
+export class BulkAssignCustomersDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique() @IsUUID(undefined, { each: true })
+  customerIds!: string[];
+
+  @IsUUID()
+  adviserId!: string;
+
+  @IsString() @Length(2, 1000)
+  reason!: string;
+}
+
 export class ResolveDuplicateDto {
   @IsEnum(DuplicateReviewStatus)
   status!: DuplicateReviewStatus;
@@ -87,8 +107,17 @@ export class CreateLoanRequestDto {
   @IsUUID()
   customerId!: string;
 
-  @IsString() @Length(2, 200)
-  topic!: string;
+  @IsOptional() @IsUUID()
+  productId?: string;
+
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  requestedAmount?: string;
+
+  @IsOptional() @IsInt() @Min(1) @Max(1200)
+  requestedTermMonths?: number;
+
+  @IsOptional() @IsString() @Length(2, 200)
+  topic?: string;
 
   @IsOptional() @IsString() @Length(1, 4000)
   notes?: string;
@@ -103,17 +132,149 @@ export class CreateLoanContractDto {
   @IsUUID()
   customerId!: string;
 
+  @IsOptional() @IsUUID()
+  productId?: string;
+
+  @IsOptional() @IsUUID()
+  loanRequestId?: string;
+
   @IsString() @Length(2, 120)
   contractNumber!: string;
 
-  @IsString() @Length(2, 200)
-  packageName!: string;
+  @IsOptional() @IsString() @Length(2, 200)
+  packageName?: string;
 
   @IsOptional() @IsString() @Length(2, 120)
   loanType?: string;
 
   @IsOptional() @IsInt() @Min(1) @Max(1200)
   termMonths?: number;
+
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  loanAmount?: string;
+
+  @IsOptional() @IsObject()
+  formulaInputs?: Record<string, unknown>;
+}
+
+export class CreateLoanProductDto {
+  @IsOptional() @IsUUID()
+  branchId?: string;
+
+  @IsString() @Length(2, 80) @Matches(/^[A-Za-z0-9._-]+$/)
+  code!: string;
+
+  @IsString() @Length(2, 200)
+  name!: string;
+
+  @IsString() @Length(2, 120)
+  loanType!: string;
+
+  @IsString() @Length(2, 200)
+  source!: string;
+
+  @IsOptional() @IsString() @Length(1, 4000)
+  description?: string;
+
+  @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true })
+  sourceUrl?: string;
+
+  @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true })
+  thumbnailUrl?: string;
+
+  @IsInt() @Min(1) @Max(1200)
+  minTermMonths!: number;
+
+  @IsInt() @Min(1) @Max(1200)
+  maxTermMonths!: number;
+
+  @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  minAmount!: string;
+
+  @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  maxAmount!: string;
+
+  @IsString() @Matches(/^\d+(?:\.\d{1,4})?$/)
+  annualInterestRate!: string;
+}
+
+export class UpdateLoanProductDto {
+  @IsOptional() @IsString() @Length(2, 200)
+  name?: string;
+
+  @IsOptional() @IsString() @Length(2, 120)
+  loanType?: string;
+
+  @IsOptional() @IsString() @Length(2, 200)
+  source?: string;
+
+  @IsOptional() @IsString() @Length(1, 4000)
+  description?: string | null;
+
+  @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true })
+  sourceUrl?: string | null;
+
+  @IsOptional() @IsUrl({ protocols: ['https'], require_protocol: true })
+  thumbnailUrl?: string | null;
+
+  @IsOptional() @IsInt() @Min(1) @Max(1200)
+  minTermMonths?: number;
+
+  @IsOptional() @IsInt() @Min(1) @Max(1200)
+  maxTermMonths?: number;
+
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  minAmount?: string;
+
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  maxAmount?: string;
+
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,4})?$/)
+  annualInterestRate?: string;
+}
+
+export class SetLoanProductStatusDto {
+  @IsEnum(LoanProductStatus)
+  status!: LoanProductStatus;
+}
+
+export class LoanProductFormulaVariableDto {
+  @IsString() @Length(1, 40) @Matches(/^[A-Za-z][A-Za-z0-9_]*$/)
+  key!: string;
+
+  @IsString() @Length(1, 80)
+  label!: string;
+
+  @IsString() @Matches(/^-?\d+(?:\.\d{1,6})?$/)
+  min!: string;
+
+  @IsString() @Matches(/^-?\d+(?:\.\d{1,6})?$/)
+  max!: string;
+
+  @IsString() @Matches(/^-?\d+(?:\.\d{1,6})?$/)
+  defaultValue!: string;
+}
+
+export class SetLoanProductFormulaDto {
+  @IsString() @Length(1, 512)
+  interestFormula!: string;
+
+  @IsString() @Length(1, 512)
+  monthlyPaymentFormula!: string;
+
+  @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => LoanProductFormulaVariableDto)
+  variables!: LoanProductFormulaVariableDto[];
+}
+
+export class CalculateLoanProductDto {
+  @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  principal!: string;
+
+  @IsInt() @Min(1) @Max(1200)
+  termMonths!: number;
+
+  @IsOptional() @IsObject()
+  formulaInputs?: Record<string, unknown>;
 }
 
 export class ExternalLoanContractDto {
@@ -162,6 +323,18 @@ export class ContractListQueryDto {
   customerId?: string;
   @IsOptional() @IsUUID()
   cursor?: string;
+  @IsOptional() @IsUUID()
+  branchId?: string;
+  @IsOptional() @IsEnum(LoanContractStatus)
+  status?: LoanContractStatus;
+}
+
+export class LoanProductListQueryDto {
+  @IsOptional() @IsUUID()
+  branchId?: string;
+
+  @IsOptional() @IsEnum(LoanProductStatus)
+  status?: LoanProductStatus;
 }
 
 export class CustomerListQueryDto {

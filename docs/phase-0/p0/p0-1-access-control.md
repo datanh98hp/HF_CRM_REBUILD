@@ -1,6 +1,6 @@
 # P0-1 — Tổ chức, auth, RBAC và audit
 
-**Trạng thái:** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần; còn cổng kiểm thử tích hợp/production và xác nhận cấu hình môi trường thật.
+**Trạng thái:** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần. Role editor đã chuẩn hóa dữ liệu quyền trả về trước khi gửi lại, và DTO chấp nhận đầy đủ ma trận permission/scope; API tests (8 suites/49 tests) và web typecheck đạt. Còn cổng kiểm thử tích hợp/security/production và xác nhận cấu hình môi trường thật.
 
 ## Mục tiêu
 

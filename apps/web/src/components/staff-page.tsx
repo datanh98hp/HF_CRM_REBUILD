@@ -230,7 +230,7 @@ export function StaffPage() {
                           </div>
                           <div>
                             <label htmlFor="temporary-password">Mật khẩu tạm thời</label>
-                            <Input id="temporary-password" className="h-11 md:h-10" type="password" autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} minLength={12} maxLength={256} required />
+                            <Input id="temporary-password" className="h-11 md:h-10" type="password" autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} minLength={8} maxLength={256} required />
                           </div>
                           <div>
                             <label htmlFor="new-role">Vai trò</label>

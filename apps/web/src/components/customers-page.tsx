@@ -22,6 +22,7 @@ export function CustomersPage() {
         canManageRequests={can('loan-requests.manage')}
         canManageContracts={can('loan-contracts.manage')}
         canReviewContracts={can('loan-contracts.review')}
+        canReadLoanProducts={can('loan-products.read') || can('loan-products.manage')}
         contractCompletionOtp={capabilities?.contractCompletionOtp}
       />
     </WorkspaceLayout>

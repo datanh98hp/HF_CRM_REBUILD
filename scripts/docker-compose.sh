@@ -22,7 +22,6 @@ if [[ $# -lt 2 ]]; then
   usage >&2
   exit 2
 fi
-
 environment=$1
 action=$2
 shift 2

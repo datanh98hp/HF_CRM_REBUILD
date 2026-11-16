@@ -276,8 +276,37 @@ export class AccessAdminService {
       const managedBranches = await this.prisma.branch.findMany({ where: { managerUserId: actor.id }, select: { id: true } });
       if (managedBranches.length) branchIds = managedBranches.map(({ id }) => id);
     }
+    let adviserBranchIds: string[] | null = null;
+    if (branchIds !== null) {
+      const branches = await this.prisma.branch.findMany({ select: { id: true, parentId: true } });
+      const branchById = new Map(branches.map((branch) => [branch.id, branch]));
+      const assignableBranches = new Set(branchIds);
+      for (const branchId of branchIds) {
+        const visited = new Set<string>();
+        let currentBranchId: string | null = branchId;
+        while (currentBranchId && !visited.has(currentBranchId)) {
+          visited.add(currentBranchId);
+          const parentId: string | null = branchById.get(currentBranchId)?.parentId ?? null;
+          if (parentId) assignableBranches.add(parentId);
+          currentBranchId = parentId;
+        }
+      }
+      adviserBranchIds = [...assignableBranches];
+    }
     return this.prisma.user.findMany({
-      where: branchIds === null ? undefined : { roleGrants: { some: { branchId: { in: branchIds } } } },
+      where: branchIds === null ? undefined : {
+        OR: [
+          { roleGrants: { some: { branchId: { in: branchIds } } } },
+          {
+            roleGrants: {
+              some: {
+                role: { key: 'ADVISING' },
+                OR: [{ branchId: null }, { branchId: { in: adviserBranchIds ?? [] } }],
+              },
+            },
+          },
+        ],
+      },
       select: {
         id: true,
         username: true,

@@ -91,7 +91,7 @@ export class CreateUserDto {
   displayName!: string;
 
   @IsString()
-  @Length(12, 256)
+  @Length(8, 256)
   temporaryPassword!: string;
 
   @IsString()

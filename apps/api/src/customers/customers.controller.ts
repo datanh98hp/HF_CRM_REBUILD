@@ -1,15 +1,22 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  StreamableFile,
   Headers,
   Query,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { createReadStream } from 'node:fs';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentActor } from '../common/actor-context.js';
 import type { ActorContext, ActorRequest } from '../common/actor-context.js';
@@ -17,16 +24,24 @@ import { Authenticated, RequirePermission } from '../common/auth-metadata.js';
 import { CustomersService } from './customers.service.js';
 import {
   AssignCustomerDto,
+  BulkAssignCustomersDto,
   ConfirmContractOtpDto,
   ContractListQueryDto,
   ContractStatusReasonDto,
   ChangeCustomerStatusDto,
   CreateCustomerDto,
   CreateLoanContractDto,
+  CreateLoanProductDto,
   CreateLoanRequestDto,
+  CalculateLoanProductDto,
   ExternalLoanContractDto,
   CustomerListQueryDto,
+  LoanProductFormulaHistoryQueryDto,
+  LoanProductListQueryDto,
   ResolveDuplicateDto,
+  SetLoanProductFormulaDto,
+  SetLoanProductStatusDto,
+  UpdateLoanProductDto,
   UpdateCustomerDto,
   UpdateLoanRequestStatusDto,
 } from './customer.dto.js';
@@ -73,6 +88,12 @@ export class CustomersController {
     return this.customers.assign(actor, customerId, dto, request);
   }
 
+  @RequirePermission('customers.assign')
+  @Post('customers/assignments/bulk')
+  bulkAssignCustomers(@CurrentActor() actor: ActorContext, @Body() dto: BulkAssignCustomersDto, @Req() request: ActorRequest) {
+    return this.customers.bulkAssign(actor, dto, request);
+  }
+
   @Authenticated()
   @Get('customers/:customerId/assignments')
   assignments(@CurrentActor() actor: ActorContext, @Param('customerId', ParseUUIDPipe) customerId: string) {
@@ -89,6 +110,70 @@ export class CustomersController {
   @Post('customers/:customerId/duplicates/:candidateId/resolve')
   resolveDuplicate(@CurrentActor() actor: ActorContext, @Param('customerId', ParseUUIDPipe) customerId: string, @Param('candidateId', ParseUUIDPipe) candidateId: string, @Body() dto: ResolveDuplicateDto, @Req() request: ActorRequest) {
     return this.customers.resolveDuplicate(actor, customerId, candidateId, dto, request);
+  }
+
+  @Authenticated()
+  @Get('loan-products')
+  listLoanProducts(@CurrentActor() actor: ActorContext, @Query() query: LoanProductListQueryDto) {
+    return this.customers.listLoanProducts(actor, query);
+  }
+
+  @Authenticated()
+  @Get('loan-products/:productId')
+  loanProductDetail(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string) {
+    return this.customers.loanProductDetail(actor, productId);
+  }
+
+  @RequirePermission('loan-products.manage')
+  @Post('loan-products')
+  createLoanProduct(@CurrentActor() actor: ActorContext, @Body() dto: CreateLoanProductDto, @Req() request: ActorRequest) {
+    return this.customers.createLoanProduct(actor, dto, request);
+  }
+
+  @RequirePermission('loan-products.manage')
+  @Patch('loan-products/:productId')
+  updateLoanProduct(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: UpdateLoanProductDto, @Req() request: ActorRequest) {
+    return this.customers.updateLoanProduct(actor, productId, dto, request);
+  }
+
+  @RequirePermission('loan-products.publish')
+  @Post('loan-products/:productId/status')
+  setLoanProductStatus(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: SetLoanProductStatusDto, @Req() request: ActorRequest) {
+    return this.customers.setLoanProductStatus(actor, productId, dto, request);
+  }
+
+  @RequirePermission('loan-products.formula.manage')
+  @Get('loan-products/:productId/formula')
+  getLoanProductFormula(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string) {
+    return this.customers.getLoanProductFormula(actor, productId);
+  }
+
+  @RequirePermission('loan-products.formula.manage')
+  @Get('loan-products/:productId/formula-versions')
+  getLoanProductFormulaHistory(
+    @CurrentActor() actor: ActorContext,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Query() query: LoanProductFormulaHistoryQueryDto,
+  ) {
+    return this.customers.getLoanProductFormulaHistory(actor, productId, query.beforeVersion);
+  }
+
+  @RequirePermission('loan-products.formula.manage')
+  @Post('loan-products/:productId/formula')
+  setLoanProductFormula(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: SetLoanProductFormulaDto, @Req() request: ActorRequest) {
+    return this.customers.setLoanProductFormula(actor, productId, dto, request);
+  }
+
+  @RequirePermission('loan-contracts.manage')
+  @Get('loan-products/:productId/formula-inputs')
+  getLoanProductFormulaInputs(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string) {
+    return this.customers.getLoanProductFormulaInputs(actor, productId);
+  }
+
+  @Authenticated()
+  @Post('loan-products/:productId/calculate')
+  calculateLoanProduct(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: CalculateLoanProductDto) {
+    return this.customers.calculateLoanProduct(actor, productId, dto);
   }
 
   @Authenticated()
@@ -113,6 +198,68 @@ export class CustomersController {
   @Get('loan-contracts')
   listLoanContracts(@CurrentActor() actor: ActorContext, @Query() query: ContractListQueryDto) {
     return this.customers.listLoanContracts(actor, query);
+  }
+
+  @Authenticated()
+  @Get('loan-contracts/:contractId/documents')
+  listContractDocuments(@CurrentActor() actor: ActorContext, @Param('contractId', ParseUUIDPipe) contractId: string) {
+    return this.customers.listContractDocuments(actor, contractId);
+  }
+
+  @Authenticated()
+  @Get('loan-contracts/:contractId/history')
+  getContractHistory(@CurrentActor() actor: ActorContext, @Param('contractId', ParseUUIDPipe) contractId: string) {
+    return this.customers.getContractHistory(actor, contractId);
+  }
+
+  @Authenticated()
+  @Get('loan-contracts/:contractId/documents/:documentId/download')
+  async downloadContractDocument(
+    @CurrentActor() actor: ActorContext,
+    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+  ) {
+    const document = await this.customers.getContractDocumentFile(actor, contractId, documentId);
+    return new StreamableFile(createReadStream(document.filePath), {
+      type: document.mimeType,
+      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(document.fileName)}`,
+    });
+  }
+
+  @RequirePermission('loan-contracts.manage')
+  @Post('loan-contracts/:contractId/documents')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
+  uploadContractDocument(
+    @CurrentActor() actor: ActorContext,
+    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @UploadedFile() file: { originalname: string; mimetype: string; size: number; buffer: Buffer } | undefined,
+    @Req() request: ActorRequest,
+  ) {
+    return this.customers.uploadContractDocument(actor, contractId, file, request);
+  }
+
+  @RequirePermission('loan-contracts.manage')
+  @Put('loan-contracts/:contractId/documents/:documentId')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
+  replaceContractDocument(
+    @CurrentActor() actor: ActorContext,
+    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @UploadedFile() file: { originalname: string; mimetype: string; size: number; buffer: Buffer } | undefined,
+    @Req() request: ActorRequest,
+  ) {
+    return this.customers.replaceContractDocument(actor, contractId, documentId, file, request);
+  }
+
+  @RequirePermission('loan-contracts.manage')
+  @Delete('loan-contracts/:contractId/documents/:documentId')
+  deleteContractDocument(
+    @CurrentActor() actor: ActorContext,
+    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+    @Req() request: ActorRequest,
+  ) {
+    return this.customers.deleteContractDocument(actor, contractId, documentId, request);
   }
 
   @RequirePermission('loan-contracts.manage')

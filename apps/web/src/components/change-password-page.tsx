@@ -27,8 +27,8 @@ export function ChangePasswordPage() {
     event.preventDefault();
     setError('');
     setNotice('');
-    if (newPassword.length < 12) {
-      setError('Mật khẩu mới cần có ít nhất 12 ký tự.');
+    if (newPassword.length < 8) {
+      setError('Mật khẩu mới cần có ít nhất 8 ký tự.');
       return;
     }
     if (newPassword !== confirmPassword) {

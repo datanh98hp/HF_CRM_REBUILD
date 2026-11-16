@@ -124,8 +124,8 @@ export function PasswordChangeWorkspace({
             <label htmlFor="current-password">Mật khẩu hiện tại</label>
             <Input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} className="h-11" required />
             <label htmlFor="new-password">Mật khẩu mới</label>
-            <Input id="new-password" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(event) => onNewPasswordChange(event.target.value)} className="h-11" required />
-            <small>Tối thiểu 12 ký tự.</small>
+            <Input id="new-password" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(event) => onNewPasswordChange(event.target.value)} className="h-11" required />
+            <small>Tối thiểu 8 ký tự.</small>
             <label htmlFor="confirm-password">Xác nhận mật khẩu mới</label>
             <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.target.value)} className="h-11" required />
             <Button className="w-full justify-between" type="submit" size="lg" disabled={busy}>

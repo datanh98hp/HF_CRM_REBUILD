@@ -28,6 +28,14 @@ import {
   LoanRequestStatus,
 } from '../generated/prisma/client.js';
 
+export enum LoanProductType {
+  SHORT_TERM_SUPPORT = 'Gói hỗ trợ ngắn hạn',
+  MEDIUM_LONG_TERM_PRODUCT = 'Gói sản phẩm trung, dài hạn',
+  CONSUMER_PURCHASE_SUPPORT = 'Gói hỗ trợ mua sắm tiêu dùng',
+  REAL_ESTATE_MORTGAGE_SUPPORT = 'Gói hỗ trợ thế chấp bất động sản',
+  CAR_PURCHASE_MORTGAGE = 'Vay thế chấp mua xe ô tô',
+}
+
 export class CreateCustomerDto {
   @IsString() @Length(2, 160)
   fullName!: string;
@@ -80,8 +88,8 @@ export class AssignCustomerDto {
   @IsUUID()
   adviserId!: string;
 
-  @IsString() @Length(2, 1000)
-  reason!: string;
+  @IsOptional() @IsString() @Length(2, 1000)
+  reason?: string;
 }
 
 export class BulkAssignCustomersDto {
@@ -91,8 +99,8 @@ export class BulkAssignCustomersDto {
   @IsUUID()
   adviserId!: string;
 
-  @IsString() @Length(2, 1000)
-  reason!: string;
+  @IsOptional() @IsString() @Length(2, 1000)
+  reason?: string;
 }
 
 export class ResolveDuplicateDto {
@@ -161,14 +169,14 @@ export class CreateLoanProductDto {
   @IsOptional() @IsUUID()
   branchId?: string;
 
-  @IsString() @Length(2, 80) @Matches(/^[A-Za-z0-9._-]+$/)
-  code!: string;
+  @IsOptional() @IsString() @Length(0, 80) @Matches(/^[A-Za-z0-9._-]*$/)
+  code?: string;
 
   @IsString() @Length(2, 200)
   name!: string;
 
-  @IsString() @Length(2, 120)
-  loanType!: string;
+  @IsEnum(LoanProductType)
+  loanType!: LoanProductType;
 
   @IsString() @Length(2, 200)
   source!: string;
@@ -188,11 +196,11 @@ export class CreateLoanProductDto {
   @IsInt() @Min(1) @Max(1200)
   maxTermMonths!: number;
 
-  @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
-  minAmount!: string;
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  minAmount?: string | null;
 
-  @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
-  maxAmount!: string;
+  @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
+  maxAmount?: string | null;
 
   @IsString() @Matches(/^\d+(?:\.\d{1,4})?$/)
   annualInterestRate!: string;
@@ -202,8 +210,8 @@ export class UpdateLoanProductDto {
   @IsOptional() @IsString() @Length(2, 200)
   name?: string;
 
-  @IsOptional() @IsString() @Length(2, 120)
-  loanType?: string;
+  @IsOptional() @IsEnum(LoanProductType)
+  loanType?: LoanProductType;
 
   @IsOptional() @IsString() @Length(2, 200)
   source?: string;
@@ -224,10 +232,10 @@ export class UpdateLoanProductDto {
   maxTermMonths?: number;
 
   @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
-  minAmount?: string;
+  minAmount?: string | null;
 
   @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,2})?$/)
-  maxAmount?: string;
+  maxAmount?: string | null;
 
   @IsOptional() @IsString() @Matches(/^\d+(?:\.\d{1,4})?$/)
   annualInterestRate?: string;
@@ -264,6 +272,11 @@ export class SetLoanProductFormulaDto {
 
   @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => LoanProductFormulaVariableDto)
   variables!: LoanProductFormulaVariableDto[];
+}
+
+export class LoanProductFormulaHistoryQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  beforeVersion?: number;
 }
 
 export class CalculateLoanProductDto {
@@ -327,6 +340,10 @@ export class ContractListQueryDto {
   branchId?: string;
   @IsOptional() @IsEnum(LoanContractStatus)
   status?: LoanContractStatus;
+  @IsOptional() @IsString() @Length(1, 120)
+  search?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(5) @Max(100)
+  pageSize?: number;
 }
 
 export class LoanProductListQueryDto {

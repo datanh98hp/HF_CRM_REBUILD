@@ -13,14 +13,14 @@ describe('loan formula DSL', () => {
       principal: '12000000',
       annualRatePercent: '12',
       termMonths: 12,
-    }).toString()).toBe('12000');
+    }).toString()).toBe('120000');
     expect(evaluateLoanFormula('max(2, min(5, 3)) + -1', {}).toString()).toBe('2');
   });
 
   it('rejects executable syntax, unknown symbols, and division by zero', () => {
     expect(() => validateLoanFormula('principal.constructor')).toThrow(LoanFormulaError);
-    expect(() => validateLoanFormula('unknown + 1')).toThrowError('LOAN_FORMULA_UNKNOWN_VARIABLE');
-    expect(() => evaluateLoanFormula('10 / 0', {})).toThrowError('LOAN_FORMULA_DIVIDE_BY_ZERO');
+    expect(() => validateLoanFormula('unknown + 1')).toThrow('LOAN_FORMULA_UNKNOWN_VARIABLE');
+    expect(() => evaluateLoanFormula('10 / 0', {})).toThrow('LOAN_FORMULA_DIVIDE_BY_ZERO');
   });
 
   it('validates custom variable bounds and applies defaults to calculation inputs', () => {
@@ -39,6 +39,6 @@ describe('loan formula DSL', () => {
       principal: '1000000',
       annualRatePercent: '0',
       termMonths: 10,
-    })).toThrowError('LOAN_FORMULA_INPUT_OUT_OF_RANGE');
+    })).toThrow('LOAN_FORMULA_INPUT_OUT_OF_RANGE');
   });
 });

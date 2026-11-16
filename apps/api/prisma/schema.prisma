@@ -164,6 +164,8 @@ model User {
   createdLoanContracts LoanContract[] @relation("LoanContractCreator")
   approvedLoanContracts LoanContract[] @relation("LoanContractApprover")
   loanContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractStatusActor")
+  contractDocuments LoanContractDocument[] @relation("LoanContractDocumentUploader")
+  contractChanges LoanContractChangeHistory[] @relation("LoanContractChangeActor")
   createdPlans Plan[] @relation("PlanCreator")
   createdTasks Task[] @relation("TaskCreator")
   assignedTasks Task[] @relation("TaskAssignee")
@@ -394,8 +396,8 @@ model LoanProduct {
   thumbnailUrl          String?          @db.VarChar(2048)
   minTermMonths         Int
   maxTermMonths         Int
-  minAmount             Decimal          @db.Decimal(18, 2)
-  maxAmount             Decimal          @db.Decimal(18, 2)
+  minAmount             Decimal?         @db.Decimal(18, 2)
+  maxAmount             Decimal?         @db.Decimal(18, 2)
   annualInterestRate    Decimal          @default(0) @db.Decimal(9, 4)
   status                LoanProductStatus @default(DRAFT)
   currentFormulaVersion Int               @default(0)
@@ -469,6 +471,8 @@ model LoanContract {
   createdBy          User?                       @relation("LoanContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
   approvedBy         User?                       @relation("LoanContractApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   statusHistory      LoanContractStatusHistory[]
+  documents          LoanContractDocument[]
+  changeHistory      LoanContractChangeHistory[]
   otpChallenges      ContractOtpChallenge[]
   createdAt          DateTime                    @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime                    @updatedAt @db.Timestamptz(3)
@@ -491,6 +495,37 @@ model LoanContractStatusHistory {
   contract    LoanContract       @relation(fields: [contractId], references: [id], onDelete: Restrict)
   changedBy   User?              @relation("LoanContractStatusActor", fields: [changedById], references: [id], onDelete: SetNull)
   changedByCustomer Customer?    @relation("LoanContractCustomerStatusActor", fields: [changedByCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([contractId, createdAt])
+}
+
+model LoanContractDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  contractId   String       @db.Uuid
+  fileName     String       @db.VarChar(255)
+  storageKey   String       @unique @db.VarChar(80)
+  mimeType     String       @db.VarChar(127)
+  sizeBytes    Int
+  uploadedById String?      @db.Uuid
+  deletedAt    DateTime?    @db.Timestamptz(3)
+  contract     LoanContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  uploadedBy   User?        @relation("LoanContractDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([contractId, deletedAt, createdAt])
+}
+
+model LoanContractChangeHistory {
+  id          String       @id @default(uuid()) @db.Uuid
+  contractId  String       @db.Uuid
+  action      String       @db.VarChar(60)
+  beforeState Json?
+  afterState  Json?
+  changedById String?      @db.Uuid
+  contract    LoanContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  changedBy   User?        @relation("LoanContractChangeActor", fields: [changedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
 
   @@index([contractId, createdAt])
 }

@@ -6,12 +6,14 @@ import {
   ChartNoAxesColumn,
   CheckSquare,
   ChevronRight,
+  FileCheck2,
   LayoutDashboard,
   LogOut,
   Menu,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  PackageSearch,
   ShieldCheck,
   Tags,
   UserRound,
@@ -22,7 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type AccessSection = 'customers' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -36,6 +38,8 @@ type ShellProps = {
   canAccessPlans: boolean;
   canReadPlanCatalog: boolean;
   canReadTasks: boolean;
+  canAccessProducts: boolean;
+  canAccessContracts: boolean;
   busy: boolean;
   contractCompletionOtp?: CapabilityNotice;
   onNavigate: (section: AccessSection) => void;
@@ -68,6 +72,8 @@ export function AppShell({
   canAccessPlans,
   canReadPlanCatalog,
   canReadTasks,
+  canAccessProducts,
+  canAccessContracts,
   busy,
   onNavigate,
   onLogout,
@@ -112,6 +118,13 @@ export function AppShell({
       ],
     },
     {
+      label: 'Sản phẩm & khoản vay',
+      items: [
+        ...(canAccessProducts ? [{ key: 'products', label: 'Sản phẩm vay', icon: PackageSearch, section: 'products' as const }] : []),
+        ...(canAccessContracts ? [{ key: 'contracts', label: 'Quản lý Hợp đồng', icon: FileCheck2, section: 'contracts' as const }] : []),
+      ],
+    },
+    {
       label: 'Công việc & KPI',
       items: [
         ...(canReadTasks ? [{ key: 'tasks', label: 'Công việc', icon: CheckSquare, section: 'tasks' as const }] : []),
@@ -132,6 +145,10 @@ export function AppShell({
 
   const currentLabel = activeSection === 'customers'
     ? 'Khách hàng'
+    : activeSection === 'products'
+      ? 'Sản phẩm vay'
+    : activeSection === 'contracts'
+      ? 'Quản lý Hợp đồng'
     : activeSection === 'users'
       ? 'Nhân viên'
       : activeSection === 'branches'

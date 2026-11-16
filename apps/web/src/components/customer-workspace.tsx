@@ -32,6 +32,9 @@ type Customer = {
 type LoanRequest = {
   id: string;
   customerId: string;
+  productId: string | null;
+  requestedAmount: string | null;
+  requestedTermMonths: number | null;
   topic: string;
   notes: string | null;
   status: string;
@@ -47,11 +50,16 @@ type Contract = {
   packageVersion: string | null;
   loanType: string | null;
   termMonths: number | null;
+  loanAmount: string | null;
+  monthlyPayment: string | null;
   status: string;
   approvedAt: string | null;
   completedAt: string | null;
   createdAt: string;
 };
+type LoanProductOption = { id: string; code: string; name: string; status: string; minAmount: string | null; maxAmount: string | null; minTermMonths: number; maxTermMonths: number };
+type LoanCalculation = { productId: string; formulaVersion: number; inputs: Record<string, string>; outputs: { interestAmount: string; monthlyPayment: string; totalRepayment: string } };
+type FormulaInputDefinition = { key: string; label: string; min: string; max: string; defaultValue: string };
 type Assignment = {
   id: string;
   adviserId: string;
@@ -95,11 +103,13 @@ type Props = {
   canManageRequests: boolean;
   canManageContracts: boolean;
   canReviewContracts: boolean;
+  canReadLoanProducts: boolean;
   contractCompletionOtp?: CapabilityNotice;
 };
 
 const customerStatuses = ['NEW', 'CONTACTED', 'QUALIFIED', 'IN_PROGRESS', 'CONVERTED', 'CLOSED'];
 const CUSTOMER_PAGE_SIZES = [5, 10, 20, 50, 100];
+const MAX_BULK_ASSIGNMENT_CUSTOMERS = 100;
 const statusLabels: Record<string, string> = {
   NEW: 'Mới',
   CONTACTED: 'Đã liên hệ',
@@ -125,6 +135,20 @@ const matchReasonLabels: Record<string, string> = {
 
 function label(value: string) {
   return statusLabels[value] ?? value;
+}
+
+function formatMoney(value: string) {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return value;
+  const [whole, fraction] = value.split('.');
+  const groupedWhole = BigInt(whole).toLocaleString('vi-VN');
+  return fraction ? `${groupedWhole},${fraction.padEnd(2, '0')}` : groupedWhole;
+}
+
+function formatLoanAmountBounds(minAmount: string | null, maxAmount: string | null) {
+  if (minAmount && maxAmount) return `${formatMoney(minAmount)}–${formatMoney(maxAmount)} ₫`;
+  if (minAmount) return `Từ ${formatMoney(minAmount)} ₫`;
+  if (maxAmount) return `Đến ${formatMoney(maxAmount)} ₫`;
+  return 'Không giới hạn theo số tiền';
 }
 
 function date(value: string | null) {
@@ -320,6 +344,7 @@ export function CustomerWorkspace({
   canManageRequests,
   canManageContracts,
   canReviewContracts,
+  canReadLoanProducts,
   contractCompletionOtp,
 }: Props) {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -330,6 +355,7 @@ export function CustomerWorkspace({
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [advisers, setAdvisers] = useState<AdviserOption[]>([]);
+  const [loanProducts, setLoanProducts] = useState<LoanProductOption[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [assignmentFrom, setAssignmentFrom] = useState('');
@@ -357,15 +383,29 @@ export function CustomerWorkspace({
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [adviserId, setAdviserId] = useState('');
   const [assignmentReason, setAssignmentReason] = useState('');
+  const [bulkSelectedCustomers, setBulkSelectedCustomers] = useState<Map<string, Customer>>(() => new Map());
+  const [bulkAdviserId, setBulkAdviserId] = useState('');
+  const [bulkAssignmentReason, setBulkAssignmentReason] = useState('');
   const [duplicateAction, setDuplicateAction] = useState<{ candidateId: string; status: string } | null>(null);
   const [duplicateReason, setDuplicateReason] = useState('');
   const [topic, setTopic] = useState('');
   const [notes, setNotes] = useState('');
+  const [requestProductId, setRequestProductId] = useState('');
+  const [requestAmount, setRequestAmount] = useState('');
+  const [requestTermMonths, setRequestTermMonths] = useState('');
   const [showContractForm, setShowContractForm] = useState(false);
   const [contractNumber, setContractNumber] = useState('');
   const [packageName, setPackageName] = useState('');
   const [loanType, setLoanType] = useState('');
   const [termMonths, setTermMonths] = useState('');
+  const [contractProductId, setContractProductId] = useState('');
+  const [contractLoanRequestId, setContractLoanRequestId] = useState('');
+  const [contractLoanAmount, setContractLoanAmount] = useState('');
+  const [formulaVariables, setFormulaVariables] = useState<FormulaInputDefinition[]>([]);
+  const [formulaInputs, setFormulaInputs] = useState<Record<string, string>>({});
+  const [formulaInputsLoading, setFormulaInputsLoading] = useState(false);
+  const [formulaInputsError, setFormulaInputsError] = useState('');
+  const [loanCalculation, setLoanCalculation] = useState<{ inputKey: string; result: LoanCalculation } | null>(null);
   const [rejectingContractId, setRejectingContractId] = useState('');
   const [contractRejectionReason, setContractRejectionReason] = useState('');
   const selectionVersion = useRef(0);
@@ -375,6 +415,11 @@ export function CustomerWorkspace({
   const mobileDetailCloseRef = useRef<HTMLButtonElement>(null);
 
   const activeBranches = useMemo(() => branches.filter((branch) => branch.status === 'ACTIVE'), [branches]);
+  const activeLoanProducts = useMemo(() => loanProducts.filter((product) => product.status === 'ACTIVE'), [loanProducts]);
+  const selectedRequestProduct = activeLoanProducts.find((product) => product.id === requestProductId) ?? null;
+  const contractProduct = activeLoanProducts.find((product) => product.id === contractProductId) ?? null;
+  const contractCalculationKey = JSON.stringify([contractProductId, contractLoanRequestId, contractLoanAmount, termMonths, formulaInputs]);
+  const currentLoanCalculation = loanCalculation?.inputKey === contractCalculationKey ? loanCalculation.result : null;
   const adviserBranchScope = useMemo(() => {
     const branchById = new Map(branches.map((branch) => [branch.id, branch]));
     const scope = new Set<string>();
@@ -393,6 +438,27 @@ export function CustomerWorkspace({
     )),
     [advisers, adviserBranchScope],
   );
+  const selectedBulkCustomerList = useMemo(() => Array.from(bulkSelectedCustomers.values()), [bulkSelectedCustomers]);
+  const eligibleBulkAdvisers = useMemo(() => {
+    if (!selectedBulkCustomerList.length) return [];
+    const branchById = new Map(branches.map((branch) => [branch.id, branch]));
+    const grantCoversBranch = (grantBranchId: string | null, targetBranchId: string) => {
+      if (!grantBranchId) return true;
+      let branch = branchById.get(targetBranchId);
+      const visited = new Set<string>();
+      while (branch && !visited.has(branch.id)) {
+        if (branch.id === grantBranchId) return true;
+        visited.add(branch.id);
+        branch = branch.parentId ? branchById.get(branch.parentId) : undefined;
+      }
+      return false;
+    };
+    return advisers.filter((user) => user.status === 'ACTIVE' && selectedBulkCustomerList.every(
+      (customer) => user.roleGrants.some(
+        (grant) => grant.role.key === 'ADVISING' && grantCoversBranch(grant.branch?.id ?? null, customer.branchId),
+      ),
+    ));
+  }, [advisers, branches, selectedBulkCustomerList]);
   const currentAssignment = assignments.find((assignment) => assignment.endedAt === null);
 
   async function loadCustomers(cursor: string | undefined, targetPage: number, version: number) {
@@ -497,6 +563,9 @@ export function CustomerWorkspace({
       if (canAssignCustomers && canReadUsers) {
         lookups.push(request<AdviserOption[]>('/access/users', {}, accessToken).then(setAdvisers));
       }
+      if (canReadLoanProducts) {
+        lookups.push(request<LoanProductOption[]>('/loan-products', {}, accessToken).then(setLoanProducts));
+      }
       try {
         await Promise.all(lookups);
       } catch (err) {
@@ -507,7 +576,26 @@ export function CustomerWorkspace({
     return () => {
       selectionVersion.current += 1;
     };
-  }, [accessToken, request, canReadBranches, canAssignCustomers, canReadUsers]);
+  }, [accessToken, request, canReadBranches, canAssignCustomers, canReadUsers, canReadLoanProducts]);
+
+  useEffect(() => {
+    setFormulaVariables([]);
+    setFormulaInputs({});
+    setFormulaInputsError('');
+    setLoanCalculation(null);
+    if (!contractProductId) return;
+    let current = true;
+    setFormulaInputsLoading(true);
+    void request<{ version: number; variables: FormulaInputDefinition[] }>(`/loan-products/${contractProductId}/formula-inputs`, {}, accessToken)
+      .then(({ variables }) => {
+        if (!current) return;
+        setFormulaVariables(variables);
+        setFormulaInputs(Object.fromEntries(variables.map((variable) => [variable.key, variable.defaultValue])));
+      })
+      .catch((loadError: unknown) => { if (current) setFormulaInputsError(errorMessage(loadError, 'Không thể tải biến công thức.')); })
+      .finally(() => { if (current) setFormulaInputsLoading(false); });
+    return () => { current = false; };
+  }, [accessToken, request, contractProductId]);
 
   useEffect(() => {
     const version = ++customerListRequestVersion.current;
@@ -636,7 +724,10 @@ export function CustomerWorkspace({
     try {
       await request(`/customers/${selected.id}/assignments`, {
         method: 'POST',
-        body: JSON.stringify({ adviserId, reason: assignmentReason.trim() }),
+        body: JSON.stringify({
+          adviserId,
+          ...(assignmentReason.trim() ? { reason: assignmentReason.trim() } : {}),
+        }),
       }, accessToken);
       await selectCustomer(selected);
       refreshCustomerPage();
@@ -648,6 +739,67 @@ export function CustomerWorkspace({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function bulkAssignAdviser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const customerIds = Array.from(bulkSelectedCustomers.keys());
+    if (!customerIds.length || customerIds.length > MAX_BULK_ASSIGNMENT_CUSTOMERS || !eligibleBulkAdvisers.some((adviser) => adviser.id === bulkAdviserId)) return;
+    setError('');
+    setNotice('');
+    setSaving(true);
+    try {
+      await request('/customers/assignments/bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerIds,
+          adviserId: bulkAdviserId,
+          ...(bulkAssignmentReason.trim() ? { reason: bulkAssignmentReason.trim() } : {}),
+        }),
+      }, accessToken);
+      const selectedForRefresh = selected && bulkSelectedCustomers.has(selected.id) ? selected : null;
+      setBulkSelectedCustomers(new Map());
+      setBulkAdviserId('');
+      setBulkAssignmentReason('');
+      refreshCustomerPage();
+      if (selectedForRefresh) await selectCustomer(selectedForRefresh);
+      setNotice(`Đã phân công ${customerIds.length} khách hàng cho tư vấn viên; lịch sử từng hồ sơ đã được lưu.`);
+    } catch (err) {
+      setError(errorMessage(err, 'Không thể phân công các khách hàng đã chọn.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleBulkCustomer(customer: Customer, checked: boolean) {
+    if (checked && !bulkSelectedCustomers.has(customer.id) && bulkSelectedCustomers.size >= MAX_BULK_ASSIGNMENT_CUSTOMERS) {
+      setError(`Có thể phân công tối đa ${MAX_BULK_ASSIGNMENT_CUSTOMERS} khách hàng mỗi lần.`);
+      return;
+    }
+    setBulkSelectedCustomers((current) => {
+      const next = new Map(current);
+      if (checked) next.set(customer.id, customer);
+      else next.delete(customer.id);
+      return next;
+    });
+  }
+
+  function toggleCurrentPageSelection(checked: boolean) {
+    const additionalCustomers = checked
+      ? paginatedCustomers.filter((customer) => !bulkSelectedCustomers.has(customer.id))
+      : [];
+    if (checked && bulkSelectedCustomers.size + additionalCustomers.length > MAX_BULK_ASSIGNMENT_CUSTOMERS) {
+      setError(`Có thể phân công tối đa ${MAX_BULK_ASSIGNMENT_CUSTOMERS} khách hàng mỗi lần. Hãy bỏ bớt lựa chọn rồi thử lại.`);
+      return;
+    }
+    setBulkSelectedCustomers((current) => {
+      const next = new Map(current);
+      for (const customer of paginatedCustomers) {
+        if (checked) next.set(customer.id, customer);
+        else next.delete(customer.id);
+      }
+      return next;
+    });
   }
 
   async function resolveDuplicate(event: FormEvent<HTMLFormElement>) {
@@ -683,11 +835,18 @@ export function CustomerWorkspace({
     try {
       const created = await request<LoanRequest>('/loan-requests', {
         method: 'POST',
-        body: JSON.stringify({ customerId: selected.id, topic, notes: notes || undefined }),
+        body: JSON.stringify({
+          customerId: selected.id,
+          ...(requestProductId ? { productId: requestProductId, requestedAmount: requestAmount, requestedTermMonths: Number(requestTermMonths) } : { topic: topic.trim() }),
+          notes: notes.trim() || undefined,
+        }),
       }, accessToken);
       setRequests((current) => [created, ...current]);
       setTopic('');
       setNotes('');
+      setRequestProductId('');
+      setRequestAmount('');
+      setRequestTermMonths('');
       setNotice('Đã ghi nhận yêu cầu vay; yêu cầu này không đồng nghĩa với phê duyệt khoản vay.');
     } catch (err) {
       setError(errorMessage(err, 'Không thể tạo yêu cầu vay.'));
@@ -760,14 +919,25 @@ export function CustomerWorkspace({
     setNotice('');
     setSaving(true);
     try {
+      let contractFormulaInputs: Record<string, unknown> | undefined;
+      if (contractProductId) {
+        contractFormulaInputs = formulaInputs;
+        if (!loanCalculation || loanCalculation.inputKey !== contractCalculationKey) {
+          throw new Error('Dữ liệu đã đổi. Hãy tính lãi lại trước khi tạo hợp đồng.');
+        }
+      }
       const created = await request<Contract>('/loan-contracts', {
         method: 'POST',
         body: JSON.stringify({
           customerId: selected.id,
+          ...(contractProductId ? {
+            productId: contractProductId,
+            loanRequestId: contractLoanRequestId || undefined,
+            loanAmount: contractLoanAmount,
+            termMonths: Number(termMonths),
+            formulaInputs: contractFormulaInputs,
+          } : { packageName, loanType: loanType || undefined, termMonths: termMonths ? Number(termMonths) : undefined }),
           contractNumber,
-          packageName,
-          loanType: loanType || undefined,
-          termMonths: termMonths ? Number(termMonths) : undefined,
         }),
       }, accessToken);
       setContracts((current) => [created, ...current]);
@@ -776,11 +946,33 @@ export function CustomerWorkspace({
       setPackageName('');
       setLoanType('');
       setTermMonths('');
+      setContractProductId('');
+      setContractLoanRequestId('');
+      setContractLoanAmount('');
+      setFormulaVariables([]);
+      setFormulaInputs({});
+      setLoanCalculation(null);
       setNotice('Đã tạo hợp đồng chờ duyệt.');
     } catch (err) {
       setError(errorMessage(err, 'Không thể tạo hợp đồng.'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function calculateContract() {
+    if (!contractProductId) return;
+    setError('');
+    setNotice('');
+    try {
+      const result = await request<LoanCalculation>(`/loan-products/${contractProductId}/calculate`, {
+        method: 'POST',
+        body: JSON.stringify({ principal: contractLoanAmount, termMonths: Number(termMonths), formulaInputs }),
+      }, accessToken);
+      setLoanCalculation({ inputKey: contractCalculationKey, result });
+    } catch (calculationError) {
+      setLoanCalculation(null);
+      setError(errorMessage(calculationError, 'Không thể tính theo công thức sản phẩm.'));
     }
   }
 
@@ -908,10 +1100,41 @@ export function CustomerWorkspace({
               </div>
             : visibleCustomers.length
               ? <>
+                {canAssignCustomers && <form onSubmit={bulkAssignAdviser} className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(9rem,auto)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto_auto] xl:items-end">
+                  <p className="text-sm font-medium text-slate-800" aria-live="polite">Đã chọn {bulkSelectedCustomers.size}/{MAX_BULK_ASSIGNMENT_CUSTOMERS} khách hàng</p>
+                  <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-800">
+                    Nhân viên chăm sóc
+                    <Select value={bulkAdviserId} onValueChange={(value) => { if (typeof value === 'string') setBulkAdviserId(value); }}>
+                      <SelectTrigger className="w-full bg-white" aria-label="Chọn nhân viên chăm sóc">
+                        <SelectValue placeholder="Chọn một nhân viên" />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {eligibleBulkAdvisers.map((adviser) => <SelectItem key={adviser.id} value={adviser.id} label={adviser.username}>{adviser.username}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-800">
+                    Lý do phân công (không bắt buộc)
+                    <Input value={bulkAssignmentReason} onChange={(event) => setBulkAssignmentReason(event.target.value)} minLength={2} maxLength={1000} placeholder="Nhập nếu cần" className="bg-white" />
+                  </label>
+                  <button type="submit" disabled={saving || bulkSelectedCustomers.size === 0 || !bulkAdviserId || !eligibleBulkAdvisers.some((adviser) => adviser.id === bulkAdviserId)} className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50">
+                    {saving ? 'Đang phân công…' : 'Phân công'}
+                  </button>
+                  <button type="button" disabled={saving || bulkSelectedCustomers.size === 0} onClick={() => { setBulkSelectedCustomers(new Map()); setBulkAdviserId(''); setBulkAssignmentReason(''); }} className={secondaryButtonClass}>
+                    Bỏ chọn
+                  </button>
+                  {bulkSelectedCustomers.size > 0 && !canReadUsers && <p className="text-xs text-amber-800 sm:col-span-2 xl:col-span-full">Bạn cần quyền đọc danh sách nhân viên để chọn người chăm sóc.</p>}
+                  {bulkSelectedCustomers.size > 0 && canReadUsers && eligibleBulkAdvisers.length === 0 && <p className="text-xs text-amber-800 sm:col-span-2 xl:col-span-full">Không có nhân viên ADVISING đang hoạt động trong phạm vi chi nhánh của toàn bộ khách đã chọn.</p>}
+                </form>}
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-left text-sm">
+                  <table className="w-full min-w-[680px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                      <tr><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Ngày phân công</th></tr>
+                      <tr>
+                        {canAssignCustomers && <th className="w-12 px-4 py-3">
+                          <input type="checkbox" aria-label="Chọn tất cả khách hàng trên trang này" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => bulkSelectedCustomers.has(customer.id))} onChange={(event) => toggleCurrentPageSelection(event.target.checked)} className="size-4 accent-teal-700" />
+                        </th>}
+                        <th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Ngày phân công</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {paginatedCustomers.map((customer) => (
@@ -930,8 +1153,11 @@ export function CustomerWorkspace({
                           }}
                           tabIndex={0}
                           aria-selected={selected?.id === customer.id}
-                          className={`cursor-pointer border-t border-slate-100 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-700 ${selected?.id === customer.id ? 'bg-teal-50' : ''}`}
+                          className={`cursor-pointer border-t border-slate-100 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-700 ${bulkSelectedCustomers.has(customer.id) ? 'bg-emerald-50/70' : ''} ${selected?.id === customer.id ? 'bg-teal-50' : ''}`}
                         >
+                          {canAssignCustomers && <td className="px-4 py-3" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                            <input type="checkbox" aria-label={`Chọn ${customer.fullName}`} checked={bulkSelectedCustomers.has(customer.id)} onChange={(event) => toggleBulkCustomer(customer, event.target.checked)} className="size-4 accent-teal-700" />
+                          </td>}
                           <td className="px-4 py-3">
                             <p className="font-semibold text-slate-950">{customer.fullName}</p>
                             <p className="mt-0.5 text-xs text-slate-500">{customer.email ?? 'Chưa có email'}</p>
@@ -1042,12 +1268,12 @@ export function CustomerWorkspace({
                       <label className="grid gap-1 text-sm font-medium text-slate-800">Tư vấn viên
                         <select value={adviserId} onChange={(event) => setAdviserId(event.target.value)} required className={inputClass}>
                           <option value="">Chọn tư vấn viên đang hoạt động</option>
-                          {eligibleAdvisers.map((adviser) => <option key={adviser.id} value={adviser.id}>{adviser.displayName} · @{adviser.username}</option>)}
+                          {eligibleAdvisers.map((adviser) => <option key={adviser.id} value={adviser.id}>{adviser.username}</option>)}
                         </select>
                       </label>
                       {eligibleAdvisers.length === 0 && <p className="text-sm text-amber-800">Không có tư vấn viên đang hoạt động thuộc chi nhánh này.</p>}
-                      <label className="grid gap-1 text-sm font-medium text-slate-800">Lý do phân công
-                        <textarea value={assignmentReason} onChange={(event) => setAssignmentReason(event.target.value)} required minLength={2} maxLength={1000} rows={2} className={inputClass} />
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Lý do phân công (không bắt buộc)
+                        <textarea value={assignmentReason} onChange={(event) => setAssignmentReason(event.target.value)} minLength={2} maxLength={1000} rows={2} className={inputClass} />
                       </label>
                       <button disabled={saving || eligibleAdvisers.length === 0} className={secondaryButtonClass}>Lưu phân công</button>
                     </form>}
@@ -1118,15 +1344,41 @@ export function CustomerWorkspace({
                               </select>
                               : <span className="h-fit rounded-full bg-white px-2 py-1 text-xs text-slate-700">{label(item.status)}</span>}
                           </div>
+                          {(item.requestedAmount || item.requestedTermMonths) && <p className="mt-2 tabular-nums text-slate-600">{item.requestedAmount ? `${formatMoney(item.requestedAmount)} ₫` : 'Chưa có số tiền'}{item.requestedTermMonths ? ` · ${item.requestedTermMonths} tháng` : ''}</p>}
                           <p className="mt-2 text-xs text-slate-500">{item.source === 'CUSTOMER' ? 'Khách hàng gửi' : 'Nhân viên ghi nhận'} · {date(item.createdAt)}</p>
                         </li>)}
                       </ul>
                       : <p className="mt-2 text-sm text-slate-600">Chưa có yêu cầu vay.</p>}
                     {canManageRequests && <form onSubmit={createRequest} className="mt-3 grid gap-2">
-                      <label className="sr-only" htmlFor="loan-topic">Nội dung yêu cầu vay</label>
-                      <input id="loan-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required minLength={2} maxLength={200} placeholder="Nội dung yêu cầu vay" className={inputClass} />
+                      {canReadLoanProducts && <label className="grid gap-1 text-xs font-medium text-slate-700">Sản phẩm gói vay
+                        <Select value={requestProductId || 'NO_PRODUCT'} onValueChange={(value) => {
+                          if (typeof value !== 'string') return;
+                          setRequestProductId(value === 'NO_PRODUCT' ? '' : value);
+                          setRequestAmount('');
+                          setRequestTermMonths('');
+                        }}>
+                          <SelectTrigger aria-label="Chọn sản phẩm vay" className="w-full bg-white"><SelectValue placeholder="Không chọn sản phẩm" /></SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectItem value="NO_PRODUCT">Không chọn sản phẩm</SelectItem>
+                            {activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name} · {product.code}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </label>}
+                      {selectedRequestProduct ? <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <label className="grid gap-1 text-xs font-medium text-slate-700">Số tiền mong muốn (₫)
+                          <input value={requestAmount} onChange={(event) => setRequestAmount(event.target.value)} type="number" min={selectedRequestProduct.minAmount ?? undefined} max={selectedRequestProduct.maxAmount ?? undefined} step="0.01" required className={inputClass} />
+                          <span className="font-normal">{formatLoanAmountBounds(selectedRequestProduct.minAmount, selectedRequestProduct.maxAmount)}</span>
+                        </label>
+                        <label className="grid gap-1 text-xs font-medium text-slate-700">Kỳ hạn mong muốn (tháng)
+                          <input value={requestTermMonths} onChange={(event) => setRequestTermMonths(event.target.value)} type="number" min={selectedRequestProduct.minTermMonths} max={selectedRequestProduct.maxTermMonths} step="1" required className={inputClass} />
+                          <span className="font-normal">{selectedRequestProduct.minTermMonths}–{selectedRequestProduct.maxTermMonths} tháng</span>
+                        </label>
+                      </div> : <>
+                        <label className="sr-only" htmlFor="loan-topic">Nội dung yêu cầu vay</label>
+                        <input id="loan-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required={!requestProductId} minLength={2} maxLength={200} placeholder="Nội dung yêu cầu vay" className={inputClass} />
+                      </>}
                       <label className="sr-only" htmlFor="loan-notes">Ghi chú yêu cầu vay</label>
-                      <textarea id="loan-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} placeholder="Ghi chú (không bắt buộc)" className={`${inputClass} min-h-20`} />
+                      <textarea id="loan-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={4000} placeholder="Ghi chú (không bắt buộc)" className={`${inputClass} min-h-20`} />
                       <button disabled={saving} className={secondaryButtonClass}>Ghi nhận yêu cầu</button>
                     </form>}
                   </section>
@@ -1137,15 +1389,68 @@ export function CustomerWorkspace({
                       {canManageContracts && <button type="button" onClick={() => setShowContractForm((value) => !value)} className="text-sm font-semibold text-teal-700 hover:underline">{showContractForm ? 'Đóng biểu mẫu' : 'Tạo hợp đồng'}</button>}
                     </div>
                     {showContractForm && <form onSubmit={createContract} className="mt-3 grid gap-2 rounded-lg border border-slate-200 p-3">
+                      {requests.length > 0 && <label className="grid gap-1 text-xs font-medium text-slate-700">Tạo từ yêu cầu vay
+                        <Select value={contractLoanRequestId || 'NO_REQUEST'} onValueChange={(value) => {
+                          if (typeof value !== 'string') return;
+                          const requestId = value === 'NO_REQUEST' ? '' : value;
+                          const loanRequest = requests.find((item) => item.id === requestId);
+                          setContractLoanRequestId(requestId);
+                          if (loanRequest?.productId) setContractProductId(loanRequest.productId);
+                          if (loanRequest?.requestedAmount) setContractLoanAmount(loanRequest.requestedAmount);
+                          if (loanRequest?.requestedTermMonths) setTermMonths(String(loanRequest.requestedTermMonths));
+                          setPackageName(loanRequest?.topic ?? '');
+                          setLoanCalculation(null);
+                        }}>
+                          <SelectTrigger className="w-full bg-white"><SelectValue placeholder="Không gắn yêu cầu" /></SelectTrigger>
+                          <SelectContent align="start"><SelectItem value="NO_REQUEST">Không gắn yêu cầu</SelectItem>{requests.map((item) => <SelectItem key={item.id} value={item.id}>{item.topic} · {date(item.createdAt)}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </label>}
+                      {canReadLoanProducts && <label className="grid gap-1 text-xs font-medium text-slate-700">Sản phẩm vay
+                        <Select value={contractProductId || 'NO_PRODUCT'} onValueChange={(value) => {
+                          if (typeof value !== 'string') return;
+                          setContractProductId(value === 'NO_PRODUCT' ? '' : value);
+                          setLoanCalculation(null);
+                        }}>
+                          <SelectTrigger className="w-full bg-white"><SelectValue placeholder="Hợp đồng ngoài danh mục" /></SelectTrigger>
+                          <SelectContent align="start"><SelectItem value="NO_PRODUCT">Hợp đồng ngoài danh mục</SelectItem>{activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name} · {product.code}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </label>}
                       <label className="sr-only" htmlFor="contract-number">Số hợp đồng</label>
                       <input id="contract-number" value={contractNumber} onChange={(event) => setContractNumber(event.target.value)} required minLength={2} placeholder="Số hợp đồng" className={inputClass} />
-                      <label className="sr-only" htmlFor="package-name">Tên gói vay</label>
-                      <input id="package-name" value={packageName} onChange={(event) => setPackageName(event.target.value)} required minLength={2} placeholder="Tên gói vay" className={inputClass} />
-                      <label className="sr-only" htmlFor="loan-type">Loại khoản vay</label>
-                      <input id="loan-type" value={loanType} onChange={(event) => setLoanType(event.target.value)} placeholder="Loại khoản vay" className={inputClass} />
-                      <label className="sr-only" htmlFor="term-months">Kỳ hạn tháng</label>
-                      <input id="term-months" value={termMonths} onChange={(event) => setTermMonths(event.target.value)} type="number" min="1" max="1200" placeholder="Kỳ hạn (tháng)" className={inputClass} />
-                      <button disabled={saving} className={secondaryButtonClass}>Tạo hợp đồng chờ duyệt</button>
+                      {contractProduct ? <>
+                        <label className="grid gap-1 text-xs font-medium text-slate-700">Số tiền khách vay (₫)
+                          <input value={contractLoanAmount} onChange={(event) => { setContractLoanAmount(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minAmount ?? undefined} max={contractProduct.maxAmount ?? undefined} step="0.01" required className={inputClass} />
+                          <span className="font-normal">{formatLoanAmountBounds(contractProduct.minAmount, contractProduct.maxAmount)}</span>
+                        </label>
+                        <label className="grid gap-1 text-xs font-medium text-slate-700">Kỳ hạn (tháng)
+                          <input value={termMonths} onChange={(event) => { setTermMonths(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minTermMonths} max={contractProduct.maxTermMonths} step="1" required className={inputClass} />
+                          <span className="font-normal">Điều kiện: {contractProduct.minTermMonths}–{contractProduct.maxTermMonths} tháng</span>
+                        </label>
+                        {formulaInputsLoading && <p className="text-xs text-slate-600">Đang tải biến công thức…</p>}
+                        {formulaInputsError && <p role="alert" className="text-xs text-red-700">{formulaInputsError}</p>}
+                        {formulaVariables.map((variable) => <label key={variable.key} className="grid gap-1 text-xs font-medium text-slate-700">
+                          {variable.label}
+                          <input value={formulaInputs[variable.key] ?? ''} onChange={(event) => {
+                            setFormulaInputs((current) => ({ ...current, [variable.key]: event.target.value }));
+                            setLoanCalculation(null);
+                          }} type="number" min={variable.min} max={variable.max} step="any" required className={inputClass} />
+                          <span className="font-normal">Cho phép {variable.min}–{variable.max} · Mặc định {variable.defaultValue}</span>
+                        </label>)}
+                        <p className="text-xs text-slate-600">Thay đổi số tiền hoặc kỳ hạn sẽ làm kết quả tính trước đó mất hiệu lực.</p>
+                        {loanCalculation && !currentLoanCalculation && <p role="alert" className="text-xs text-amber-800">Đầu vào đã thay đổi. Tính lại để tiếp tục.</p>}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button type="button" disabled={saving || formulaInputsLoading || Boolean(formulaInputsError) || !contractLoanAmount || !termMonths} onClick={() => void calculateContract()} className={secondaryButtonClass}>Tính lãi</button>
+                          {currentLoanCalculation && <p role="status" className="text-xs tabular-nums text-slate-700">Phiên bản {currentLoanCalculation.formulaVersion} · Trả/tháng {formatMoney(currentLoanCalculation.outputs.monthlyPayment)} ₫ · Tổng lãi {formatMoney(currentLoanCalculation.outputs.interestAmount)} ₫</p>}
+                        </div>
+                      </> : <>
+                        <label className="sr-only" htmlFor="package-name">Tên gói vay</label>
+                        <input id="package-name" value={packageName} onChange={(event) => setPackageName(event.target.value)} required minLength={2} placeholder="Tên gói vay" className={inputClass} />
+                        <label className="sr-only" htmlFor="loan-type">Loại khoản vay</label>
+                        <input id="loan-type" value={loanType} onChange={(event) => setLoanType(event.target.value)} placeholder="Loại khoản vay" className={inputClass} />
+                        <label className="sr-only" htmlFor="term-months">Kỳ hạn tháng</label>
+                        <input id="term-months" value={termMonths} onChange={(event) => { setTermMonths(event.target.value); setLoanCalculation(null); }} type="number" min="1" max="1200" placeholder="Kỳ hạn (tháng)" className={inputClass} />
+                      </>}
+                      <button disabled={saving || Boolean(contractProduct && (formulaInputsLoading || formulaInputsError || !currentLoanCalculation))} className={secondaryButtonClass}>Tạo hợp đồng chờ duyệt</button>
                     </form>}
                     {contracts.length
                       ? <ul className="mt-2 space-y-2">
@@ -1154,6 +1459,7 @@ export function CustomerWorkspace({
                             <div className="min-w-0">
                               <p className="break-all font-medium text-slate-900">{item.contractNumber}</p>
                               <p className="mt-1 text-slate-600">{item.packageName}{item.termMonths ? ` · ${item.termMonths} tháng` : ''}</p>
+                              {item.monthlyPayment && <p className="mt-1 tabular-nums text-slate-600">Dự kiến {formatMoney(item.monthlyPayment)} ₫/tháng</p>}
                             </div>
                             <span className="h-fit rounded-full bg-white px-2 py-1 text-xs text-slate-700">{label(item.status)}</span>
                           </div>

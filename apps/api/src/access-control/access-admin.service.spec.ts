@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
-import { BranchStatus } from '../generated/prisma/client.js';
+import { AccessScope, BranchStatus } from '../generated/prisma/client.js';
 import { AccessAdminService } from './access-admin.service.js';
 
 describe('AccessAdminService branch status', () => {
@@ -312,6 +312,55 @@ describe('AccessAdminService manager account disabling', () => {
     service = new AccessAdminService(prisma, access, audit, {
       hash: async () => 'encoded-password',
       verify: async () => true,
+    });
+  });
+
+  describe('AccessAdminService user assignment options', () => {
+    it('includes global and ancestor-scoped advisers for users with branch-scoped access', async () => {
+      const actor = { id: 'branch-manager', type: 'STAFF' as const };
+      const branchId = 'managed-branch';
+      const parentBranchId = 'parent-branch';
+      const prisma = {
+        userRoleGrant: {
+          findMany: jest.fn(async () => [{
+            branchId,
+            role: { permissions: [{ permissionKey: 'users.read', scope: AccessScope.BRANCH }] },
+          }]),
+        },
+        branch: {
+          findMany: jest.fn(async ({ where }: any) => where?.managerUserId ? [] : [
+            { id: branchId, parentId: parentBranchId },
+            { id: parentBranchId, parentId: null },
+          ]),
+        },
+        user: { findMany: jest.fn(async (_query: any) => []) },
+      };
+      const access = { hasPermission: jest.fn(async () => false) };
+      const service = new AccessAdminService(prisma as any, access as any, { write: jest.fn() } as any, {
+        hash: async () => 'encoded-password',
+        verify: async () => true,
+      });
+
+      await service.listUsers(actor);
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          OR: [
+            { roleGrants: { some: { branchId: { in: [branchId] } } } },
+            {
+              roleGrants: {
+                some: {
+                  role: { key: 'ADVISING' },
+                  OR: [
+                    { branchId: null },
+                    { branchId: { in: [branchId, parentBranchId] } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      }));
     });
   });
 

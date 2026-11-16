@@ -47,6 +47,13 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   TASK_RESULT_ALREADY_REVIEWED: 'Revision này đã được xác minh.',
   TASK_RESULT_SELF_VERIFICATION: 'Bạn không thể tự xác minh kết quả do mình nộp.',
   KPI_REQUIRES_FULL_PLAN_BRANCH_SCOPE: 'Cần quyền xem KPI trên toàn bộ chi nhánh của kế hoạch.',
+  LOAN_CONTRACT_DOCUMENT_REQUIRED: 'Hãy chọn một tài liệu hợp đồng.',
+  LOAN_CONTRACT_DOCUMENT_SIZE_INVALID: 'Tài liệu không được vượt quá 25 MB.',
+  LOAN_CONTRACT_DOCUMENT_TYPE_INVALID: 'Chỉ chấp nhận tệp DOCX, PDF, PNG hoặc JPG hợp lệ.',
+  LOAN_CONTRACT_DOCUMENT_CONTENT_INVALID: 'Nội dung tệp không khớp với định dạng đã chọn.',
+  LOAN_CONTRACT_DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu hợp đồng.',
+  LOAN_CONTRACT_DOCUMENT_FILE_MISSING: 'Không tìm thấy tệp lưu trữ trên máy chủ.',
+  LOAN_CONTRACT_DOCUMENT_STORAGE_KEY_INVALID: 'Thông tin lưu trữ tài liệu không hợp lệ.',
 };
 
 function apiBaseUrl() {
@@ -68,7 +75,9 @@ export async function request<T>(
 ): Promise<T> {
   const send = (token?: string) => {
     const headers = new Headers(options.headers);
-    if (options.body) headers.set('Content-Type', 'application/json');
+    if (options.body && !(typeof FormData !== 'undefined' && options.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
     if (token) headers.set('Authorization', `Bearer ${token}`);
     return fetch(`${apiBaseUrl()}/api/v1${path}`, {
       ...options,
@@ -99,4 +108,29 @@ export async function request<T>(
     ));
   }
   return payload as T;
+}
+
+export async function downloadFile(path: string, accessToken?: string): Promise<Blob> {
+  const send = (token?: string) => fetch(`${apiBaseUrl()}/api/v1${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    credentials: 'include',
+    cache: 'no-store',
+  });
+
+  let response = await send(accessToken);
+  if (response.status === 401 && accessToken) {
+    try {
+      const refreshed = await request<{ accessToken: string }>('/auth/refresh', { method: 'POST' });
+      response = await send(refreshed.accessToken);
+    } catch {
+      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { code?: string; message?: string | string[] } | null;
+    const codeMessage = payload?.code ? API_ERROR_MESSAGES[payload.code] : undefined;
+    const message = Array.isArray(payload?.message) ? payload.message.join('. ') : payload?.message;
+    throw new Error(codeMessage || message || 'Không thể tải tài liệu hợp đồng.');
+  }
+  return response.blob();
 }

@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { useCrmSession } from '@/components/crm-session';
 
-type Section = 'customers' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type Section = 'customers' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
 const sectionPaths: Record<Exclude<Section, null>, string> = {
   customers: '/customers',
+  products: '/loan-products',
+  contracts: '/loan-contracts',
   users: '/staff',
   branches: '/branches',
   roles: '/roles',
@@ -59,6 +61,8 @@ export function WorkspaceLayout({
       canAccessPlans={can('plans.read') || can('plans.manage')}
       canReadPlanCatalog={can('plans.read')}
       canReadTasks={can('tasks.read')}
+      canAccessProducts={can('loan-products.read') || can('loan-products.manage')}
+      canAccessContracts={can('loan-contracts.read')}
       busy={busy}
       onNavigate={(section) => {
         setError('');

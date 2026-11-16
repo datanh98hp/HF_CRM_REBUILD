@@ -11,4 +11,5 @@ coverage/
 !.env.prod.example
 npm-debug.log*
 *.tsbuildinfo
+chrome_debug
 apps/api/src/generated/prisma/

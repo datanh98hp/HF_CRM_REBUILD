@@ -75,7 +75,11 @@ services:
       AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET:?Set AUTH_ACCESS_TOKEN_SECRET in .env}
       AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
       AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
-      WEB_ORIGINS: "${WEB_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+      WEB_ORIGINS: "${WEB_ORIGINS:-http://localhost:3000,http://127.0.0.1:300}"
+      CONTRACT_DOCUMENT_DIRECTORY: ${CONTRACT_DOCUMENT_DIRECTORY}
+  
+    volumes:
+      - ${CONTRACT_DOCUMENT_HOST}:/app/contracts
     depends_on:
       postgres:
         condition: service_healthy

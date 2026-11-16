@@ -71,7 +71,7 @@ type ContractUploadFile = {
 };
 
 const CONTRACT_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
-const CONTRACT_DOCUMENT_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/Assets/contracts');
+const CONTRACT_DOCUMENT_DIRECTORY = process.env.CONTRACT_DOCUMENT_DIRECTORY ? resolve(process.env.CONTRACT_DOCUMENT_DIRECTORY) : resolve('/tmp/contracts');
 const CONTRACT_DOCUMENT_MIME_TYPES: Record<string, string> = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.jpeg': 'image/jpeg',
@@ -100,7 +100,7 @@ export class CustomersService {
     private readonly prisma: PrismaService,
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
-  ) {}
+  ) { }
 
   async list(actor: ActorContext, query: CustomerListQueryDto) {
     this.assertStaff(actor);
@@ -534,7 +534,7 @@ export class CustomersService {
     const allowedTransition = product.status === LoanProductStatus.DRAFT
       ? dto.status === LoanProductStatus.ACTIVE || dto.status === LoanProductStatus.INACTIVE
       : (product.status === LoanProductStatus.ACTIVE && dto.status === LoanProductStatus.INACTIVE)
-        || (product.status === LoanProductStatus.INACTIVE && dto.status === LoanProductStatus.ACTIVE);
+      || (product.status === LoanProductStatus.INACTIVE && dto.status === LoanProductStatus.ACTIVE);
     if (!allowedTransition) throw new ConflictException({ code: 'LOAN_PRODUCT_STATUS_TRANSITION_INVALID' });
     if (dto.status === LoanProductStatus.ACTIVE) {
       if (!product.currentFormulaVersion) throw new ConflictException({ code: 'LOAN_PRODUCT_FORMULA_REQUIRED' });
@@ -1091,11 +1091,11 @@ export class CustomersService {
         : extension === '.jpg' || extension === '.jpeg'
           ? file.buffer[0] === 0xff && file.buffer[1] === 0xd8 && file.buffer[2] === 0xff
           : file.buffer[0] === 0x50
-            && file.buffer[1] === 0x4b
-            && file.buffer[2] === 0x03
-            && file.buffer[3] === 0x04
-            && file.buffer.includes(Buffer.from('[Content_Types].xml'))
-            && file.buffer.includes(Buffer.from('word/document.xml'));
+          && file.buffer[1] === 0x4b
+          && file.buffer[2] === 0x03
+          && file.buffer[3] === 0x04
+          && file.buffer.includes(Buffer.from('[Content_Types].xml'))
+          && file.buffer.includes(Buffer.from('word/document.xml'));
     if (!signatureIsValid) throw new BadRequestException({ code: 'LOAN_CONTRACT_DOCUMENT_CONTENT_INVALID' });
 
     return { fileName, extension, mimeType, sizeBytes: file.size, buffer: file.buffer };
@@ -1231,10 +1231,14 @@ export class CustomersService {
       customerFullName: name, customerPhone: phone, customerDateOfBirth: dto.customerDateOfBirth ?? null,
       customerEmail: normalizedEmail(dto.customerEmail), branchId: dto.branchId,
     })).digest('hex');
-    const existing = await this.prisma.loanContract.findFirst({ where: { OR: [
-      { sourceSystem, externalContractId },
-      { idempotencyKeyHash: keyHash },
-    ] } });
+    const existing = await this.prisma.loanContract.findFirst({
+      where: {
+        OR: [
+          { sourceSystem, externalContractId },
+          { idempotencyKeyHash: keyHash },
+        ]
+      }
+    });
     if (existing) {
       if (existing.sourcePayloadHash !== payloadHash) throw new ConflictException({ code: 'IDEMPOTENCY_CONFLICT' });
       return { ...this.serializeContract(existing), replayed: true };
@@ -1245,29 +1249,39 @@ export class CustomersService {
         const exact = matches.filter((candidate) => candidate.normalizedName === normalized && (!dob || candidate.dateOfBirth?.getTime() === dob.getTime()));
         // Attach only to one unambiguous exact identity. Otherwise create a separate unverified customer for manual duplicate review.
         const customer = exact.length === 1 ? exact[0] : await tx.customer.create({
-          data: { fullName: name, normalizedName: normalized, phone, phoneNormalized: phone,
+          data: {
+            fullName: name, normalizedName: normalized, phone, phoneNormalized: phone,
             dateOfBirth: dob, email: normalizedEmail(dto.customerEmail), emailNormalized: normalizedEmail(dto.customerEmail),
-            provenance: `external:${dto.sourceSystem}`, verificationStatus: 'UNVERIFIED', branchId: dto.branchId },
+            provenance: `external:${dto.sourceSystem}`, verificationStatus: 'UNVERIFIED', branchId: dto.branchId
+          },
           include: { assignments: { where: { endedAt: null } } },
         });
         if (exact.length !== 1) await this.syncDuplicateCandidates(tx, customer);
-        const contract = await tx.loanContract.create({ data: {
-          customerId: customer.id, branchId: dto.branchId, contractNumber: dto.contractNumber.trim(),
-          packageCode: dto.packageCode?.trim(), packageName: dto.packageName.trim(), packageVersion: dto.packageVersion?.trim(),
-          loanType: dto.loanType?.trim(), termMonths: dto.termMonths, sourceSystem,
-          externalContractId, sourceUpdatedAt: dto.sourceUpdatedAt ? new Date(dto.sourceUpdatedAt) : undefined,
-          sourcePayloadHash: payloadHash, idempotencyKeyHash: keyHash, createdById: actor.id, status: 'PENDING_REVIEW',
-        } });
+        const contract = await tx.loanContract.create({
+          data: {
+            customerId: customer.id, branchId: dto.branchId, contractNumber: dto.contractNumber.trim(),
+            packageCode: dto.packageCode?.trim(), packageName: dto.packageName.trim(), packageVersion: dto.packageVersion?.trim(),
+            loanType: dto.loanType?.trim(), termMonths: dto.termMonths, sourceSystem,
+            externalContractId, sourceUpdatedAt: dto.sourceUpdatedAt ? new Date(dto.sourceUpdatedAt) : undefined,
+            sourcePayloadHash: payloadHash, idempotencyKeyHash: keyHash, createdById: actor.id, status: 'PENDING_REVIEW',
+          }
+        });
         await tx.loanContractStatusHistory.create({ data: { contractId: contract.id, toStatus: 'PENDING_REVIEW', reason: 'External import; pending branch manager review', changedById: actor.id } });
-        await this.audit.write(tx, { actor, action: 'loan_contract.external_ingested', targetType: 'loan_contract', targetId: contract.id, branchId: dto.branchId,
-          afterState: { sourceSystem: dto.sourceSystem, externalContractId: dto.externalContractId, sourcePayloadHash: payloadHash, customerCreated: exact.length !== 1 }, requestId: requestId(request) });
+        await this.audit.write(tx, {
+          actor, action: 'loan_contract.external_ingested', targetType: 'loan_contract', targetId: contract.id, branchId: dto.branchId,
+          afterState: { sourceSystem: dto.sourceSystem, externalContractId: dto.externalContractId, sourcePayloadHash: payloadHash, customerCreated: exact.length !== 1 }, requestId: requestId(request)
+        });
         return { ...this.serializeContract(contract), customerCreated: exact.length !== 1, replayed: false };
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const raced = await this.prisma.loanContract.findFirst({ where: { OR: [
-          { sourceSystem, externalContractId }, { idempotencyKeyHash: keyHash },
-        ] } });
+        const raced = await this.prisma.loanContract.findFirst({
+          where: {
+            OR: [
+              { sourceSystem, externalContractId }, { idempotencyKeyHash: keyHash },
+            ]
+          }
+        });
         if (raced?.sourcePayloadHash === payloadHash) return { ...this.serializeContract(raced), replayed: true };
         throw new ConflictException({ code: raced ? 'IDEMPOTENCY_CONFLICT' : 'CONTRACT_NUMBER_EXISTS' });
       }
@@ -1359,8 +1373,10 @@ export class CustomersService {
       if (!customer.phoneVerifiedAt) {
         const phoneVerifiedAt = new Date();
         await tx.customer.update({ where: { id: actor.id }, data: { phoneVerifiedAt } });
-        await this.audit.write(tx, { actor, action: 'customer.phone.verified', targetType: 'customer', targetId: actor.id, branchId: contract.branchId,
-          afterState: { phoneVerifiedAt, source: 'loan_contract_otp' }, requestId: requestId(request) });
+        await this.audit.write(tx, {
+          actor, action: 'customer.phone.verified', targetType: 'customer', targetId: actor.id, branchId: contract.branchId,
+          afterState: { phoneVerifiedAt, source: 'loan_contract_otp' }, requestId: requestId(request)
+        });
       }
       if (customer.status !== 'CLOSED' && customer.status !== 'CONVERTED') {
         await tx.customer.update({ where: { id: actor.id }, data: { status: 'CONVERTED' } });

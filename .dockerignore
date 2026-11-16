@@ -9,3 +9,4 @@ node_modules
 **/node_modules
 apps/api/src/generated/prisma
 npm-debug.log*
+chrome_debug

@@ -519,13 +519,13 @@ function ContractWorkspace({
             if (open || eventDetails.reason === 'close-press') setMobileDetailOpen(open);
           }}
         >
-          <DialogOverlay className="hidden max-xl:block" />
+          <DialogOverlay className={isMobileLayout && mobileDetailOpen ? 'max-xl:block xl:hidden' : 'hidden'} />
           <DialogPopup
             role={isMobileLayout ? 'dialog' : 'region'}
             aria-modal={isMobileLayout || undefined}
             aria-labelledby={isMobileLayout ? 'mobile-contract-detail-title' : 'contract-detail-heading'}
             initialFocus={isMobileLayout ? true : false}
-            className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl"
+            className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
           >
             <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
               <DialogTitle id="mobile-contract-detail-title" className="text-sm font-semibold">Chi tiết hợp đồng</DialogTitle>

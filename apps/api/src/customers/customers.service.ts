@@ -217,7 +217,18 @@ export class CustomersService {
     if (customer.status === dto.status) throw new BadRequestException({ code: 'CUSTOMER_STATUS_UNCHANGED' });
     return this.prisma.$transaction(async (tx) => {
       if (dto.status === CustomerStatus.CONVERTED) {
-        const contractCount = await tx.loanContract.count({ where: { customerId, status: 'COMPLETED' } });
+        const contractCount = await tx.loanContract.count({
+          where: {
+            customerId,
+            status: {
+              in: [
+                LoanContractStatus.APPROVED,
+                LoanContractStatus.AWAITING_CUSTOMER_CONFIRMATION,
+                LoanContractStatus.COMPLETED,
+              ],
+            },
+          },
+        });
         if (!contractCount) throw new ConflictException({ code: 'CONVERTED_REQUIRES_CONTRACT' });
       }
       const updated = await tx.customer.update({ where: { id: customerId }, data: { status: dto.status } });
@@ -800,8 +811,8 @@ export class CustomersService {
               customerName: row.customer.fullName,
               branchName: row.branch.name,
               canReview: row.status === LoanContractStatus.PENDING_REVIEW
-                && row.createdById !== actor.id
-                && (hasGlobalReview || await this.access.isBranchManager(actor.id, row.branchId)),
+                && (hasGlobalReview
+                  || (row.createdById !== actor.id && await this.access.isBranchManager(actor.id, row.branchId))),
             });
         }
         if (output.length === pageSize) {
@@ -1157,6 +1168,8 @@ export class CustomersService {
             code: product.code,
             name: product.name,
             loanType: product.loanType,
+            source: product.source,
+            description: product.description,
             minAmount: product.minAmount?.toFixed(2) ?? null,
             maxAmount: product.maxAmount?.toFixed(2) ?? null,
             minTermMonths: product.minTermMonths,
@@ -1293,7 +1306,7 @@ export class CustomersService {
     const contract = await this.contractForAction(actor, contractId);
     const hasGlobalReview = await this.access.hasPermission(actor.id, 'loan-contracts.review', AccessScope.ALL);
     await this.assertBranchManagePermission(actor, 'loan-contracts.review', contract.branchId);
-    if (contract.createdById === actor.id) throw new ForbiddenException({ code: 'CONTRACT_CREATOR_CANNOT_REVIEW' });
+    if (contract.createdById === actor.id && !hasGlobalReview) throw new ForbiddenException({ code: 'CONTRACT_CREATOR_CANNOT_REVIEW' });
     if (!hasGlobalReview && !await this.access.isBranchManager(actor.id, contract.branchId)) throw new ForbiddenException({ code: 'DIRECT_BRANCH_MANAGER_REQUIRED' });
     if (contract.status !== 'PENDING_REVIEW') throw new ConflictException({ code: 'CONTRACT_NOT_PENDING_REVIEW' });
     return this.changeContractStatus(actor, contract, 'APPROVED', 'Branch manager approved contract', request, { approvedBy: { connect: { id: actor.id } }, approvedAt: new Date() });
@@ -1303,7 +1316,7 @@ export class CustomersService {
     const contract = await this.contractForAction(actor, contractId);
     const hasGlobalReview = await this.access.hasPermission(actor.id, 'loan-contracts.review', AccessScope.ALL);
     await this.assertBranchManagePermission(actor, 'loan-contracts.review', contract.branchId);
-    if (contract.createdById === actor.id) throw new ForbiddenException({ code: 'CONTRACT_CREATOR_CANNOT_REVIEW' });
+    if (contract.createdById === actor.id && !hasGlobalReview) throw new ForbiddenException({ code: 'CONTRACT_CREATOR_CANNOT_REVIEW' });
     if (!hasGlobalReview && !await this.access.isBranchManager(actor.id, contract.branchId)) throw new ForbiddenException({ code: 'DIRECT_BRANCH_MANAGER_REQUIRED' });
     if (contract.status !== 'PENDING_REVIEW') throw new ConflictException({ code: 'CONTRACT_NOT_PENDING_REVIEW' });
     return this.changeContractStatus(actor, contract, 'REJECTED', reason.trim(), request);
@@ -1402,6 +1415,36 @@ export class CustomersService {
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.loanContract.update({ where: { id: contract.id }, data: { status, ...extra } });
       await tx.loanContractStatusHistory.create({ data: { contractId: contract.id, fromStatus: contract.status, toStatus: status, reason, changedById: actor.id } });
+      if (status === 'APPROVED') {
+        const customer = await tx.customer.findUnique({
+          where: { id: contract.customerId },
+          select: { id: true, branchId: true, status: true },
+        });
+        if (!customer) throw new NotFoundException({ code: 'CUSTOMER_NOT_FOUND' });
+        if (customer.status !== CustomerStatus.CONVERTED) {
+          await tx.customer.update({ where: { id: customer.id }, data: { status: CustomerStatus.CONVERTED } });
+          await tx.customerStatusHistory.create({
+            data: {
+              customerId: customer.id,
+              fromStatus: customer.status,
+              toStatus: CustomerStatus.CONVERTED,
+              reason: 'Automatically converted after a loan contract was approved',
+              changedById: actor.id,
+            },
+          });
+          await this.audit.write(tx, {
+            actor,
+            action: 'customer.status.changed',
+            targetType: 'customer',
+            targetId: customer.id,
+            branchId: customer.branchId,
+            reason: 'A loan contract was approved',
+            beforeState: { status: customer.status },
+            afterState: { status: CustomerStatus.CONVERTED },
+            requestId: requestId(request),
+          });
+        }
+      }
       await this.audit.write(tx, { actor, action: `loan_contract.${status.toLowerCase()}`, targetType: 'loan_contract', targetId: contract.id, branchId: contract.branchId, reason, beforeState: { status: contract.status }, afterState: { status }, requestId: requestId(request) });
       return this.serializeContract(updated);
     });
@@ -1636,7 +1679,7 @@ export class CustomersService {
     return { ...allowed, branchId: row.branchId, source: row.source };
   }
 
-  private serializeContract(row: { id: string; customerId: string; branchId: string; contractNumber: string; packageCode: string | null; packageName: string; packageVersion: string | null; loanType: string | null; termMonths: number | null; loanAmount?: Prisma.Decimal | null; annualInterestRate?: Prisma.Decimal | null; interestAmount?: Prisma.Decimal | null; monthlyPayment?: Prisma.Decimal | null; status: string; approvedAt?: Date | null; completedAt?: Date | null; createdAt: Date }, customerView = false) {
+  private serializeContract(row: { id: string; customerId: string; branchId: string; contractNumber: string; packageCode: string | null; packageName: string; packageVersion: string | null; loanType: string | null; termMonths: number | null; loanAmount?: Prisma.Decimal | null; annualInterestRate?: Prisma.Decimal | null; interestAmount?: Prisma.Decimal | null; monthlyPayment?: Prisma.Decimal | null; formulaSnapshot?: Prisma.JsonValue | null; status: string; approvedAt?: Date | null; completedAt?: Date | null; createdAt: Date }, customerView = false) {
     const allowed = {
       id: row.id,
       customerId: row.customerId,
@@ -1656,7 +1699,27 @@ export class CustomersService {
       createdAt: row.createdAt,
     };
     if (customerView) return allowed;
-    return { ...allowed, branchId: row.branchId };
+    return { ...allowed, branchId: row.branchId, loanProduct: this.serializeContractProduct(row.formulaSnapshot) };
+  }
+
+  private serializeContractProduct(snapshot: Prisma.JsonValue | null | undefined) {
+    if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) return null;
+    const product = snapshot.product;
+    if (typeof product !== 'object' || product === null || Array.isArray(product)) return null;
+    const stringValue = (value: Prisma.JsonValue | undefined) => typeof value === 'string' ? value : null;
+    const numberValue = (value: Prisma.JsonValue | undefined) => typeof value === 'number' ? value : null;
+    return {
+      code: stringValue(product.code),
+      name: stringValue(product.name),
+      loanType: stringValue(product.loanType),
+      source: stringValue(product.source),
+      description: stringValue(product.description),
+      minAmount: stringValue(product.minAmount),
+      maxAmount: stringValue(product.maxAmount),
+      minTermMonths: numberValue(product.minTermMonths),
+      maxTermMonths: numberValue(product.maxTermMonths),
+      annualInterestRate: stringValue(product.annualInterestRate),
+    };
   }
 
   private customerAuditState(customer: CustomerRecord) {

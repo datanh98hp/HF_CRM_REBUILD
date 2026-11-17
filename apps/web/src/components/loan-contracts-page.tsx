@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, ChevronLeft, ChevronRight, Download, File as FileIcon, FileImage, FileText, History, RefreshCw, Search, Trash2, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPopup, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,7 +26,20 @@ type Contract = {
   loanType: string | null;
   termMonths: number | null;
   loanAmount: string | null;
+  annualInterestRate: string | null;
   monthlyPayment: string | null;
+  loanProduct: {
+    code: string | null;
+    name: string | null;
+    loanType: string | null;
+    source: string | null;
+    description: string | null;
+    minAmount: string | null;
+    maxAmount: string | null;
+    minTermMonths: number | null;
+    maxTermMonths: number | null;
+    annualInterestRate: string | null;
+  } | null;
   status: string;
   approvedAt: string | null;
   completedAt: string | null;
@@ -87,6 +100,22 @@ function formatMoney(value: string | null) {
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const normalizedFraction = fraction?.replace(/0+$/, '');
   return `${grouped}${normalizedFraction ? `,${normalizedFraction}` : ''} ₫`;
+}
+
+function formatLoanAmountBounds(minAmount: string | null, maxAmount: string | null) {
+  if (minAmount && maxAmount) return `${formatMoney(minAmount)}–${formatMoney(maxAmount)}`;
+  if (minAmount) return `Từ ${formatMoney(minAmount)}`;
+  if (maxAmount) return `Đến ${formatMoney(maxAmount)}`;
+  return 'Không giới hạn theo số tiền';
+}
+
+function formatLoanTermBounds(minTermMonths: number | null, maxTermMonths: number | null, contractTermMonths: number | null, hasProductSnapshot: boolean) {
+  if (minTermMonths !== null && maxTermMonths !== null) return `${minTermMonths}–${maxTermMonths} tháng`;
+  if (minTermMonths !== null) return `Từ ${minTermMonths} tháng`;
+  if (maxTermMonths !== null) return `Đến ${maxTermMonths} tháng`;
+  if (hasProductSnapshot) return 'Không giới hạn theo kỳ hạn';
+  if (contractTermMonths !== null) return `${contractTermMonths} tháng (kỳ hạn hợp đồng)`;
+  return 'Chưa lưu trong hồ sơ này';
 }
 
 function badgeClass(status: string) {
@@ -166,6 +195,8 @@ function ContractWorkspace({
   const [historyError, setHistoryError] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [documentBusy, setDocumentBusy] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ContractDocument | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -174,6 +205,18 @@ function ContractWorkspace({
   const cursor = pageCursors.at(-1);
   const selected = contracts.find((contract) => contract.id === selectedId) ?? null;
   const canGoBack = pageCursors.length > 1;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1279px)');
+    const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
+    updateLayout();
+    mediaQuery.addEventListener('change', updateLayout);
+    return () => mediaQuery.removeEventListener('change', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileLayout) setMobileDetailOpen(false);
+  }, [isMobileLayout]);
 
   useEffect(() => {
     const version = ++requestVersion.current;
@@ -261,7 +304,7 @@ function ContractWorkspace({
     setNotice('');
     try {
       await apiRequest(`/loan-contracts/${selected.id}/approve`, { method: 'POST' }, accessToken);
-      setNotice('Đã duyệt hợp đồng. Khách hàng cần xác nhận theo quy trình hiện hành.');
+      setNotice('Đã duyệt hợp đồng và chuyển trạng thái khách hàng sang “Đã có khoản vay chuyển đổi”. Việc hoàn tất vẫn cần khách hàng xác nhận OTP.');
       setReloadVersion((version) => version + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thể duyệt hợp đồng.');
@@ -381,33 +424,23 @@ function ContractWorkspace({
       {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>}
       {notice && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div>}
 
-      <section className="mb-4 grid min-w-0 grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(18rem,1.5fr)_minmax(12rem,1fr)_minmax(10rem,0.7fr)_auto]" aria-label="Bộ lọc hợp đồng">
+      <section className="mb-4 grid min-w-0 grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] sm:p-4 xl:w-[65%]" aria-label="Bộ lọc hợp đồng">
         <form onSubmit={submitSearch} className="grid min-w-0 gap-1.5">
           <label htmlFor="contract-search" className="text-sm font-medium text-slate-800">Mã hợp đồng</label>
           <div className="flex min-w-0 gap-2">
-            <Input id="contract-search" value={searchText} onChange={(event) => setSearchText(event.target.value)} maxLength={120} placeholder="Nhập mã hợp đồng" className="h-10 min-w-0 bg-white" />
-            <Button type="submit" variant="outline" aria-label="Tìm hợp đồng"><Search aria-hidden="true" />Tìm</Button>
+            <Input id="contract-search" value={searchText} onChange={(event) => setSearchText(event.target.value)} maxLength={120} placeholder="Nhập mã hợp đồng" className="h-10 min-w-0 flex-1 bg-white" />
+            <Button type="submit" variant="outline" className="h-10 shrink-0" aria-label="Tìm hợp đồng"><Search aria-hidden="true" />Tìm</Button>
           </div>
         </form>
         <div className="grid min-w-0 gap-1.5">
           <label htmlFor="contract-status-filter" className="text-sm font-medium text-slate-800">Trạng thái</label>
           <Select value={statusFilter} onValueChange={(value) => { if (typeof value === 'string') changeStatusFilter(value); }}>
-            <SelectTrigger id="contract-status-filter" className="w-full bg-white"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="contract-status-filter" className="h-10 w-full bg-white data-[size=default]:h-10"><SelectValue /></SelectTrigger>
             <SelectContent align="start">
               {statusOptions.map(([value, label]) => <SelectItem key={value} value={value} label={label}>{label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <div className="grid min-w-0 gap-1.5">
-          <label htmlFor="contract-page-size" className="text-sm font-medium text-slate-800">Số hợp đồng mỗi trang</label>
-          <Select value={String(pageSize)} onValueChange={(value) => { if (typeof value === 'string') changePageSize(value); }}>
-            <SelectTrigger id="contract-page-size" className="w-full bg-white"><SelectValue /></SelectTrigger>
-            <SelectContent align="start">
-              {pageSizeOptions.map((value) => <SelectItem key={value} value={String(value)} label={`${value} hợp đồng`}>{value} hợp đồng</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <p className="text-sm text-slate-600 sm:col-span-2 xl:col-span-1 xl:text-right" aria-live="polite">{loading ? 'Đang tải…' : `${contracts.length} hợp đồng trong trang này`}</p>
       </section>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(20rem,0.7fr)]">
@@ -438,7 +471,7 @@ function ContractWorkspace({
                   </thead>
                   <tbody>
                     {contracts.map((contract) => (
-                      <tr key={contract.id} className={`cursor-pointer border-t border-slate-100 hover:bg-teal-50 ${selectedId === contract.id ? 'bg-teal-50' : ''}`} onClick={() => setSelectedId(contract.id)}>
+                      <tr key={contract.id} className={`cursor-pointer border-t border-slate-100 hover:bg-teal-50 ${selectedId === contract.id ? 'bg-teal-50' : ''}`} onClick={() => { setSelectedId(contract.id); if (isMobileLayout) setMobileDetailOpen(true); }}>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-slate-950">{contract.contractNumber}</p>
                           <p className="mt-0.5 text-xs text-slate-600">{contract.customerName ?? `Khách hàng ${contract.customerId.slice(0, 8)}`}</p>
@@ -454,17 +487,55 @@ function ContractWorkspace({
                   </tbody>
                 </table>
               </div>}
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-            <Button type="button" variant="outline" size="sm" disabled={!canGoBack || loading} onClick={() => { setPageCursors((pages) => pages.slice(0, -1)); setSelectedId(''); }}>
-              <ChevronLeft aria-hidden="true" /> Trang trước
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={!nextCursor || loading} onClick={() => { if (nextCursor) { setPageCursors((pages) => [...pages, nextCursor]); setSelectedId(''); } }}>
-              Trang sau <ChevronRight aria-hidden="true" />
-            </Button>
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="grid min-w-40 gap-1.5">
+                <label htmlFor="contract-page-size" className="text-sm font-medium text-slate-800">Số hợp đồng mỗi trang</label>
+                <Select value={String(pageSize)} onValueChange={(value) => { if (typeof value === 'string') changePageSize(value); }}>
+                  <SelectTrigger id="contract-page-size" className="h-10 w-full bg-white data-[size=default]:h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent align="start">
+                    {pageSizeOptions.map((value) => <SelectItem key={value} value={String(value)} label={`${value} hợp đồng`}>{value} hợp đồng</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-sm text-slate-600 sm:pb-2" aria-live="polite">{loading ? 'Đang tải…' : `${contracts.length} hợp đồng trong trang này`}</p>
+            </div>
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <Button type="button" variant="outline" size="sm" disabled={!canGoBack || loading} onClick={() => { setPageCursors((pages) => pages.slice(0, -1)); setSelectedId(''); }}>
+                <ChevronLeft aria-hidden="true" /> Trang trước
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={!nextCursor || loading} onClick={() => { if (nextCursor) { setPageCursors((pages) => [...pages, nextCursor]); setSelectedId(''); } }}>
+                Trang sau <ChevronRight aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         </section>
 
-        <aside className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="contract-detail-heading">
+        <Dialog
+          open={isMobileLayout ? mobileDetailOpen : true}
+          modal={isMobileLayout}
+          disablePointerDismissal
+          onOpenChange={(open, eventDetails) => {
+            if (open || eventDetails.reason === 'close-press') setMobileDetailOpen(open);
+          }}
+        >
+          <DialogOverlay className="hidden max-xl:block" />
+          <DialogPopup
+            role={isMobileLayout ? 'dialog' : 'region'}
+            aria-modal={isMobileLayout || undefined}
+            aria-labelledby={isMobileLayout ? 'mobile-contract-detail-title' : 'contract-detail-heading'}
+            initialFocus={isMobileLayout ? true : false}
+            className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl"
+          >
+            <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
+              <DialogTitle id="mobile-contract-detail-title" className="text-sm font-semibold">Chi tiết hợp đồng</DialogTitle>
+              <DialogClose
+                render={<Button type="button" variant="outline" className="h-9 px-3" />}
+              >
+                Đóng
+              </DialogClose>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain max-xl:p-4">
           <div className="border-b border-slate-200 pb-3">
             <p className="text-xs font-medium uppercase text-slate-500">Chi tiết</p>
             <h2 id="contract-detail-heading" className="mt-1 break-words text-lg font-semibold text-slate-950">{selected?.contractNumber ?? 'Chọn một hợp đồng'}</h2>
@@ -482,6 +553,20 @@ function ContractWorkspace({
                 <div><dt className="text-xs text-slate-500">Chi nhánh</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.branchName ?? '—'}</dd></div>
                 <div><dt className="text-xs text-slate-500">Trạng thái</dt><dd className="mt-1"><Badge variant="outline" className={badgeClass(selected.status)}>{statusLabels[selected.status] ?? selected.status}</Badge></dd></div>
               </dl>
+              <section className="border-t border-slate-200 py-4" aria-labelledby="contract-product-heading">
+                <h3 id="contract-product-heading" className="font-semibold text-slate-900">Chi tiết gói vay</h3>
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
+                  <div><dt className="text-xs text-slate-500">Mã gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.code ?? selected.packageCode ?? '—'}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Tên gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.name ?? selected.packageName}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Loại gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.loanType ?? selected.loanType ?? '—'}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Lãi suất năm</dt><dd className="mt-1 font-medium text-slate-900">{(selected.loanProduct?.annualInterestRate ?? selected.annualInterestRate) !== null ? `${Number(selected.loanProduct?.annualInterestRate ?? selected.annualInterestRate).toLocaleString('vi-VN')}%` : '—'}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Giới hạn số tiền</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct ? formatLoanAmountBounds(selected.loanProduct.minAmount, selected.loanProduct.maxAmount) : 'Chưa lưu trong hồ sơ này'}</dd></div>
+                  <div><dt className="text-xs text-slate-500">Kỳ hạn gói</dt><dd className="mt-1 font-medium text-slate-900">{formatLoanTermBounds(selected.loanProduct?.minTermMonths ?? null, selected.loanProduct?.maxTermMonths ?? null, selected.termMonths, Boolean(selected.loanProduct))}</dd></div>
+                  {selected.loanProduct?.source && <div className="col-span-2"><dt className="text-xs text-slate-500">Nguồn sản phẩm</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct.source}</dd></div>}
+                  {selected.loanProduct?.description && <div className="col-span-2"><dt className="text-xs text-slate-500">Mô tả gói</dt><dd className="mt-1 whitespace-pre-wrap break-words text-slate-700">{selected.loanProduct.description}</dd></div>}
+                </dl>
+                {!selected.loanProduct && <p className="mt-3 text-xs text-slate-500">Hồ sơ hợp đồng này chưa lưu bản chụp chi tiết gói vay.</p>}
+              </section>
               {selected.status === 'PENDING_REVIEW' && canReview && selected.canReview
                 ? rejecting
                   ? <form onSubmit={rejectSelected} className="grid gap-3 border-t border-slate-200 pt-4">
@@ -499,10 +584,10 @@ function ContractWorkspace({
                 : <div className="border-t border-slate-200 pt-4 text-sm text-slate-600">
                   {selected.status === 'PENDING_REVIEW'
                     ? selected.canReview === false
-                      ? 'Bạn không thể duyệt hợp đồng này: chỉ Admin/Operator toàn hệ thống hoặc Quản lý được phân công mới có quyền.'
+                      ? 'Bạn không có quyền duyệt hợp đồng này. Admin/Operator có thể duyệt toàn hệ thống; Manager chỉ duyệt tại chi nhánh được phân công và không thể tự duyệt hợp đồng do mình tạo.'
                       : 'Hợp đồng đang chờ Admin, Operator hoặc Quản lý chi nhánh được phân công duyệt.'
                     : selected.status === 'APPROVED'
-                      ? 'Đã duyệt; bước hoàn tất cần khách hàng xác nhận theo OTP.'
+                      ? 'Đã duyệt; khách hàng đã chuyển sang “Đã có khoản vay chuyển đổi”. Bước hoàn tất cần khách hàng xác nhận OTP.'
                       : selected.status === 'AWAITING_CUSTOMER_CONFIRMATION'
                         ? 'Đang chờ khách hàng xác nhận hoàn tất.'
                         : selected.status === 'COMPLETED'
@@ -608,9 +693,11 @@ function ContractWorkspace({
                     </ol>}
               </section>
             </>}
-        </aside>
+            </div>
+          </DialogPopup>
+        </Dialog>
       </div>
-      <p className="mt-4 text-xs text-slate-500">Admin và Operator được duyệt toàn hệ thống; Manager chỉ duyệt tại chi nhánh được phân công. Người tạo không thể tự duyệt.</p>
+      <p className="mt-4 text-xs text-slate-500">Admin và Operator được duyệt toàn hệ thống. Manager chỉ duyệt tại chi nhánh được phân công và không thể tự duyệt hợp đồng do mình tạo.</p>
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open && !documentBusy) setDeleteTarget(null); }}>
         <DialogContent className="sm:max-w-md" closeLabel="Đóng">
           <DialogHeader>

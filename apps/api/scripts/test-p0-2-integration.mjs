@@ -250,12 +250,13 @@ try {
   const contractResult = await responseJson(contract);
   check(contractResult.status === 201 && contractResult.body.status === 'PENDING_REVIEW', 'new contract requires manager review');
   const creatorApprove = await fetch(`${baseUrl}/loan-contracts/${contractResult.body.id}/approve`, { method: 'POST', headers: operatorHeaders });
-  check(creatorApprove.status === 403, 'contract creator with global review permission cannot approve own contract');
+  check(creatorApprove.status === 201, 'global reviewer can approve a contract they created');
   const managerCreatedContract = await responseJson(await fetch(`${baseUrl}/loan-contracts`, {
-    method: 'POST', headers: managerHeaders,
+    method: 'POST', headers: { ...managerHeaders, 'content-type': 'application/json' },
     body: JSON.stringify({ customerId: second.id, contractNumber: `CI-OPERATOR-REVIEW-${second.id}`, packageName: 'Manager-created test contract' }),
   }));
-  check(managerCreatedContract.status === 201, 'branch manager can create a contract in the assigned branch');
+  check(managerCreatedContract.status === 201,
+    `branch manager can create a contract in the assigned branch (HTTP ${managerCreatedContract.status}, ${managerCreatedContract.body.code ?? 'no error code'})`);
   const operatorApprove = await fetch(`${baseUrl}/loan-contracts/${managerCreatedContract.body.id}/approve`, { method: 'POST', headers: operatorHeaders });
   check(operatorApprove.status === 201, 'global OPERATOR approves another user’s contract');
 
@@ -295,6 +296,14 @@ try {
 
   const approve = await fetch(`${baseUrl}/loan-contracts/${contractResult.body.id}/approve`, { method: 'POST', headers: managerHeaders });
   check(approve.status === 201, 'direct branch manager approves a pending contract');
+  const customerAfterApproval = await db.query('SELECT "status" FROM "Customer" WHERE "id" = $1', [first.id]);
+  check(customerAfterApproval.rows[0]?.status === 'CONVERTED', 'approving a contract immediately converts its customer');
+  const approvalStatusHistory = await db.query(
+    'SELECT "changedById", "changedByCustomerId" FROM "CustomerStatusHistory" WHERE "customerId" = $1 AND "toStatus" = \'CONVERTED\' ORDER BY "createdAt" LIMIT 1',
+    [first.id],
+  );
+  check(approvalStatusHistory.rows[0]?.changedById === managerId && approvalStatusHistory.rows[0]?.changedByCustomerId === null,
+    'automatic customer conversion history records the contract approver');
   const otpResponse = await responseJson(await fetch(`${baseUrl}/loan-contracts/${contractResult.body.id}/request-completion-otp`, { method: 'POST', headers: managerHeaders }));
   check(otpResponse.status === 201 && otpResponse.body.status === 'AWAITING_CUSTOMER_CONFIRMATION' && Boolean(otpResponse.body.debugOtp), 'manager requests transaction-bound OTP');
   const completion = await responseJson(await fetch(`${baseUrl}/loan-contracts/${contractResult.body.id}/confirm-completion`, {
@@ -303,12 +312,13 @@ try {
   check(completion.status === 201 && completion.body.status === 'COMPLETED', 'contract completes only after CUSTOMER OTP confirmation');
   const contractActor = await db.query('SELECT "changedByCustomerId" FROM "LoanContractStatusHistory" WHERE "contractId" = $1 AND "toStatus" = \'COMPLETED\'', [contractResult.body.id]);
   check(contractActor.rows[0]?.changedByCustomerId === first.id, 'contract status history records CUSTOMER OTP actor');
-  const customerStatusActor = await db.query('SELECT "changedByCustomerId" FROM "CustomerStatusHistory" WHERE "customerId" = $1 AND "toStatus" = \'CONVERTED\'', [first.id]);
-  check(customerStatusActor.rows[0]?.changedByCustomerId === first.id, 'customer conversion history records CUSTOMER actor');
+  const customerStatusActor = await db.query('SELECT "changedById", "changedByCustomerId" FROM "CustomerStatusHistory" WHERE "customerId" = $1 AND "toStatus" = \'CONVERTED\'', [first.id]);
+  check(customerStatusActor.rows[0]?.changedById === managerId && customerStatusActor.rows[0]?.changedByCustomerId === null,
+    'OTP completion does not duplicate the conversion history created by contract approval');
   const phoneVerification = await db.query('SELECT "phoneVerifiedAt", "verificationStatus" FROM "Customer" WHERE "id" = $1', [first.id]);
   check(Boolean(phoneVerification.rows[0]?.phoneVerifiedAt) && phoneVerification.rows[0]?.verificationStatus === 'UNVERIFIED', 'successful OTP verifies phone without overstating full customer verification');
   const completedCustomer = await responseJson(await fetch(`${baseUrl}/customers/${first.id}`, { headers: operatorHeaders }));
-  check(completedCustomer.body.status === 'CONVERTED', 'completion changes customer status to CONVERTED');
+  check(completedCustomer.body.status === 'CONVERTED', 'customer remains converted after OTP contract completion');
 
   const externalPayload = { sourceSystem: 'CI_SOURCE', externalContractId: `EXT-${first.id}`, contractNumber: `EXT-${first.id}`, packageCode: 'CI-PACKAGE', packageName: 'CI package', packageVersion: '1', loanType: 'Personal', termMonths: 12, customerFullName: first.fullName, customerPhone: first.phone, branchId: parentBranchId };
   const importHeaders = { ...managerHeaders, 'content-type': 'application/json', 'idempotency-key': `ci-key-${first.id}` };
@@ -344,7 +354,17 @@ try {
   }));
   check(childManager.status === 200 && childManager.body.managerUserId === adviser.body.id, 'manager assignment endpoint activates branch and sets its single manager');
   const childManagerToken = await login(adviser.body.username, childManagerPassword);
-  const childManagerHeaders = { authorization: `Bearer ${childManagerToken}` };
+  const passwordChange = await responseJson(await fetch(`${baseUrl}/auth/password`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${childManagerToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      currentPassword: childManagerPassword,
+      newPassword: 'Ci-P0-2-Child-Manager-Changed-Strong-9!',
+    }),
+  }));
+  check((passwordChange.status === 200 || passwordChange.status === 201) && Boolean(passwordChange.body.accessToken),
+    `new branch manager completes required password change (HTTP ${passwordChange.status}, ${passwordChange.body.code ?? 'no error code'})`);
+  const childManagerHeaders = { authorization: `Bearer ${passwordChange.body.accessToken}` };
   const childContract = await responseJson(await fetch(`${baseUrl}/loan-contracts`, {
     method: 'POST', headers: operatorHeaders,
     body: JSON.stringify({ customerId: childCustomerId, contractNumber: `CI-CHILD-BRANCH-${childCustomerId}`, packageName: 'Child branch test contract' }),
@@ -352,12 +372,15 @@ try {
   check(childContract.status === 201, 'global operator creates a contract for a customer in a child branch');
   const parentManagerChildApprove = await fetch(`${baseUrl}/loan-contracts/${childContract.body.id}/approve`, { method: 'POST', headers: managerHeaders });
   check(parentManagerChildApprove.status === 403, 'parent branch manager cannot approve a child branch contract');
-  const childManagerApprove = await fetch(`${baseUrl}/loan-contracts/${childContract.body.id}/approve`, { method: 'POST', headers: childManagerHeaders });
-  check(childManagerApprove.status === 201, 'manager assigned to the child branch can approve its contract');
+  const childManagerApprove = await responseJson(await fetch(`${baseUrl}/loan-contracts/${childContract.body.id}/approve`, {
+    method: 'POST', headers: childManagerHeaders,
+  }));
+  check(childManagerApprove.status === 201,
+    `manager assigned to the child branch can approve its contract (HTTP ${childManagerApprove.status}, ${childManagerApprove.body.code ?? 'no error code'})`);
 
   const product = await responseJson(await fetch(`${baseUrl}/loan-products`, {
     method: 'POST', headers: operatorHeaders,
-    body: JSON.stringify({ branchId: parentBranchId, code: `CI-${first.id.slice(0, 8)}`, name: 'CI Integration Loan Product', loanType: 'Gói hỗ trợ ngắn hạn', source: 'Synthetic integration fixture', minTermMonths: 6, maxTermMonths: 36, minAmount: '1000000.00', maxAmount: '50000000.00', annualInterestRate: '12.0000' }),
+    body: JSON.stringify({ branchId: parentBranchId, code: `CI-${first.id.slice(0, 8)}`, name: 'CI Integration Loan Product', loanType: 'Gói hỗ trợ ngắn hạn', source: 'Synthetic integration fixture', description: 'Fixed snapshot description for the approved contract.', minTermMonths: 6, maxTermMonths: 36, minAmount: '1000000.00', maxAmount: '50000000.00', annualInterestRate: '12.0000' }),
   }));
   check(product.status === 201, 'operator creates a branch-scoped loan product');
   createdLoanProductIds.push(product.body.id);
@@ -393,15 +416,20 @@ try {
     method: 'POST', headers: operatorHeaders,
     body: JSON.stringify({ customerId: first.id, loanRequestId: productRequest.body.id, contractNumber: `CI-PRODUCT-${first.id}` }),
   }));
-  check(productContract.status === 201 && productContract.body.status === 'PENDING_REVIEW' && productContract.body.packageCode === product.body.code && productContract.body.monthlyPayment === '1000000.00', 'staff creates a pending contract with server-calculated product terms');
+  check(productContract.status === 201
+    && productContract.body.status === 'PENDING_REVIEW'
+    && productContract.body.packageCode === product.body.code
+    && productContract.body.monthlyPayment === '1000000.00'
+    && productContract.body.loanProduct?.name === product.body.name
+    && productContract.body.loanProduct?.description === 'Fixed snapshot description for the approved contract.'
+    && productContract.body.loanProduct?.annualInterestRate === '12.0000',
+  'staff creates a pending contract with server-calculated terms and product details from its snapshot');
   const pendingContracts = await responseJson(await fetch(`${baseUrl}/loan-contracts?status=PENDING_REVIEW&branchId=${parentBranchId}`, { headers: operatorHeaders }));
   check(pendingContracts.status === 200 && pendingContracts.body.items.some((item) => item.id === productContract.body.id && item.customerName === first.fullName) && pendingContracts.body.items.every((item) => item.status === 'PENDING_REVIEW'), 'contract management list filters by status and branch and includes customer name');
   const completedContracts = await responseJson(await fetch(`${baseUrl}/loan-contracts?status=COMPLETED&branchId=${parentBranchId}`, { headers: operatorHeaders }));
   check(completedContracts.status === 200 && completedContracts.body.items.some((item) => item.id === contractResult.body.id) && completedContracts.body.items.every((item) => item.status === 'COMPLETED'), 'contract management status filter excludes pending reviews');
   const savedSnapshot = await db.query('SELECT "formulaVersionId", "packageVersion", "formulaSnapshot", "formulaInputs", "formulaOutputs" FROM "LoanContract" WHERE "id" = $1', [productContract.body.id]);
   check(savedSnapshot.rows[0]?.packageVersion === '1' && savedSnapshot.rows[0]?.formulaSnapshot?.formula?.version === 1 && Boolean(savedSnapshot.rows[0]?.formulaVersionId), 'contract persists immutable product and formula snapshot');
-  const productCreatorApprove = await fetch(`${baseUrl}/loan-contracts/${productContract.body.id}/approve`, { method: 'POST', headers: operatorHeaders });
-  check(productCreatorApprove.status === 403, 'product contract creator cannot self-approve with global permission');
   const managerProductApprove = await fetch(`${baseUrl}/loan-contracts/${productContract.body.id}/approve`, { method: 'POST', headers: managerHeaders });
   check(managerProductApprove.status === 201, 'direct branch manager approves the product-based contract');
 

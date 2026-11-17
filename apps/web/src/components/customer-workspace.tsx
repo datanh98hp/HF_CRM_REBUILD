@@ -51,7 +51,21 @@ type Contract = {
   loanType: string | null;
   termMonths: number | null;
   loanAmount: string | null;
+  annualInterestRate: string | null;
+  interestAmount: string | null;
   monthlyPayment: string | null;
+  loanProduct: {
+    code: string | null;
+    name: string | null;
+    loanType: string | null;
+    source: string | null;
+    description: string | null;
+    minAmount: string | null;
+    maxAmount: string | null;
+    minTermMonths: number | null;
+    maxTermMonths: number | null;
+    annualInterestRate: string | null;
+  } | null;
   status: string;
   approvedAt: string | null;
   completedAt: string | null;
@@ -115,7 +129,7 @@ const statusLabels: Record<string, string> = {
   CONTACTED: 'Đã liên hệ',
   QUALIFIED: 'Đủ điều kiện',
   IN_PROGRESS: 'Đang xử lý',
-  CONVERTED: 'Đã chuyển đổi',
+  CONVERTED: 'Đã có khoản vay chuyển đổi',
   CLOSED: 'Đã đóng',
   OPEN: 'Đang mở',
   PENDING_REVIEW: 'Chờ duyệt',
@@ -882,7 +896,12 @@ export function CustomerWorkspace({
       setContracts((current) => current.map((item) => item.id === contractId
         ? { ...item, status: 'APPROVED', approvedAt: new Date().toISOString() }
         : item));
-      setNotice('Đã duyệt hợp đồng. Việc hoàn tất vẫn cần khách hàng xác nhận OTP.');
+      setSelected((current) => current ? { ...current, status: 'CONVERTED' } : current);
+      setCustomers((current) => current.map((customer) => customer.id === selected?.id
+        ? { ...customer, status: 'CONVERTED' }
+        : customer));
+      setStatusDraft('CONVERTED');
+      setNotice('Đã duyệt hợp đồng và chuyển trạng thái khách hàng sang “Đã có khoản vay chuyển đổi”. Việc hoàn tất vẫn cần khách hàng xác nhận OTP.');
     } catch (err) {
       setError(errorMessage(err, 'Không thể duyệt hợp đồng.'));
     } finally {
@@ -1104,7 +1123,12 @@ export function CustomerWorkspace({
                   <p className="text-sm font-medium text-slate-800" aria-live="polite">Đã chọn {bulkSelectedCustomers.size}/{MAX_BULK_ASSIGNMENT_CUSTOMERS} khách hàng</p>
                   <label className="grid min-w-0 gap-1 text-sm font-medium text-slate-800">
                     Nhân viên chăm sóc
-                    <Select value={bulkAdviserId} onValueChange={(value) => { if (typeof value === 'string') setBulkAdviserId(value); }}>
+                    <Select
+                      value={bulkAdviserId}
+                      itemToStringLabel={(value) => eligibleBulkAdvisers.find((adviser) => adviser.id === value)?.username
+                        ?? (value ? 'Nhân viên không khả dụng' : '')}
+                      onValueChange={(value) => { if (typeof value === 'string') setBulkAdviserId(value); }}
+                    >
                       <SelectTrigger className="w-full bg-white" aria-label="Chọn nhân viên chăm sóc">
                         <SelectValue placeholder="Chọn một nhân viên" />
                       </SelectTrigger>
@@ -1459,6 +1483,16 @@ export function CustomerWorkspace({
                             <div className="min-w-0">
                               <p className="break-all font-medium text-slate-900">{item.contractNumber}</p>
                               <p className="mt-1 text-slate-600">{item.packageName}{item.termMonths ? ` · ${item.termMonths} tháng` : ''}</p>
+                              {item.loanProduct && <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md border border-slate-200 bg-white p-2 text-xs">
+                                <div><dt className="text-slate-500">Mã gói</dt><dd className="mt-0.5 break-words font-medium text-slate-800">{item.loanProduct.code ?? item.packageCode ?? '—'}</dd></div>
+                                <div><dt className="text-slate-500">Loại gói</dt><dd className="mt-0.5 break-words font-medium text-slate-800">{item.loanProduct.loanType ?? item.loanType ?? '—'}</dd></div>
+                                <div><dt className="text-slate-500">Số tiền vay</dt><dd className="mt-0.5 font-medium text-slate-800">{item.loanAmount ? `${formatMoney(item.loanAmount)} ₫` : '—'}</dd></div>
+                                <div><dt className="text-slate-500">Lãi suất năm</dt><dd className="mt-0.5 font-medium text-slate-800">{item.loanProduct.annualInterestRate ? `${Number(item.loanProduct.annualInterestRate).toLocaleString('vi-VN')}%` : '—'}</dd></div>
+                                <div><dt className="text-slate-500">Giới hạn số tiền</dt><dd className="mt-0.5 break-words font-medium text-slate-800">{formatLoanAmountBounds(item.loanProduct.minAmount, item.loanProduct.maxAmount)}</dd></div>
+                                <div><dt className="text-slate-500">Kỳ hạn gói</dt><dd className="mt-0.5 font-medium text-slate-800">{item.loanProduct.minTermMonths ?? '—'}–{item.loanProduct.maxTermMonths ?? '—'} tháng</dd></div>
+                                {item.loanProduct.source && <div className="col-span-2"><dt className="text-slate-500">Nguồn sản phẩm</dt><dd className="mt-0.5 break-words font-medium text-slate-800">{item.loanProduct.source}</dd></div>}
+                                {item.loanProduct.description && <div className="col-span-2"><dt className="text-slate-500">Mô tả gói</dt><dd className="mt-0.5 whitespace-pre-wrap break-words text-slate-700">{item.loanProduct.description}</dd></div>}
+                              </dl>}
                               {item.monthlyPayment && <p className="mt-1 tabular-nums text-slate-600">Dự kiến {formatMoney(item.monthlyPayment)} ₫/tháng</p>}
                             </div>
                             <span className="h-fit rounded-full bg-white px-2 py-1 text-xs text-slate-700">{label(item.status)}</span>
@@ -1482,7 +1516,7 @@ export function CustomerWorkspace({
                         </li>)}
                       </ul>
                       : <p className="mt-2 text-sm text-slate-600">Chưa có hợp đồng trong hồ sơ này.</p>}
-                    <p className="mt-3 text-xs text-slate-500">Yêu cầu vay và hợp đồng là hai hồ sơ riêng; chỉ hợp đồng hoàn tất mới cho phép chuyển khách hàng sang “Đã chuyển đổi”.</p>
+                    <p className="mt-3 text-xs text-slate-500">Khi có ít nhất một hợp đồng được duyệt, khách hàng chuyển sang “Đã có khoản vay chuyển đổi”. Việc hoàn tất hợp đồng vẫn cần khách hàng xác nhận OTP.</p>
                   </section>
                 </>}
             </>

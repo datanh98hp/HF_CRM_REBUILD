@@ -1,6 +1,6 @@
 # P0-2 — Khách hàng, yêu cầu vay, hợp đồng và phân công
 
-**Trạng thái cập nhật 2026-11-16:** Baseline P0-2 vẫn hoạt động. Phần mở rộng hiện có API và UI staff cho phân công hàng loạt, catalog/formula sản phẩm, yêu cầu vay theo sản phẩm, tạo hợp đồng với tính toán server-side và snapshot, cùng maker-checker MANAGE theo chi nhánh. Prisma generate, typecheck, build, 66 unit tests và integration PostgreSQL trên project/volume validation riêng đều đạt. Migration đã chạy trên development và test; production không thay đổi. P0-2 chưa nghiệm thu: chưa probe UI staff trên browser/375px, chưa kiểm tra migration nâng cấp trên DB legacy có dữ liệu, chưa có quy tắc tài chính thực được Compliance phê duyệt; CUSTOMER PWA, OTP provider thật và upload thumbnail an toàn tiếp tục hoãn.
+**Trạng thái cập nhật 2026-11-17:** Baseline P0-2 vẫn hoạt động. Phần mở rộng có API/UI staff cho phân công hàng loạt, catalog/formula sản phẩm, yêu cầu vay theo sản phẩm, tạo hợp đồng với tính toán server-side và snapshot, duyệt toàn cục cho ADMIN/OPERATOR (kể cả hợp đồng do mình tạo), maker-checker MANAGE theo chi nhánh, cùng tìm kiếm mã hợp đồng, page size tùy chỉnh, tên chi nhánh, tài liệu và lịch sử. Duyệt hợp đồng tự chuyển khách hàng sang `CONVERTED`; chi tiết hợp đồng hiển thị thông tin sản phẩm từ snapshot. API/web typecheck, build và 37 unit tests tập trung P0-2 đạt. API/PostgreSQL integration đã đạt trước đó; script đã cập nhật theo quyền duyệt mới nhưng chưa chạy lại. Browser `/loan-contracts` đã kiểm tra ở desktop và 375px trước lần chỉnh bố cục bộ lọc/page size này; cần probe lại giao diện mới. Full API unit suite lần gần nhất còn một test auth không liên quan fail do test kỳ vọng mật khẩu mới tối thiểu 12 ký tự trong khi DTO hiện cho phép từ 8 ký tự. Migration chưa chạy production. Còn mở: probe `/customers` và `/loan-products`, nâng cấp migration trên DB legacy có dữ liệu, grants thật theo chi nhánh và phê duyệt policy tài chính; CUSTOMER PWA, OTP provider thật và upload thumbnail an toàn tiếp tục hoãn.
 
 ## Tiến độ mở rộng mới nhất
 
@@ -18,17 +18,19 @@
 - Đã thêm bộ phân tích/đánh giá công thức an toàn trong `apps/api/src/customers/loan-formula.ts`; unit test xác nhận số học, giới hạn biến và từ chối cú pháp không an toàn.
 - Bulk assignment có route `POST /api/v1/customers/assignments/bulk`, dùng `customers.assign`, kiểm tra toàn bộ customer và adviser trước khi ghi, lưu assignment history/audit trong transaction; batch ngoài phạm vi bị từ chối toàn bộ.
 - Trang khách hàng có checkbox từng dòng/chọn cả trang, giữ lựa chọn khi phân trang, chọn một ADVISING đang hoạt động đủ phạm vi cho mọi khách đã chọn, nhập lý do và submit; giới hạn 100 khách/request đồng bộ với DTO.
-- API catalog/formula có kiểm soát scope, version công thức bất biến, trạng thái sản phẩm và endpoint metadata đầu vào không tiết lộ biểu thức. Request theo sản phẩm kiểm tra amount/term; contract tính lại ở server, lưu snapshot product/formula và chờ MANAGE duyệt; CUSTOMER không thể tạo contract, người tạo không thể tự duyệt.
+- API catalog/formula có kiểm soát scope, version công thức bất biến, trạng thái sản phẩm và endpoint metadata đầu vào không tiết lộ biểu thức. Request theo sản phẩm kiểm tra amount/term; contract tính lại ở server và lưu snapshot product/formula. ADMIN/OPERATOR có quyền duyệt toàn cục, kể cả hợp đồng do chính mình tạo; MANAGE chỉ duyệt tại chi nhánh được gán và không tự duyệt hợp đồng do mình tạo. CUSTOMER không thể tạo contract.
 - Staff UI có route `/loan-products`, product-aware request/contract forms trên `/customers` và màn hàng đợi riêng `/loan-contracts` theo bố cục bảng + panel chi tiết. Trang hợp đồng lọc trạng thái, phân trang và chỉ hiện duyệt/từ chối theo quyền; thumbnail chỉ là URL metadata, chưa có upload binary.
+- Màn hợp đồng hỗ trợ tìm kiếm mã không phân biệt hoa/thường, page size mặc định 20 (API nhận 5–100), hiển thị tên chi nhánh và phân quyền duyệt: ADMIN/OPERATOR có quyền toàn cục, kể cả hợp đồng do mình tạo; MANAGE chỉ duyệt chi nhánh được gán và không tự duyệt.
+- Tài liệu DOCX/PDF/PNG/JPG tối đa 25 MB được lưu tạm dưới `apps/api/src/Assets/contracts` bằng storage key ngẫu nhiên; tải xuống cần xác thực, xóa mềm, thay thế giữ phiên bản cũ, mọi thao tác tài liệu được ghi lịch sử. Đây chưa phải lưu trữ production: chưa có scanner/quarantine, backup hoặc storage dùng chung. Lịch sử hiện bao gồm chuyển trạng thái và tài liệu; chưa có endpoint sửa điều khoản tài chính để ghi lịch sử các chỉnh sửa đó.
 
 ### Kiểm tra mới nhất
 
-- `npm run db:generate`, `npm run typecheck`, `npm run build` và `npm test`: đạt; build sinh route `/loan-products` và `/customers`.
-- Unit tests: 10 suites/66 tests đạt.
-- API/PostgreSQL P0-2 integration đạt trên Compose project validation riêng, không publish host ports. Ngoài baseline, test xác nhận sản phẩm INACTIVE bị ẩn với CUSTOMER và không dùng được để nhập request, tính toán hoặc tạo contract; tạo công thức mới và nhiều request công thức đồng thời vẫn giữ version liên tiếp; snapshot contract hiện hữu không đổi sau cập nhật công thức/ngừng bán. Bulk assignment thành công cho 2 khách và batch ngoài scope bị từ chối không ghi một phần.
-- Test project riêng đã dừng bằng `down` không `-v`; volume validation được giữ. Development stack không bị recreate trong lượt validation cuối; không có migration production.
+- `npm run db:generate`, `npm run typecheck` và `npm run build`: đạt; build sinh route `/loan-products` và `/customers`.
+- Unit tests tập trung P0-2: 3 suites/31 tests đạt. Full API suite: 9/10 suites, 78/79 tests đạt; test `ChangePasswordDto` không khớp giữa kỳ vọng 12 ký tự trong spec và giới hạn 8 ký tự trong DTO, ngoài phạm vi P0-2.
+- API/PostgreSQL P0-2 integration đạt trên Compose test stack riêng trước thay đổi quyền duyệt hiện tại. Script đã cập nhật để xác nhận Admin/Operator duyệt hợp đồng do mình tạo; cần chạy lại để xác minh chính sách mới cùng Manager theo chi nhánh, tìm kiếm mã/page size, tài liệu/lịch sử, snapshot và bulk assignment atomic.
+- Browser `/loan-contracts` đã kiểm tra khi đăng nhập ở 1440px và 375px; không tràn ngang toàn trang. Tìm kiếm, chọn 10 hồ sơ/trang, tên chi nhánh, upload/download/thay thế, dialog xác nhận xóa mềm và lịch sử đều hoạt động. Bảng cuộn ngang trong vùng riêng trên viewport hẹp.
+- Compose test config resolve được với giá trị storage mặc định; integration/browser test dùng thư mục local và fixture tài liệu của lượt này đã được dọn. Không áp migration lên production.
 - `git diff --check` đạt; Git chỉ cảnh báo chuẩn hóa LF/CRLF cho hai file TypeScript trên Windows.
-- Chưa có kiểm tra trực quan bằng phiên staff/browser hoặc probe 375px cho các màn P0-2 mới.
 
 ### Còn lại
 
@@ -36,8 +38,8 @@
 2. Kiểm tra migration upgrade trên test DB có customer/contract legacy; hiện integration chạy trên DB đã migrate đầy đủ, chưa chứng minh giữ nguyên dữ liệu khi nâng cấp.
 3. Compliance/chủ tín dụng phê duyệt nguồn dữ liệu, rate/fee/amortization/rounding và allowlist trước khi dùng kết quả tài chính như thông tin chính thức.
 4. Chốt manager/grants thật cho từng chi nhánh; giữ OTP provider thật và CUSTOMER PWA hoãn theo quyết định hiện tại.
-5. Probe `/customers`, `/loan-products` và `/loan-contracts` bằng phiên staff trên desktop/375px; màn mới hiện mới được build, chưa có kiểm tra trực quan bằng tài khoản.
-6. Upload thumbnail, scanner/quarantine, retention/legal hold và download an toàn vẫn chờ cổng P0-4; không bật upload bằng URL metadata hiện có.
+5. Upload thumbnail, scanner/quarantine, retention/legal hold và lưu trữ dùng chung an toàn vẫn chờ cổng P0-4; không bật upload thumbnail bằng URL metadata hiện có.
+6. Nếu cần cho phép sửa số tiền/kỳ hạn/điều khoản hợp đồng, cần chốt danh sách trường và quyền trước khi bổ sung endpoint cập nhật cùng lịch sử tương ứng.
 
 ## Mục tiêu
 
@@ -51,12 +53,12 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 - Danh mục sản phẩm gói vay có loại gói, nguồn, tên, mã viết tắt tùy chọn, kỳ hạn tối thiểu/tối đa, lãi suất, mô tả và liên kết nguồn. Loại gói chọn từ danh mục cố định; giới hạn số tiền tối thiểu/tối đa độc lập và không bắt buộc.
 - Yêu cầu vay do CUSTOMER gửi với sản phẩm, số tiền mong muốn, kỳ hạn và ghi chú; ADVISING có thể ghi nhận thay khách. Yêu cầu chỉ phục vụ intake/tracking, không tự tạo hợp đồng hoặc hàm ý đã được duyệt.
 - Nhân viên được phân quyền tạo hợp đồng từ customer/yêu cầu vay và sản phẩm; lưu số tiền vay, kỳ hạn, khoản trả hàng tháng và snapshot điều kiện sản phẩm. Hợp đồng do nhân viên tạo phải qua MANAGE duyệt theo chi nhánh.
-- `LoanContract` là record riêng; `CONVERTED` chỉ được đặt khi có hợp đồng `COMPLETED`, và hợp đồng mới chỉ hoàn tất sau OTP CUSTOMER.
+- `LoanContract` là record riêng; khi ít nhất một hợp đồng được duyệt, khách hàng tự chuyển sang `CONVERTED` và lưu lịch sử/audit cùng transaction. Hợp đồng chỉ hoàn tất sau OTP CUSTOMER; việc hoàn tất không tạo thêm chuyển trạng thái khách hàng nếu trạng thái đã là `CONVERTED`.
 - Người có quyền phân công hàng loạt nhiều customer cho một ADVISING trong mỗi lần thao tác và lưu assignment history; mỗi customer vẫn chỉ có một adviser chính tại một thời điểm.
 - CUSTOMER chỉ đọc dữ liệu của chính mình; chỉ xem sản phẩm được công bố và thông tin hợp đồng/yêu cầu theo allowlist và scope.
 - Mỗi chi nhánh có đúng một MANAGE chịu trách nhiệm chi nhánh; được quản lý các ADVISING thuộc quyền, phân công khách hàng, duyệt/chốt và xử lý trạng thái hợp đồng.
 - CUSTOMER phải xác nhận OTP khi xác nhận hoàn thành hợp đồng vay.
-- Hợp đồng nhận từ nguồn ngoài phải lưu thông tin nguồn, chạy idempotent, tìm/tạo customer trước khi gán hợp đồng; danh sách phân trang tối đa 20 phần tử/trang.
+- Hợp đồng nhận từ nguồn ngoài phải lưu thông tin nguồn, chạy idempotent, tìm/tạo customer trước khi gán hợp đồng; danh sách mặc định 20 phần tử/trang và hỗ trợ `pageSize` 5–100.
 
 ## Kế hoạch mở rộng
 
@@ -86,7 +88,7 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 - API nhân viên quản lý catalog theo quyền, API đọc sản phẩm `ACTIVE` và CUSTOMER allowlist đã có; pagination catalog và policy approval cho môi trường thật cần tiếp tục xác minh.
 - API CUSTOMER tạo yêu cầu của chính mình theo product/amount/term/notes; request không tạo contract. CUSTOMER không thể tạo `LoanContract`.
 - API nhân viên tạo contract theo product/request, validate điều kiện và tính ở backend, lưu snapshot rồi chuyển `PENDING_REVIEW` đã có; cần tăng coverage race/version và dữ liệu legacy.
-- MANAGE duyệt theo branch, maker-checker và giữ luồng OTP completion đã có; SMS provider thật/CUSTOMER auth vẫn deferred.
+- ADMIN/OPERATOR duyệt toàn cục; MANAGE duyệt theo branch và không tự duyệt hợp đồng do mình tạo. Luồng OTP completion giữ nguyên; SMS provider thật/CUSTOMER auth vẫn deferred.
 - Bổ sung API phân công hàng loạt theo quy tắc ánh xạ đã chốt; phương án cơ sở là chọn nhiều customer và một ADVISING đang hoạt động trong cùng phạm vi chi nhánh. Kiểm tra toàn bộ đối tượng trước khi ghi, cập nhật assignment hiện tại, lưu lịch sử từng customer và audit tác nhân/lý do. Nếu có customer/nhân viên ngoài scope hoặc không hợp lệ, từ chối toàn bộ request thay vì phân công một phần.
 - Giữ nguyên API tiếp nhận hợp đồng ngoài và idempotency; sản phẩm liên kết là tùy chọn nếu nguồn ngoài chưa có catalog match, snapshot nguồn vẫn là căn cứ lịch sử.
 
@@ -96,11 +98,11 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 - Màn `/loan-products` staff đã có catalog/formula; cần hoàn tất probe các state loading/empty/error/responsive và xác nhận phân quyền bằng role thực tế.
 - Màn `/loan-contracts` staff đã có bảng + panel chi tiết, status filter, cursor pagination và duyệt/từ chối; cần probe UI và xác nhận permission gating bằng role thật.
 - CUSTOMER product/request screen và CUSTOMER PWA chưa triển khai; customer API scope đã có nhưng UI vẫn deferred.
-- Màn staff `/customers` đã có product-backed request/contract preview, tính lại khi bấm nút và đưa hợp đồng vào queue duyệt; cần browser probe để nghiệm thu hành vi.
+- Màn staff `/customers` đã có product-backed request/contract preview, tính lại khi bấm nút, chi tiết gói vay theo snapshot và thao tác duyệt trong chi tiết hợp đồng; cần browser probe để nghiệm thu hành vi.
 
 ### Giai đoạn 4 — Kiểm thử và phát hành
 
-- Unit tests cho min/max tiền/kỳ hạn, sản phẩm không hoạt động, phiên bản/snapshot, không tính khoản trả khi chưa cấu hình, CUSTOMER không thể tạo hợp đồng và maker-checker.
+- Unit tests cho min/max tiền/kỳ hạn, sản phẩm không hoạt động, phiên bản/snapshot, không tính khoản trả khi chưa cấu hình, CUSTOMER không thể tạo hợp đồng, ADMIN/OPERATOR toàn cục và maker-checker của MANAGE; hiện 4 suite tập trung P0-2/37 tests đạt.
 - Integration PostgreSQL đã xác nhận bulk assignment all-or-nothing, branch scope, product bounds, request không tự sinh contract, snapshot, maker-checker và contract OTP baseline.
 - Chưa kiểm tra migration upgrade trên DB legacy có customer/contract hiện hữu; integration hiện chạy trên fresh validation database.
 - Kiểm tra API allowlist, quyền CUSTOMER chỉ đọc sản phẩm công khai/hồ sơ của mình, audit đầy đủ, pagination, seed dev/test và idempotency của seed.
@@ -109,7 +111,7 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 ## Tiêu chí hoàn tất
 
 - Backend kiểm tra quyền/scope cho list, search, detail, update, assignment và contract lookup.
-- Mọi chuyển customer/contract state ghi tác nhân, from/to, timestamp và reason; trạng thái `CONVERTED` chỉ sau khi contract đã `COMPLETED`.
+- Mọi chuyển customer/contract state ghi tác nhân, from/to, timestamp và reason; duyệt một hợp đồng chuyển khách hàng sang `CONVERTED`, còn hoàn tất hợp đồng vẫn cần OTP CUSTOMER.
 - Loan request không tự tạo hợp đồng hoặc quyết định eligibility/approval.
 - Cập nhật assignment giữ lịch sử và chịu kiểm tra branch scope.
 - Duplicate candidate không tự gộp; thao tác xác nhận/giải quyết được audit.
@@ -125,7 +127,7 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 - Customer bắt buộc có số điện thoại Việt Nam dạng chuẩn 10 chữ số: bắt đầu `0`, chữ số thứ hai `1–9`; bỏ dấu phân cách, quy đổi `+84`/`0084`/`84` thành dạng nội địa. Email/ngày sinh tùy chọn. Chuẩn hóa tên bỏ dấu, email lowercase; dò trùng theo phone/email và tên + ngày sinh.
 - Nhân viên xem dữ liệu theo grant và phạm vi `OWN`, `ASSIGNED`, `BRANCH` (bao gồm nhánh con), `ALL`. Danh sách quét tuần tự các trang dữ liệu để không cắt cụt kết quả do lọc scope sau truy vấn.
 - Một quyết định rà trùng được hiển thị từ cả hai hồ sơ; cập nhật thông tin không xóa người/thời điểm/lý do đã xác minh. Candidate không còn khớp bị ẩn khỏi hàng đợi hiện tại nhưng vẫn lưu làm lịch sử. Không tự gộp hồ sơ.
-- Mỗi đổi trạng thái có lịch sử và audit; `CONVERTED` chỉ hợp lệ khi đã liên kết hợp đồng. Phân công ghi lịch sử và PostgreSQL chặn nhiều tư vấn viên chính còn hiệu lực trên cùng khách hàng.
+- Mỗi đổi trạng thái có lịch sử và audit; `CONVERTED` chỉ hợp lệ khi có hợp đồng được duyệt, đang chờ khách xác nhận hoặc đã hoàn tất. Phân công ghi lịch sử và PostgreSQL chặn nhiều tư vấn viên chính còn hiệu lực trên cùng khách hàng.
 - CUSTOMER chỉ được đọc hồ sơ của mình, gửi yêu cầu vay cho chính mình và xem contract allowlist. JSON customer không chứa nguồn nhập, trạng thái xác minh nội bộ, mã chi nhánh hay người phụ trách; endpoint lịch sử phân công chỉ dành cho nhân viên.
 - Quản lý chi nhánh được gán qua endpoint riêng; role `MANAGE` không thể cấp qua grant thường. Chi nhánh mới ở `INACTIVE`, chỉ kích hoạt khi có quản lý; PostgreSQL chặn nhánh `ACTIVE` không có quản lý. Quản lý được đọc cây con nhưng quyền ghi, phân công, cấp nhân viên, import và duyệt chỉ áp dụng tại nhánh được gán.
 - Hợp đồng đi qua `PENDING_REVIEW -> APPROVED -> AWAITING_CUSTOMER_CONFIRMATION -> COMPLETED` (hoặc `REJECTED/CANCELLED`). OTP ràng buộc với hợp đồng, phiên bản và nội dung, hết hạn sau 5 phút, tối đa 5 lần thử, cooldown 60 giây và tối đa 3 challenge/giờ. Challenge lưu HMAC hash và chỉ dùng một lần; xác nhận thành công cũng đánh dấu số điện thoại đã được xác minh.
@@ -160,7 +162,7 @@ Ranh giới trên đã được chốt và kiểm thử: quản lý cha không t
 2. Chỉ link customer khi phone và tên khớp duy nhất, ngày sinh không mâu thuẫn; nếu mới/mơ hồ, tạo customer `UNVERIFIED` để rà trùng trước khi duyệt.
 3. Unique `(sourceSystem, externalContractId)` và hash `Idempotency-Key`; lặp cùng payload trả bản ghi cũ, payload khác trả 409. Resolve customer, tạo contract, history và audit trong transaction.
 4. Hợp đồng theo `PENDING_REVIEW -> APPROVED -> AWAITING_CUSTOMER_CONFIRMATION -> COMPLETED` hoặc `REJECTED/CANCELLED`; ghi trạng thái và audit.
-5. Cursor pagination, page size tối đa 20, theo thứ tự createdAt/ID ổn định.
+5. Cursor pagination theo thứ tự createdAt/ID ổn định; page size mặc định 20, có thể chọn 5–100.
 
 ### Schema và allowlist áp dụng
 

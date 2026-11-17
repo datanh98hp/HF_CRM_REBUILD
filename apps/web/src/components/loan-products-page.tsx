@@ -7,6 +7,7 @@ import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogClose, DialogOverlay, DialogPopup, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { request } from '@/lib/crm-api';
@@ -179,9 +180,23 @@ function LoanProductsWorkspace({
   const [formulaHistoryError, setFormulaHistoryError] = useState('');
   const [formulaHistoryReloadKey, setFormulaHistoryReloadKey] = useState(0);
   const [applyingFormulaVersion, setApplyingFormulaVersion] = useState<number | null>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const formulaHistoryRequestId = useRef(0);
   const selectedProduct = useMemo(() => products.find((product) => product.id === selectedId) ?? null, [products, selectedId]);
   const activeBranches = branches.filter((branch) => branch.status === 'ACTIVE');
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1279px)');
+    const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
+    updateLayout();
+    mediaQuery.addEventListener('change', updateLayout);
+    return () => mediaQuery.removeEventListener('change', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileLayout) setMobileDetailOpen(false);
+  }, [isMobileLayout]);
 
   async function loadProducts() {
     setLoading(true);
@@ -423,7 +438,7 @@ function LoanProductsWorkspace({
           <h1 className="text-xl font-semibold text-slate-950">Sản phẩm vay</h1>
           <p className="mt-1 text-sm text-slate-600">Điều kiện, kỳ hạn và phiên bản công thức của từng gói.</p>
         </div>
-        {canManage && <Button variant="default" onClick={startCreate}><Plus aria-hidden="true" className="size-4" />Tạo sản phẩm</Button>}
+        {canManage && <Button variant="default" onClick={() => { startCreate(); if (isMobileLayout) setMobileDetailOpen(true); }}><Plus aria-hidden="true" className="size-4" />Tạo sản phẩm</Button>}
       </header>
 
       {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><p className="font-medium">Không thể hoàn tất thao tác</p><p className="mt-1">{error}</p></div>}
@@ -441,7 +456,7 @@ function LoanProductsWorkspace({
             <ul className="divide-y divide-slate-100">
               {products.map((product) => (
                 <li key={product.id}>
-                  <button type="button" aria-current={selectedId === product.id ? 'true' : undefined} onClick={() => { setSelectedId(product.id); setEditorMode(null); }} className={`flex w-full min-w-0 items-start justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
+                  <button type="button" aria-current={selectedId === product.id ? 'true' : undefined} onClick={() => { setSelectedId(product.id); setEditorMode(null); if (isMobileLayout) setMobileDetailOpen(true); }} className={`flex w-full min-w-0 items-start justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-slate-950">{product.name}</span>
                       <span className="mt-1 block text-xs text-slate-500">{product.code} · {product.loanType}</span>
@@ -455,7 +470,31 @@ function LoanProductsWorkspace({
           )}
         </section>
 
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white" aria-labelledby="product-details-heading">
+        <Dialog
+          open={isMobileLayout ? mobileDetailOpen : true}
+          modal={isMobileLayout}
+          disablePointerDismissal
+          onOpenChange={(open, eventDetails) => {
+            if (open || eventDetails.reason === 'close-press') setMobileDetailOpen(open);
+          }}
+        >
+          <DialogOverlay className="hidden max-xl:block" />
+          <DialogPopup
+            role={isMobileLayout ? 'dialog' : 'region'}
+            aria-modal={isMobileLayout || undefined}
+            aria-labelledby={isMobileLayout ? 'mobile-product-detail-title' : 'product-details-heading'}
+            initialFocus={isMobileLayout ? true : false}
+            className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl"
+          >
+            <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
+              <DialogTitle id="mobile-product-detail-title" className="text-sm font-semibold">Chi tiết sản phẩm vay</DialogTitle>
+              <DialogClose
+                render={<Button type="button" variant="outline" className="h-9 px-3" />}
+              >
+                Đóng
+              </DialogClose>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain max-xl:pb-4">
           {editorMode ? (
             <form onSubmit={saveProduct} className="p-4 sm:p-5">
               <div className="mb-4 flex items-start justify-between gap-3">
@@ -621,7 +660,9 @@ function LoanProductsWorkspace({
               {selectedProduct.status === 'DRAFT' && selectedProduct.currentFormulaVersion === 0 && <p role="note" className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 sm:mx-5"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />Cần lưu công thức đã được duyệt trước khi công bố sản phẩm.</p>}
             </div>
           ) : loading ? <p className="py-8 text-center text-sm text-slate-600">Đang tải chi tiết sản phẩm…</p> : <p className="px-4 py-6 text-sm text-slate-600">Chọn một sản phẩm để xem điều kiện và công thức.</p>}
-        </section>
+            </div>
+          </DialogPopup>
+        </Dialog>
       </div>
     </main>
   );

@@ -165,6 +165,52 @@ function formatLoanAmountBounds(minAmount: string | null, maxAmount: string | nu
   return 'Không giới hạn theo số tiền';
 }
 
+function compareLoanAmounts(left: string, right: string) {
+  const [leftWhole, leftFraction = ''] = left.split('.');
+  const [rightWhole, rightFraction = ''] = right.split('.');
+  const normalizedLeftWhole = leftWhole.replace(/^0+(?=\d)/, '');
+  const normalizedRightWhole = rightWhole.replace(/^0+(?=\d)/, '');
+  if (normalizedLeftWhole.length !== normalizedRightWhole.length) {
+    return normalizedLeftWhole.length < normalizedRightWhole.length ? -1 : 1;
+  }
+  if (normalizedLeftWhole !== normalizedRightWhole) {
+    return normalizedLeftWhole < normalizedRightWhole ? -1 : 1;
+  }
+  const normalizedLeftFraction = leftFraction.padEnd(2, '0');
+  const normalizedRightFraction = rightFraction.padEnd(2, '0');
+  if (normalizedLeftFraction === normalizedRightFraction) return 0;
+  return normalizedLeftFraction < normalizedRightFraction ? -1 : 1;
+}
+
+function loanAmountError(value: string, product: LoanProductOption | null) {
+  if (!product || !/^\d+(?:\.\d{1,2})?$/.test(value)) return '';
+  if (product.minAmount && compareLoanAmounts(value, product.minAmount) < 0) {
+    return `Số tiền thấp hơn mức tối thiểu ${formatMoney(product.minAmount)} ₫.`;
+  }
+  if (product.maxAmount && compareLoanAmounts(value, product.maxAmount) > 0) {
+    return `Số tiền vượt mức tối đa ${formatMoney(product.maxAmount)} ₫.`;
+  }
+  return '';
+}
+
+function loanTermError(value: string, product: LoanProductOption | null) {
+  if (!product || !value) return '';
+  const months = Number(value);
+  if (!Number.isInteger(months)) return 'Kỳ hạn phải là số tháng nguyên.';
+  if (months < product.minTermMonths) return `Kỳ hạn tối thiểu là ${product.minTermMonths} tháng.`;
+  if (months > product.maxTermMonths) return `Kỳ hạn tối đa là ${product.maxTermMonths} tháng.`;
+  return '';
+}
+
+function formulaInputError(value: string, variable: FormulaInputDefinition) {
+  if (!value) return '';
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return 'Giá trị phải là một số hợp lệ.';
+  if (numericValue < Number(variable.min)) return `Giá trị tối thiểu là ${variable.min}.`;
+  if (numericValue > Number(variable.max)) return `Giá trị tối đa là ${variable.max}.`;
+  return '';
+}
+
 function date(value: string | null) {
   return value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(new Date(value)) : '—';
 }
@@ -432,6 +478,15 @@ export function CustomerWorkspace({
   const activeLoanProducts = useMemo(() => loanProducts.filter((product) => product.status === 'ACTIVE'), [loanProducts]);
   const selectedRequestProduct = activeLoanProducts.find((product) => product.id === requestProductId) ?? null;
   const contractProduct = activeLoanProducts.find((product) => product.id === contractProductId) ?? null;
+  const requestAmountError = loanAmountError(requestAmount, selectedRequestProduct);
+  const requestTermError = loanTermError(requestTermMonths, selectedRequestProduct);
+  const contractAmountError = loanAmountError(contractLoanAmount, contractProduct);
+  const contractTermError = loanTermError(termMonths, contractProduct);
+  const formulaInputErrors = Object.fromEntries(formulaVariables.map((variable) => [
+    variable.key,
+    formulaInputError(formulaInputs[variable.key] ?? '', variable),
+  ]));
+  const hasFormulaInputErrors = Object.values(formulaInputErrors).some(Boolean);
   const contractCalculationKey = JSON.stringify([contractProductId, contractLoanRequestId, contractLoanAmount, termMonths, formulaInputs]);
   const currentLoanCalculation = loanCalculation?.inputKey === contractCalculationKey ? loanCalculation.result : null;
   const adviserBranchScope = useMemo(() => {
@@ -843,6 +898,7 @@ export function CustomerWorkspace({
   async function createRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
+    if (requestAmountError || requestTermError) return;
     setError('');
     setNotice('');
     setSaving(true);
@@ -934,6 +990,7 @@ export function CustomerWorkspace({
   async function createContract(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
+    if (contractAmountError || contractTermError || (contractProduct && hasFormulaInputErrors)) return;
     setError('');
     setNotice('');
     setSaving(true);
@@ -1390,12 +1447,14 @@ export function CustomerWorkspace({
                       </label>}
                       {selectedRequestProduct ? <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <label className="grid gap-1 text-xs font-medium text-slate-700">Số tiền mong muốn (₫)
-                          <input value={requestAmount} onChange={(event) => setRequestAmount(event.target.value)} type="number" min={selectedRequestProduct.minAmount ?? undefined} max={selectedRequestProduct.maxAmount ?? undefined} step="0.01" required className={inputClass} />
-                          <span className="font-normal">{formatLoanAmountBounds(selectedRequestProduct.minAmount, selectedRequestProduct.maxAmount)}</span>
+                          <input value={requestAmount} onChange={(event) => setRequestAmount(event.target.value)} type="number" min={selectedRequestProduct.minAmount ?? undefined} max={selectedRequestProduct.maxAmount ?? undefined} step="0.01" required aria-invalid={Boolean(requestAmountError)} aria-describedby="request-amount-bounds request-amount-error" className={inputClass} />
+                          <span id="request-amount-bounds" className="font-normal">{formatLoanAmountBounds(selectedRequestProduct.minAmount, selectedRequestProduct.maxAmount)}</span>
+                          <span id="request-amount-error" role="alert" className="min-h-4 font-normal text-xs text-red-600">{requestAmountError}</span>
                         </label>
                         <label className="grid gap-1 text-xs font-medium text-slate-700">Kỳ hạn mong muốn (tháng)
-                          <input value={requestTermMonths} onChange={(event) => setRequestTermMonths(event.target.value)} type="number" min={selectedRequestProduct.minTermMonths} max={selectedRequestProduct.maxTermMonths} step="1" required className={inputClass} />
-                          <span className="font-normal">{selectedRequestProduct.minTermMonths}–{selectedRequestProduct.maxTermMonths} tháng</span>
+                          <input value={requestTermMonths} onChange={(event) => setRequestTermMonths(event.target.value)} type="number" min={selectedRequestProduct.minTermMonths} max={selectedRequestProduct.maxTermMonths} step="1" required aria-invalid={Boolean(requestTermError)} aria-describedby="request-term-bounds request-term-error" className={inputClass} />
+                          <span id="request-term-bounds" className="font-normal">{selectedRequestProduct.minTermMonths}–{selectedRequestProduct.maxTermMonths} tháng</span>
+                          <span id="request-term-error" role="alert" className="min-h-4 font-normal text-xs text-red-600">{requestTermError}</span>
                         </label>
                       </div> : <>
                         <label className="sr-only" htmlFor="loan-topic">Nội dung yêu cầu vay</label>
@@ -1443,12 +1502,14 @@ export function CustomerWorkspace({
                       <input id="contract-number" value={contractNumber} onChange={(event) => setContractNumber(event.target.value)} required minLength={2} placeholder="Số hợp đồng" className={inputClass} />
                       {contractProduct ? <>
                         <label className="grid gap-1 text-xs font-medium text-slate-700">Số tiền khách vay (₫)
-                          <input value={contractLoanAmount} onChange={(event) => { setContractLoanAmount(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minAmount ?? undefined} max={contractProduct.maxAmount ?? undefined} step="0.01" required className={inputClass} />
-                          <span className="font-normal">{formatLoanAmountBounds(contractProduct.minAmount, contractProduct.maxAmount)}</span>
+                          <input value={contractLoanAmount} onChange={(event) => { setContractLoanAmount(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minAmount ?? undefined} max={contractProduct.maxAmount ?? undefined} step="0.01" required aria-invalid={Boolean(contractAmountError)} aria-describedby="contract-amount-bounds contract-amount-error" className={inputClass} />
+                          <span id="contract-amount-bounds" className="font-normal">{formatLoanAmountBounds(contractProduct.minAmount, contractProduct.maxAmount)}</span>
+                          <span id="contract-amount-error" role="alert" className="min-h-4 font-normal text-xs text-red-600">{contractAmountError}</span>
                         </label>
                         <label className="grid gap-1 text-xs font-medium text-slate-700">Kỳ hạn (tháng)
-                          <input value={termMonths} onChange={(event) => { setTermMonths(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minTermMonths} max={contractProduct.maxTermMonths} step="1" required className={inputClass} />
-                          <span className="font-normal">Điều kiện: {contractProduct.minTermMonths}–{contractProduct.maxTermMonths} tháng</span>
+                          <input value={termMonths} onChange={(event) => { setTermMonths(event.target.value); setLoanCalculation(null); }} type="number" min={contractProduct.minTermMonths} max={contractProduct.maxTermMonths} step="1" required aria-invalid={Boolean(contractTermError)} aria-describedby="contract-term-bounds contract-term-error" className={inputClass} />
+                          <span id="contract-term-bounds" className="font-normal">Điều kiện: {contractProduct.minTermMonths}–{contractProduct.maxTermMonths} tháng</span>
+                          <span id="contract-term-error" role="alert" className="min-h-4 font-normal text-xs text-red-600">{contractTermError}</span>
                         </label>
                         {formulaInputsLoading && <p className="text-xs text-slate-600">Đang tải biến công thức…</p>}
                         {formulaInputsError && <p role="alert" className="text-xs text-red-700">{formulaInputsError}</p>}
@@ -1457,13 +1518,14 @@ export function CustomerWorkspace({
                           <input value={formulaInputs[variable.key] ?? ''} onChange={(event) => {
                             setFormulaInputs((current) => ({ ...current, [variable.key]: event.target.value }));
                             setLoanCalculation(null);
-                          }} type="number" min={variable.min} max={variable.max} step="any" required className={inputClass} />
-                          <span className="font-normal">Cho phép {variable.min}–{variable.max} · Mặc định {variable.defaultValue}</span>
+                          }} type="number" min={variable.min} max={variable.max} step="any" required aria-invalid={Boolean(formulaInputErrors[variable.key])} aria-describedby={`contract-formula-${variable.key}-bounds contract-formula-${variable.key}-error`} className={inputClass} />
+                          <span id={`contract-formula-${variable.key}-bounds`} className="font-normal">Cho phép {variable.min}–{variable.max} · Mặc định {variable.defaultValue}</span>
+                          <span id={`contract-formula-${variable.key}-error`} role="alert" className="min-h-4 font-normal text-xs text-red-600">{formulaInputErrors[variable.key]}</span>
                         </label>)}
                         <p className="text-xs text-slate-600">Thay đổi số tiền hoặc kỳ hạn sẽ làm kết quả tính trước đó mất hiệu lực.</p>
                         {loanCalculation && !currentLoanCalculation && <p role="alert" className="text-xs text-amber-800">Đầu vào đã thay đổi. Tính lại để tiếp tục.</p>}
                         <div className="flex flex-wrap items-center gap-2">
-                          <button type="button" disabled={saving || formulaInputsLoading || Boolean(formulaInputsError) || !contractLoanAmount || !termMonths} onClick={() => void calculateContract()} className={secondaryButtonClass}>Tính lãi</button>
+                          <button type="button" disabled={saving || formulaInputsLoading || Boolean(formulaInputsError) || !contractLoanAmount || !termMonths || Boolean(contractAmountError) || Boolean(contractTermError) || hasFormulaInputErrors} onClick={() => void calculateContract()} className={secondaryButtonClass}>Tính lãi</button>
                           {currentLoanCalculation && <p role="status" className="text-xs tabular-nums text-slate-700">Phiên bản {currentLoanCalculation.formulaVersion} · Trả/tháng {formatMoney(currentLoanCalculation.outputs.monthlyPayment)} ₫ · Tổng lãi {formatMoney(currentLoanCalculation.outputs.interestAmount)} ₫</p>}
                         </div>
                       </> : <>

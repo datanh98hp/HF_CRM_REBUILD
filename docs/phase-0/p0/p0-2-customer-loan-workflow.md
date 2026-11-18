@@ -1,6 +1,6 @@
 # P0-2 — Khách hàng, yêu cầu vay, hợp đồng và phân công
 
-**Trạng thái cập nhật 2026-11-17:** Baseline P0-2 vẫn hoạt động. Phần mở rộng có API/UI staff cho phân công hàng loạt, catalog/formula sản phẩm, yêu cầu vay theo sản phẩm, tạo hợp đồng với tính toán server-side và snapshot, duyệt toàn cục cho ADMIN/OPERATOR (kể cả hợp đồng do mình tạo), maker-checker MANAGE theo chi nhánh, cùng tìm kiếm mã hợp đồng, page size tùy chỉnh, tên chi nhánh, tài liệu và lịch sử. Duyệt hợp đồng tự chuyển khách hàng sang `CONVERTED`; chi tiết hợp đồng hiển thị thông tin sản phẩm từ snapshot. API/web typecheck, build và 37 unit tests tập trung P0-2 đạt. API/PostgreSQL integration đã đạt trước đó; script đã cập nhật theo quyền duyệt mới nhưng chưa chạy lại. Browser `/loan-contracts` đã kiểm tra ở desktop và 375px trước lần chỉnh bố cục bộ lọc/page size này; cần probe lại giao diện mới. Full API unit suite lần gần nhất còn một test auth không liên quan fail do test kỳ vọng mật khẩu mới tối thiểu 12 ký tự trong khi DTO hiện cho phép từ 8 ký tự. Migration chưa chạy production. Còn mở: probe `/customers` và `/loan-products`, nâng cấp migration trên DB legacy có dữ liệu, grants thật theo chi nhánh và phê duyệt policy tài chính; CUSTOMER PWA, OTP provider thật và upload thumbnail an toàn tiếp tục hoãn.
+**Trạng thái cập nhật 2026-11-18:** Baseline P0-2 vẫn hoạt động. Phần mở rộng có API/UI staff cho phân công hàng loạt, catalog/formula sản phẩm, yêu cầu vay theo sản phẩm, tạo hợp đồng với tính toán server-side và snapshot, duyệt toàn cục cho ADMIN/OPERATOR (kể cả hợp đồng do mình tạo), maker-checker MANAGE theo chi nhánh, cùng tìm kiếm mã hợp đồng, page size tùy chỉnh, tên chi nhánh, tài liệu và lịch sử. Duyệt hợp đồng tự chuyển khách hàng sang `CONVERTED`; chi tiết hợp đồng hiển thị thông tin sản phẩm từ snapshot. Full API unit suite đạt 11 suites/85 tests; API/PostgreSQL integration đạt sau khi cập nhật fixture kiểm tra chính sách duyệt toàn cục. Đã kiểm tra nâng cấp 17 migrations trên DB cô lập có dữ liệu legacy tổng hợp, giữ lại customer/contract và xác minh chuyển trạng thái/history; không chạy migration production. Browser `/customers`, `/loan-products`, `/plans`, `/tasks` được probe ở 375px và 1440px, không tràn ngang toàn trang; mobile detail sheet của sản phẩm chỉ đóng bằng nút Đóng. Còn mở: xác nhận grants theo cây chi nhánh thật và policy tài chính/allowlist với chủ nghiệp vụ; storage tệp hiện vẫn local, chưa có scanner/quarantine, retention policy hay quy trình backup/restore sẵn sàng production. CUSTOMER PWA, OTP provider thật và upload thumbnail an toàn tiếp tục hoãn.
 
 ## Tiến độ mở rộng mới nhất
 
@@ -26,16 +26,18 @@
 ### Kiểm tra mới nhất
 
 - `npm run db:generate`, `npm run typecheck` và `npm run build`: đạt; build sinh route `/loan-products` và `/customers`.
-- Unit tests tập trung P0-2: 3 suites/31 tests đạt. Full API suite: 9/10 suites, 78/79 tests đạt; test `ChangePasswordDto` không khớp giữa kỳ vọng 12 ký tự trong spec và giới hạn 8 ký tự trong DTO, ngoài phạm vi P0-2.
-- API/PostgreSQL P0-2 integration đạt trên Compose test stack riêng trước thay đổi quyền duyệt hiện tại. Script đã cập nhật để xác nhận Admin/Operator duyệt hợp đồng do mình tạo; cần chạy lại để xác minh chính sách mới cùng Manager theo chi nhánh, tìm kiếm mã/page size, tài liệu/lịch sử, snapshot và bulk assignment atomic.
+- Full API unit suite: 11 suites/85 tests đạt. Test `ChangePasswordDto` đã đồng bộ với mức tối thiểu 8 ký tự mà DTO cho phép.
+- API/PostgreSQL P0-2 integration đạt trên Compose test stack cô lập sau thay đổi quyền duyệt; xác nhận Admin/Operator duyệt hợp đồng do mình tạo, Manager bị giới hạn theo chi nhánh, cùng tìm kiếm mã/page size, tài liệu/lịch sử, snapshot và bulk assignment atomic.
 - Browser `/loan-contracts` đã kiểm tra khi đăng nhập ở 1440px và 375px; không tràn ngang toàn trang. Tìm kiếm, chọn 10 hồ sơ/trang, tên chi nhánh, upload/download/thay thế, dialog xác nhận xóa mềm và lịch sử đều hoạt động. Bảng cuộn ngang trong vùng riêng trên viewport hẹp.
 - Compose test config resolve được với giá trị storage mặc định; integration/browser test dùng thư mục local và fixture tài liệu của lượt này đã được dọn. Không áp migration lên production.
+- Upgrade migration được thử trên DB cô lập: đánh dấu ba migration nền, tạo customer/contract cũ tổng hợp, chạy đủ 17 migrations, rồi xác nhận dữ liệu còn nguyên và contract được chuyển sang `COMPLETED` kèm status history. Đây không phải DB production.
+- Browser `/customers`, `/loan-products`, `/plans`, `/tasks` đã được probe ở 375px và 1440px; `document.scrollWidth` không vượt `clientWidth` trên cả bốn route. Product detail sheet mở được; backdrop/Escape không đóng, nút Đóng đóng sheet.
 - `git diff --check` đạt; Git chỉ cảnh báo chuẩn hóa LF/CRLF cho hai file TypeScript trên Windows.
 
 ### Còn lại
 
-1. Probe UI `/customers` và `/loan-products` bằng phiên staff trên desktop và 375px; xử lý lỗi tương tác/responsive nếu phát hiện.
-2. Kiểm tra migration upgrade trên test DB có customer/contract legacy; hiện integration chạy trên DB đã migrate đầy đủ, chưa chứng minh giữ nguyên dữ liệu khi nâng cấp.
+1. Xác nhận với chủ nghiệp vụ cây chi nhánh thật, grants theo role/branch, nguồn dữ liệu tài chính và allowlist trường CUSTOMER được xem.
+2. Chỉ đưa dữ liệu/tệp thật vào sau khi chọn và triển khai private shared storage, malware scanner/quarantine, retention/legal-hold, backup/restore và tiêu chí vận hành.
 3. Compliance/chủ tín dụng phê duyệt nguồn dữ liệu, rate/fee/amortization/rounding và allowlist trước khi dùng kết quả tài chính như thông tin chính thức.
 4. Chốt manager/grants thật cho từng chi nhánh; giữ OTP provider thật và CUSTOMER PWA hoãn theo quyết định hiện tại.
 5. Upload thumbnail, scanner/quarantine, retention/legal hold và lưu trữ dùng chung an toàn vẫn chờ cổng P0-4; không bật upload thumbnail bằng URL metadata hiện có.
@@ -94,17 +96,17 @@ Triển khai CRM customer lifecycle, phân công khách hàng, danh mục sản 
 
 ### Giai đoạn 3 — Giao diện thuộc P0-6
 
-- Màn danh sách khách hàng đã có multi-checkbox, chọn một ADVISING, lý do và submit batch; cần browser probe trên desktop/mobile và kiểm tra history sau khi lưu.
+- Màn danh sách khách hàng đã có multi-checkbox, chọn một ADVISING, lý do và submit batch; đã probe responsive `/customers` ở desktop/375px, chưa nghiệm thu bằng dữ liệu và grants thật.
 - Màn `/loan-products` staff đã có catalog/formula; cần hoàn tất probe các state loading/empty/error/responsive và xác nhận phân quyền bằng role thực tế.
 - Màn `/loan-contracts` staff đã có bảng + panel chi tiết, status filter, cursor pagination và duyệt/từ chối; cần probe UI và xác nhận permission gating bằng role thật.
 - CUSTOMER product/request screen và CUSTOMER PWA chưa triển khai; customer API scope đã có nhưng UI vẫn deferred.
-- Màn staff `/customers` đã có product-backed request/contract preview, tính lại khi bấm nút, chi tiết gói vay theo snapshot và thao tác duyệt trong chi tiết hợp đồng; cần browser probe để nghiệm thu hành vi.
+- Màn staff `/customers` đã có product-backed request/contract preview, tính lại khi bấm nút, chi tiết gói vay theo snapshot và thao tác duyệt trong chi tiết hợp đồng; đã probe responsive ở desktop/375px.
 
 ### Giai đoạn 4 — Kiểm thử và phát hành
 
 - Unit tests cho min/max tiền/kỳ hạn, sản phẩm không hoạt động, phiên bản/snapshot, không tính khoản trả khi chưa cấu hình, CUSTOMER không thể tạo hợp đồng, ADMIN/OPERATOR toàn cục và maker-checker của MANAGE; hiện 4 suite tập trung P0-2/37 tests đạt.
 - Integration PostgreSQL đã xác nhận bulk assignment all-or-nothing, branch scope, product bounds, request không tự sinh contract, snapshot, maker-checker và contract OTP baseline.
-- Chưa kiểm tra migration upgrade trên DB legacy có customer/contract hiện hữu; integration hiện chạy trên fresh validation database.
+- Migration upgrade trên DB cô lập với customer/contract legacy tổng hợp đã được kiểm tra; chưa chạy trên DB production hoặc DB chứa dữ liệu thật.
 - Kiểm tra API allowlist, quyền CUSTOMER chỉ đọc sản phẩm công khai/hồ sơ của mình, audit đầy đủ, pagination, seed dev/test và idempotency của seed.
 - Chỉ bật tính toán khoản trả và hiển thị số tiền tài chính sau khi cổng Giai đoạn 0 được thông qua; trước đó trường trả hàng tháng để trống/không khả dụng, không dùng giá trị giả trong dữ liệu nghiệp vụ.
 
@@ -192,7 +194,7 @@ Schema, trạng thái, allowlist, nhập ngoài và ranh giới quyền manager 
 
 - Theo dõi GitHub Actions trên remote sau push/PR: bỏ qua trong giai đoạn phát triển hiện tại theo quyết định của chủ dự án.
 - Gán MANAGE thật cho từng chi nhánh vận hành; migration chuyển nhánh cũ về `INACTIVE` để chờ manager trước khi kích hoạt lại.
-- Hoàn tất nghiệm thu mở rộng: browser/responsive probe, migration upgrade trên dữ liệu legacy, quyền thật theo cây chi nhánh và phê duyệt policy tài chính/allowlist.
+- Hoàn tất nghiệm thu mở rộng: grants thật theo cây chi nhánh và policy tài chính/allowlist; production file storage/scanning/quarantine/retention/backup. Browser probe bốn route ở 375px/1440px và synthetic legacy migration upgrade đã hoàn tất.
 - SMS gateway và CUSTOMER mobile auth được hoãn theo yêu cầu; capability API/frontend báo trạng thái. Việc cấu hình và xác nhận hợp đồng bằng OTP được bỏ qua khi rà soát luồng hiện tại; OTP mock chỉ phục vụ integration test. Sẽ tích hợp sau khi các chức năng CRM khác hoàn thiện.
 - Chủ tín dụng/Compliance quyết định có thêm số tiền/lãi suất/dư nợ/lịch trả vào allowlist hay giữ trường hiện tại.
 - Staff UI `/customers` và `/loan-products` đã có; CUSTOMER PWA/request flow và OTP thật vẫn deferred.

@@ -21,6 +21,7 @@ describe('CustomersService contract approval', () => {
   let prisma: any;
   let access: any;
   let audit: any;
+  let documentStorage: any;
   let tx: any;
   let customer: any;
   let service: CustomersService;
@@ -39,6 +40,12 @@ describe('CustomersService contract approval', () => {
       customerStatusHistory: { create: jest.fn(async () => undefined) },
     };
     prisma = {
+      customer: {
+        findUnique: jest.fn(async () => customer),
+      },
+      loanProduct: {
+        findMany: jest.fn(async () => []),
+      },
       loanContract: {
         findUnique: jest.fn(async () => contract),
         findMany: jest.fn(async () => []),
@@ -53,7 +60,13 @@ describe('CustomersService contract approval', () => {
       assertPermission: jest.fn(async () => undefined),
     };
     audit = { write: jest.fn(async () => undefined) };
-    service = new CustomersService(prisma, access, audit);
+    documentStorage = {
+      assertUploadsAvailable: jest.fn(),
+      put: jest.fn(async () => undefined),
+      remove: jest.fn(async () => undefined),
+      read: jest.fn(),
+    };
+    service = new CustomersService(prisma, access, audit, documentStorage);
   });
 
   it('converts the customer and records status history when a contract is approved', async () => {
@@ -123,9 +136,10 @@ describe('CustomersService contract approval', () => {
     expect(globalResult.items[0]).toHaveProperty('canReview', true);
   });
 
-  it('returns product details from the contract snapshot to staff without adding them to customer responses', async () => {
+  it('limits unapproved customer product details and includes approved source and description', async () => {
     prisma.loanContract.findMany.mockImplementation(async () => [{
       ...contract,
+      approvedAt: null,
       loanAmount: null,
       annualInterestRate: null,
       interestAmount: null,
@@ -158,6 +172,75 @@ describe('CustomersService contract approval', () => {
 
     const customerResult = await service.listLoanContracts({ id: contract.customerId, type: 'CUSTOMER' }, { pageSize: 10 });
     const customerItem = customerResult.items[0];
-    expect(customerItem && 'loanProduct' in customerItem).toBe(false);
+    expect(customerItem && 'loanProduct' in customerItem ? customerItem.loanProduct : null).toEqual({
+      name: 'Short-term support',
+      annualInterestRate: '12.0000',
+      minTermMonths: 6,
+      maxTermMonths: 24,
+    });
+
+    prisma.loanContract.findMany.mockImplementation(async () => [{
+      ...contract,
+      approvedAt: new Date('2026-01-02T00:00:00.000Z'),
+      formulaSnapshot: {
+        product: {
+          code: 'LP-1',
+          name: 'Short-term support',
+          loanType: 'Gói hỗ trợ ngắn hạn',
+          source: 'Test source',
+          description: 'Snapshot description',
+          minAmount: '1000000.00',
+          maxAmount: '5000000.00',
+          minTermMonths: 6,
+          maxTermMonths: 24,
+          annualInterestRate: '12.0000',
+        },
+      },
+      branch: { name: 'North Branch' },
+      customer: { id: contract.customerId, fullName: 'Customer', assignments: [] },
+    }]);
+    const approvedResult = await service.listLoanContracts({ id: contract.customerId, type: 'CUSTOMER' }, { pageSize: 10 });
+    const approvedItem = approvedResult.items[0];
+    expect(approvedItem && 'loanProduct' in approvedItem ? approvedItem.loanProduct : null).toEqual({
+      name: 'Short-term support',
+      annualInterestRate: '12.0000',
+      minTermMonths: 6,
+      maxTermMonths: 24,
+      source: 'Test source',
+      description: 'Snapshot description',
+    });
+
+    it('returns only the approved loan-product allowlist to customers', async () => {
+      prisma.loanProduct.findMany.mockImplementation(async () => [{
+        id: 'product-id',
+        branchId: null,
+        branch: null,
+        code: 'LP-1',
+        name: 'Short-term support',
+        loanType: 'Gói hỗ trợ ngắn hạn',
+        source: 'Test source',
+        description: 'Public description',
+        sourceUrl: 'https://example.invalid/internal',
+        thumbnailUrl: 'https://example.invalid/image',
+        minTermMonths: 6,
+        maxTermMonths: 24,
+        minAmount: { toFixed: () => '1000000.00' },
+        maxAmount: { toFixed: () => '5000000.00' },
+        annualInterestRate: { toFixed: () => '12.0000' },
+        status: 'ACTIVE',
+        currentFormulaVersion: 3,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      }]);
+
+      await expect(service.listLoanProducts({ id: customer.id, type: 'CUSTOMER' }, {})).resolves.toEqual([{
+        name: 'Short-term support',
+        annualInterestRate: '12.0000',
+        minTermMonths: 6,
+        maxTermMonths: 24,
+        source: 'Test source',
+        description: 'Public description',
+      }]);
+    });
   });
 });

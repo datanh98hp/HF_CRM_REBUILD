@@ -16,9 +16,13 @@
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand",
     "test:integration": "node scripts/test-p0-2-integration.mjs",
     "test:integration:p0-3": "node scripts/test-p0-3-integration.mjs",
+    "backup:db": "node scripts/backup-postgres.mjs",
+    "restore:db": "node scripts/restore-postgres.mjs",
+    "test:backup-crypto": "node --test scripts/backup-crypto.spec.mjs",
     "test:watch": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --watch"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1171.0",
     "@nestjs/common": "^11.2.8",
     "@nestjs/core": "^11.2.8",
     "@nestjs/platform-express": "^11.2.8",

@@ -12,4 +12,5 @@ coverage/
 npm-debug.log*
 *.tsbuildinfo
 chrome_debug
+backup/
 apps/api/src/generated/prisma/

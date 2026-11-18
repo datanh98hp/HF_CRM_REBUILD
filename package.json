@@ -27,6 +27,9 @@
     "docker:prod:down": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down",
     "docker:prod:ps": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps",
     "docker:prod:logs": "docker-compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs --follow",
+    "backup:db": "npm run backup:db --workspace @finance-crm/api",
+    "restore:db": "npm run restore:db --workspace @finance-crm/api",
+    "test:backup-crypto": "npm run test:backup-crypto --workspace @finance-crm/api",
     "typecheck": "npm run db:generate --workspace @finance-crm/api && npm run typecheck --workspace @finance-crm/api && npm run typecheck --workspace @finance-crm/web",
     "test": "npm run test --workspace @finance-crm/api",
     "build": "npm run db:generate --workspace @finance-crm/api && npm run build --workspace @finance-crm/api && npm run build --workspace @finance-crm/web"

@@ -5,19 +5,19 @@ import { validate } from 'class-validator';
 import { ChangePasswordDto } from './auth.dto.js';
 
 describe('ChangePasswordDto', () => {
-  it('accepts an existing password at the minimum login length and a 12-character new password', async () => {
+  it('accepts current and new passwords at the minimum length of 8 characters', async () => {
     const dto = plainToInstance(ChangePasswordDto, {
       currentPassword: '12345678',
-      newPassword: '123456789012',
+      newPassword: 'abcdefgh',
     });
 
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
-  it('rejects a new password shorter than 12 characters', async () => {
+  it('rejects a new password shorter than 8 characters', async () => {
     const dto = plainToInstance(ChangePasswordDto, {
       currentPassword: '12345678',
-      newPassword: '12345678901',
+      newPassword: 'abcdefg',
     });
 
     expect(await validate(dto)).not.toHaveLength(0);

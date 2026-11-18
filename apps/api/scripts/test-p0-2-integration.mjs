@@ -249,7 +249,12 @@ try {
   check(contract.status === 201, 'staff can register contract');
   const contractResult = await responseJson(contract);
   check(contractResult.status === 201 && contractResult.body.status === 'PENDING_REVIEW', 'new contract requires manager review');
-  const creatorApprove = await fetch(`${baseUrl}/loan-contracts/${contractResult.body.id}/approve`, { method: 'POST', headers: operatorHeaders });
+  const selfReviewContract = await responseJson(await fetch(`${baseUrl}/loan-contracts`, {
+    method: 'POST', headers: operatorHeaders,
+    body: JSON.stringify({ customerId: second.id, contractNumber: `CI-SELF-REVIEW-${second.id}`, packageName: 'Global self-review test contract' }),
+  }));
+  check(selfReviewContract.status === 201, 'global reviewer creates a contract for self-review test');
+  const creatorApprove = await fetch(`${baseUrl}/loan-contracts/${selfReviewContract.body.id}/approve`, { method: 'POST', headers: operatorHeaders });
   check(creatorApprove.status === 201, 'global reviewer can approve a contract they created');
   const managerCreatedContract = await responseJson(await fetch(`${baseUrl}/loan-contracts`, {
     method: 'POST', headers: { ...managerHeaders, 'content-type': 'application/json' },

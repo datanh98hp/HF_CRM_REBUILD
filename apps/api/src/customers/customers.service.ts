@@ -7,8 +7,6 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
-import { access, mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +44,7 @@ import {
   UpdateLoanRequestStatusDto,
 } from './customer.dto.js';
 import { normalizeVietnamesePhone, normalizeVietnamesePhoneSearch } from './phone-normalizer.js';
+import { ContractDocumentStorageService } from './contract-document-storage.service.js';
 import {
   evaluateLoanFormula,
   LoanFormulaError,
@@ -71,7 +70,6 @@ type ContractUploadFile = {
 };
 
 const CONTRACT_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
-const CONTRACT_DOCUMENT_DIRECTORY = process.env.CONTRACT_DOCUMENT_DIRECTORY ? resolve(process.env.CONTRACT_DOCUMENT_DIRECTORY) : resolve('/tmp/contracts');
 const CONTRACT_DOCUMENT_MIME_TYPES: Record<string, string> = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.jpeg': 'image/jpeg',
@@ -100,6 +98,7 @@ export class CustomersService {
     private readonly prisma: PrismaService,
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
+    private readonly documentStorage: ContractDocumentStorageService,
   ) { }
 
   async list(actor: ActorContext, query: CustomerListQueryDto) {
@@ -400,7 +399,7 @@ export class CustomersService {
       const allowed = customer
         ? product.status === LoanProductStatus.ACTIVE && (!product.branchId || product.branchId === customer.branchId)
         : await this.canReadLoanProduct(actor, product);
-      if (allowed) visible.push(this.serializeLoanProduct(product));
+      if (allowed) visible.push(customer ? this.serializeCustomerLoanProduct(product) : this.serializeLoanProduct(product));
     }
     return visible;
   }
@@ -415,7 +414,7 @@ export class CustomersService {
     } else {
       await this.assertLoanProductAccess(actor, 'loan-products.read', product);
     }
-    return this.serializeLoanProduct(product);
+    return actor.type === 'CUSTOMER' ? this.serializeCustomerLoanProduct(product) : this.serializeLoanProduct(product);
   }
 
   async createLoanProduct(actor: ActorContext, dto: CreateLoanProductDto, request?: ActorRequest) {
@@ -866,10 +865,9 @@ export class CustomersService {
     const contract = await this.contractForAction(actor, contractId);
     await this.assertBranchManagePermission(actor, 'loan-contracts.manage', contract.branchId);
     const fileData = this.validateContractDocument(file);
+    this.documentStorage.assertUploadsAvailable();
     const storageKey = `${randomUUID()}${fileData.extension}`;
-    const filePath = join(CONTRACT_DOCUMENT_DIRECTORY, storageKey);
-    await mkdir(CONTRACT_DOCUMENT_DIRECTORY, { recursive: true });
-    await writeFile(filePath, fileData.buffer, { flag: 'wx' });
+    await this.documentStorage.put(storageKey, fileData.buffer, fileData.mimeType);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -912,7 +910,7 @@ export class CustomersService {
         };
       });
     } catch (error) {
-      await unlink(filePath);
+      await this.removeDocumentAfterFailedWrite(storageKey, error);
       throw error;
     }
   }
@@ -931,10 +929,9 @@ export class CustomersService {
     if (!existing) throw new NotFoundException({ code: 'LOAN_CONTRACT_DOCUMENT_NOT_FOUND' });
 
     const fileData = this.validateContractDocument(file);
+    this.documentStorage.assertUploadsAvailable();
     const storageKey = `${randomUUID()}${fileData.extension}`;
-    const filePath = join(CONTRACT_DOCUMENT_DIRECTORY, storageKey);
-    await mkdir(CONTRACT_DOCUMENT_DIRECTORY, { recursive: true });
-    await writeFile(filePath, fileData.buffer, { flag: 'wx' });
+    await this.documentStorage.put(storageKey, fileData.buffer, fileData.mimeType);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -979,7 +976,7 @@ export class CustomersService {
         };
       });
     } catch (error) {
-      await unlink(filePath);
+      await this.removeDocumentAfterFailedWrite(storageKey, error);
       throw error;
     }
   }
@@ -1024,20 +1021,8 @@ export class CustomersService {
       select: { fileName: true, storageKey: true, mimeType: true },
     });
     if (!document) throw new NotFoundException({ code: 'LOAN_CONTRACT_DOCUMENT_NOT_FOUND' });
-    if (!/^[\da-f-]{36}\.(docx|jpeg|jpg|pdf|png)$/.test(document.storageKey)) {
-      throw new InternalServerErrorException({ code: 'LOAN_CONTRACT_DOCUMENT_STORAGE_KEY_INVALID' });
-    }
-
-    const filePath = join(CONTRACT_DOCUMENT_DIRECTORY, document.storageKey);
-    try {
-      if (!(await stat(filePath)).isFile()) throw new InternalServerErrorException({ code: 'LOAN_CONTRACT_DOCUMENT_FILE_MISSING' });
-    } catch (error) {
-      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-        throw new InternalServerErrorException({ code: 'LOAN_CONTRACT_DOCUMENT_FILE_MISSING' });
-      }
-      throw error;
-    }
-    return { filePath, fileName: document.fileName, mimeType: document.mimeType };
+    const stream = await this.documentStorage.read(document.storageKey);
+    return { stream, fileName: document.fileName, mimeType: document.mimeType };
   }
 
   async getContractHistory(actor: ActorContext, contractId: string) {
@@ -1540,6 +1525,35 @@ export class CustomersService {
     };
   }
 
+  private serializeCustomerLoanProduct(product: {
+    name: string;
+    source: string;
+    description: string | null;
+    minTermMonths: number;
+    maxTermMonths: number;
+    annualInterestRate: Prisma.Decimal;
+  }) {
+    return {
+      name: product.name,
+      annualInterestRate: product.annualInterestRate.toFixed(4),
+      minTermMonths: product.minTermMonths,
+      maxTermMonths: product.maxTermMonths,
+      source: product.source,
+      description: product.description,
+    };
+  }
+
+  private async removeDocumentAfterFailedWrite(storageKey: string, originalError: unknown): Promise<void> {
+    try {
+      await this.documentStorage.remove(storageKey);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [originalError, cleanupError],
+        'Contract document persistence failed and the uploaded object could not be removed',
+      );
+    }
+  }
+
   private async assertCustomerRead(actor: ActorContext, customer: CustomerRecord) {
     if (actor.type === 'CUSTOMER') {
       if (actor.id !== customer.id) throw new ForbiddenException({ code: 'CUSTOMER_OWN_DATA_ONLY' });
@@ -1698,7 +1712,23 @@ export class CustomersService {
       completedAt: row.completedAt ?? null,
       createdAt: row.createdAt,
     };
-    if (customerView) return allowed;
+    if (customerView) {
+      const loanProduct = this.serializeContractProduct(row.formulaSnapshot);
+      const customerLoanProduct = loanProduct
+        ? {
+          name: loanProduct.name,
+          annualInterestRate: loanProduct.annualInterestRate,
+          minTermMonths: loanProduct.minTermMonths,
+          maxTermMonths: loanProduct.maxTermMonths,
+          ...(row.approvedAt ? { source: loanProduct.source, description: loanProduct.description } : {}),
+        }
+        : {
+          name: row.packageName,
+          annualInterestRate: row.annualInterestRate?.toFixed(4) ?? null,
+          termMonths: row.termMonths,
+        };
+      return { ...allowed, loanProduct: customerLoanProduct };
+    }
     return { ...allowed, branchId: row.branchId, loanProduct: this.serializeContractProduct(row.formulaSnapshot) };
   }
 

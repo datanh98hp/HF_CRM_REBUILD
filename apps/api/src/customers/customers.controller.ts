@@ -16,7 +16,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { createReadStream } from 'node:fs';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentActor } from '../common/actor-context.js';
 import type { ActorContext, ActorRequest } from '../common/actor-context.js';
@@ -220,7 +219,7 @@ export class CustomersController {
     @Param('documentId', ParseUUIDPipe) documentId: string,
   ) {
     const document = await this.customers.getContractDocumentFile(actor, contractId, documentId);
-    return new StreamableFile(createReadStream(document.filePath), {
+    return new StreamableFile(document.stream, {
       type: document.mimeType,
       disposition: `attachment; filename*=UTF-8''${encodeURIComponent(document.fileName)}`,
     });

@@ -77,6 +77,12 @@ services:
       AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
       WEB_ORIGINS: "${WEB_ORIGINS:-http://localhost:3000,http://127.0.0.1:300}"
       CONTRACT_DOCUMENT_DIRECTORY: ${CONTRACT_DOCUMENT_DIRECTORY:-/app/contracts}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-}
+      MINIO_BUCKET: ${MINIO_BUCKET:-}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_PREFIX: ${MINIO_PREFIX:-contracts}
   
     volumes:
       - ${CONTRACT_DOCUMENT_HOST:-./apps/api/src/Assets/contracts}:/app/contracts

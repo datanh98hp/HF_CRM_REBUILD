@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, ChevronLeft, ChevronRight, Download, File as FileIcon, FileImage, FileText, History, RefreshCw, Search, Trash2, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPopup, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPopup, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -197,6 +197,7 @@ function ContractWorkspace({
   const [rejecting, setRejecting] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const [documentBusy, setDocumentBusy] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ContractDocument | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -443,7 +444,7 @@ function ContractWorkspace({
         </div>
       </section>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(20rem,0.7fr)]">
+      <div ref={setDialogContainer} className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(20rem,0.7fr)]">
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white" aria-labelledby="contract-list-heading">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
             <div>
@@ -519,14 +520,15 @@ function ContractWorkspace({
             if (open || eventDetails.reason === 'close-press') setMobileDetailOpen(open);
           }}
         >
-          <DialogOverlay className={isMobileLayout && mobileDetailOpen ? 'max-xl:block xl:hidden' : 'hidden'} />
-          <DialogPopup
-            role={isMobileLayout ? 'dialog' : 'region'}
-            aria-modal={isMobileLayout || undefined}
-            aria-labelledby={isMobileLayout ? 'mobile-contract-detail-title' : 'contract-detail-heading'}
-            initialFocus={isMobileLayout ? true : false}
-            className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
-          >
+          <DialogPortal container={dialogContainer ?? undefined} className="contents">
+            <DialogOverlay className={isMobileLayout && mobileDetailOpen ? 'max-xl:block xl:hidden' : 'hidden'} />
+            <DialogPopup
+              role={isMobileLayout ? 'dialog' : 'region'}
+              aria-modal={isMobileLayout || undefined}
+              aria-labelledby={isMobileLayout ? 'mobile-contract-detail-title' : 'contract-detail-heading'}
+              initialFocus={isMobileLayout ? true : false}
+              className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
+            >
             <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
               <DialogTitle id="mobile-contract-detail-title" className="text-sm font-semibold">Chi tiết hợp đồng</DialogTitle>
               <DialogClose
@@ -694,7 +696,8 @@ function ContractWorkspace({
               </section>
             </>}
             </div>
-          </DialogPopup>
+            </DialogPopup>
+          </DialogPortal>
         </Dialog>
       </div>
       <p className="mt-4 text-xs text-slate-500">Admin và Operator được duyệt toàn hệ thống. Manager chỉ duyệt tại chi nhánh được phân công và không thể tự duyệt hợp đồng do mình tạo.</p>

@@ -1381,10 +1381,10 @@ export function CustomerWorkspace({
                           setRequestAmount('');
                           setRequestTermMonths('');
                         }}>
-                          <SelectTrigger aria-label="Chọn sản phẩm vay" className="w-full bg-white"><SelectValue placeholder="Không chọn sản phẩm" /></SelectTrigger>
+                          <SelectTrigger aria-label="Chọn sản phẩm vay" className="w-full bg-white"><SelectValue placeholder="Không chọn sản phẩm">{selectedRequestProduct?.name ?? 'Không chọn sản phẩm'}</SelectValue></SelectTrigger>
                           <SelectContent align="start">
                             <SelectItem value="NO_PRODUCT">Không chọn sản phẩm</SelectItem>
-                            {activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name} · {product.code}</SelectItem>)}
+                            {activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id} label={product.name}>{product.name} · {product.code}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </label>}
@@ -1435,8 +1435,8 @@ export function CustomerWorkspace({
                           setContractProductId(value === 'NO_PRODUCT' ? '' : value);
                           setLoanCalculation(null);
                         }}>
-                          <SelectTrigger className="w-full bg-white"><SelectValue placeholder="Hợp đồng ngoài danh mục" /></SelectTrigger>
-                          <SelectContent align="start"><SelectItem value="NO_PRODUCT">Hợp đồng ngoài danh mục</SelectItem>{activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id}>{product.name} · {product.code}</SelectItem>)}</SelectContent>
+                          <SelectTrigger className="w-full bg-white"><SelectValue placeholder="Hợp đồng ngoài danh mục">{contractProduct?.name ?? 'Hợp đồng ngoài danh mục'}</SelectValue></SelectTrigger>
+                          <SelectContent align="start"><SelectItem value="NO_PRODUCT">Hợp đồng ngoài danh mục</SelectItem>{activeLoanProducts.map((product) => <SelectItem key={product.id} value={product.id} label={product.name}>{product.name} · {product.code}</SelectItem>)}</SelectContent>
                         </Select>
                       </label>}
                       <label className="sr-only" htmlFor="contract-number">Số hợp đồng</label>

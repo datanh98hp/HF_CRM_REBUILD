@@ -7,7 +7,7 @@ import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogClose, DialogOverlay, DialogPopup, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogOverlay, DialogPopup, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { request } from '@/lib/crm-api';
@@ -182,6 +182,7 @@ function LoanProductsWorkspace({
   const [applyingFormulaVersion, setApplyingFormulaVersion] = useState<number | null>(null);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const formulaHistoryRequestId = useRef(0);
   const selectedProduct = useMemo(() => products.find((product) => product.id === selectedId) ?? null, [products, selectedId]);
   const activeBranches = branches.filter((branch) => branch.status === 'ACTIVE');
@@ -444,7 +445,7 @@ function LoanProductsWorkspace({
       {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><p className="font-medium">Không thể hoàn tất thao tác</p><p className="mt-1">{error}</p></div>}
       {notice && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p>}
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
+      <div ref={setDialogContainer} className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white" aria-labelledby="products-list-heading">
           <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
             <div><h2 id="products-list-heading" className="font-semibold text-slate-950">Danh mục</h2><p className="mt-0.5 text-xs text-slate-500">{loading ? 'Đang tải…' : `${products.length} sản phẩm`}</p></div>
@@ -478,14 +479,15 @@ function LoanProductsWorkspace({
             if (open || eventDetails.reason === 'close-press') setMobileDetailOpen(open);
           }}
         >
-          <DialogOverlay className={isMobileLayout && mobileDetailOpen ? 'max-xl:block xl:hidden' : 'hidden'} />
-          <DialogPopup
-            role={isMobileLayout ? 'dialog' : 'region'}
-            aria-modal={isMobileLayout || undefined}
-            aria-labelledby={isMobileLayout ? 'mobile-product-detail-title' : 'product-details-heading'}
-            initialFocus={isMobileLayout ? true : false}
-            className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
-          >
+          <DialogPortal container={dialogContainer ?? undefined} className="contents">
+            <DialogOverlay className={isMobileLayout && mobileDetailOpen ? 'max-xl:block xl:hidden' : 'hidden'} />
+            <DialogPopup
+              role={isMobileLayout ? 'dialog' : 'region'}
+              aria-modal={isMobileLayout || undefined}
+              aria-labelledby={isMobileLayout ? 'mobile-product-detail-title' : 'product-details-heading'}
+              initialFocus={isMobileLayout ? true : false}
+              className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
+            >
             <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
               <DialogTitle id="mobile-product-detail-title" className="text-sm font-semibold">Chi tiết sản phẩm vay</DialogTitle>
               <DialogClose
@@ -546,7 +548,7 @@ function LoanProductsWorkspace({
                 {selectedProduct.description && <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedProduct.description}</dd></div>}
               </dl>
               <section className="p-4 sm:p-5" aria-labelledby="formula-heading">
-                <div className="mb-4 flex items-start justify-between gap-3"><div><h3 id="formula-heading" className="font-semibold text-slate-950">Công thức tính</h3><p className="mt-1 text-sm text-slate-600">{selectedProduct.currentFormulaVersion ? `Phiên bản hiện hành ${selectedProduct.currentFormulaVersion}` : 'Chưa có phiên bản công thức'}</p></div><FlaskConical aria-hidden="true" className="size-4 text-slate-500" /></div>
+                <div className="mb-4 flex items-start justify-between gap-3"><div><h3 id="formula-heading" className="font-semibold text-slate-950">Công thức tính * - (Đang áp dụng lãi suất cố định / năm)</h3><p className="mt-1 text-sm text-slate-600">{selectedProduct.currentFormulaVersion ? `Phiên bản hiện hành ${selectedProduct.currentFormulaVersion}` : 'Chưa có phiên bản công thức'}</p></div><FlaskConical aria-hidden="true" className="size-4 text-slate-500" /></div>
                 {canManageFormula ? (
                   <form onSubmit={saveFormula} className="grid grid-cols-1 gap-3">
                     <ProductField label="Công thức lãi *"><Input className={`${inputClass} font-mono`} value={interestFormula} onChange={(event) => setInterestFormula(event.target.value)} placeholder="principal * annualRatePercent / 100" required /></ProductField>
@@ -661,7 +663,8 @@ function LoanProductsWorkspace({
             </div>
           ) : loading ? <p className="py-8 text-center text-sm text-slate-600">Đang tải chi tiết sản phẩm…</p> : <p className="px-4 py-6 text-sm text-slate-600">Chọn một sản phẩm để xem điều kiện và công thức.</p>}
             </div>
-          </DialogPopup>
+            </DialogPopup>
+          </DialogPortal>
         </Dialog>
       </div>
     </main>

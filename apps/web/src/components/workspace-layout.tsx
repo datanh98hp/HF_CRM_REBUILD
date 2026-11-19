@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { useCrmSession } from '@/components/crm-session';
 
-type Section = 'customers' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type Section = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
 const sectionPaths: Record<Exclude<Section, null>, string> = {
   customers: '/customers',
+  'customer-import': '/customers/import',
   products: '/loan-products',
   contracts: '/loan-contracts',
   users: '/staff',
@@ -58,6 +59,7 @@ export function WorkspaceLayout({
       canReadBranches={can('branches.read')}
       canReadRoles={can('roles.read')}
       canReadCustomers={can('customers.read')}
+      canImportCustomers={can('customers.import')}
       canAccessPlans={can('plans.read') || can('plans.manage')}
       canReadPlanCatalog={can('plans.read')}
       canReadTasks={can('tasks.read')}

@@ -209,38 +209,38 @@ describe('CustomersService contract approval', () => {
       source: 'Test source',
       description: 'Snapshot description',
     });
+  });
 
-    it('returns only the approved loan-product allowlist to customers', async () => {
-      prisma.loanProduct.findMany.mockImplementation(async () => [{
-        id: 'product-id',
-        branchId: null,
-        branch: null,
-        code: 'LP-1',
-        name: 'Short-term support',
-        loanType: 'Gói hỗ trợ ngắn hạn',
-        source: 'Test source',
-        description: 'Public description',
-        sourceUrl: 'https://example.invalid/internal',
-        thumbnailUrl: 'https://example.invalid/image',
-        minTermMonths: 6,
-        maxTermMonths: 24,
-        minAmount: { toFixed: () => '1000000.00' },
-        maxAmount: { toFixed: () => '5000000.00' },
-        annualInterestRate: { toFixed: () => '12.0000' },
-        status: 'ACTIVE',
-        currentFormulaVersion: 3,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-      }]);
+  it('returns only the approved loan-product allowlist to customers', async () => {
+    prisma.loanProduct.findMany.mockImplementation(async () => [{
+      id: 'product-id',
+      branchId: null,
+      branch: null,
+      code: 'LP-1',
+      name: 'Short-term support',
+      loanType: 'Gói hỗ trợ ngắn hạn',
+      source: 'Test source',
+      description: 'Public description',
+      sourceUrl: 'https://example.invalid/internal',
+      thumbnailUrl: 'https://example.invalid/image',
+      minTermMonths: 6,
+      maxTermMonths: 24,
+      minAmount: { toFixed: () => '1000000.00' },
+      maxAmount: { toFixed: () => '5000000.00' },
+      annualInterestRate: { toFixed: () => '12.0000' },
+      status: 'ACTIVE',
+      currentFormulaVersion: 3,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    }]);
 
-      await expect(service.listLoanProducts({ id: customer.id, type: 'CUSTOMER' }, {})).resolves.toEqual([{
-        name: 'Short-term support',
-        annualInterestRate: '12.0000',
-        minTermMonths: 6,
-        maxTermMonths: 24,
-        source: 'Test source',
-        description: 'Public description',
-      }]);
-    });
+    await expect(service.listLoanProducts({ id: customer.id, type: 'CUSTOMER' }, {})).resolves.toEqual([{
+      name: 'Short-term support',
+      annualInterestRate: '12.0000',
+      minTermMonths: 6,
+      maxTermMonths: 24,
+      source: 'Test source',
+      description: 'Public description',
+    }]);
   });
 });

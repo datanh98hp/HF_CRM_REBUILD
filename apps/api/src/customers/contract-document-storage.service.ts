@@ -69,6 +69,7 @@ export class ContractDocumentStorageService {
   }
 
   async put(storageKey: string, data: Buffer, mimeType: string): Promise<void> {
+    this.assertUploadsAvailable();
     this.assertStorageKey(storageKey);
     if (this.client && this.bucket) {
       await this.client.send(new PutObjectCommand({

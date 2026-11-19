@@ -1,0 +1,170 @@
+{
+  "planHash": "e6d3d3cdac59d0fd146ad26563b050d40826bb2ccbace830f79794019ef76c1e",
+  "phase": "standalone",
+  "recordedAtUtc": "2026-11-19T03:23:24.4799185Z",
+  "retryCount": 0,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 133664,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "generate-api-client",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E @finance-crm/api@0.1.0 db:generate\r\n\u003E prisma generate --schema prisma/schema.prisma\r\n\r\n\u25C7 injected env (9) from ..\\..\\.env // tip: \u25C8 secrets for agents [www.dotenvx.com]\r\nLoaded Prisma config from prisma.config.ts.\r\n\r\nPrisma schema loaded from prisma\\schema.prisma.\r\n\r\n\u2714 Generated Prisma Client (7.10.1) to .\\src\\generated\\prisma in 349ms\r\n\r\n",
+        "durationMs": 2045
+      },
+      {
+        "name": "api-typecheck",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E @finance-crm/api@0.1.0 typecheck\r\n\u003E tsc --noEmit\r\n\r\n",
+        "durationMs": 2486
+      },
+      {
+        "name": "customer-storage-tests",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E @finance-crm/api@0.1.0 test\r\n\u003E node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/customers/customers.service.spec.ts src/customers/contract-document-storage.service.spec.ts\r\n\r\n(node:10936) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\r\n(Use \u0060node --trace-warnings ...\u0060 to show where the warning was created)\r\n\r\nTest Suites: 2 passed, 2 total\r\nTests:       10 passed, 10 total\r\nSnapshots:   0 total\r\nTime:        0.984 s, estimated 1 s\r\nRan all test suites within paths \u0022src/customers/customers.service.spec.ts\u0022, \u0022src/customers/contract-document-storage.service.spec.ts\u0022.\r\n",
+        "durationMs": 1918,
+        "testResults": {
+          "testFramework": "jest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 10,
+          "testsPassed": 10,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "backup-crypto-tests",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E @finance-crm/api@0.1.0 test:backup-crypto\r\n\u003E node --test scripts/backup-crypto.spec.mjs\r\n\r\n\u25B6 encrypted PostgreSQL backup stream\r\n  \u2714 round-trips an encrypted stream (9.1544ms)\r\n  \u2714 rejects tampered ciphertext (3.6518ms)\r\n  \u2714 rejects ciphertext encrypted with a different key (1.9945ms)\r\n\u2714 encrypted PostgreSQL backup stream (16.0392ms)\r\n\u2139 tests 3\r\n\u2139 suites 1\r\n\u2139 pass 3\r\n\u2139 fail 0\r\n\u2139 cancelled 0\r\n\u2139 skipped 0\r\n\u2139 todo 0\r\n\u2139 duration_ms 102.6442\r\n",
+        "durationMs": 545
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E @finance-crm/api@0.1.0 test\r\n\u003E node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --runInBand\r\n\r\n(node:12524) ExperimentalWarning: VM Modules is an experimental feature and might change at any time\r\n(Use \u0060node --trace-warnings ...\u0060 to show where the warning was created)\r\n\r\nTest Suites: 12 passed, 12 total\r\nTests:       89 passed, 89 total\r\nSnapshots:   0 total\r\nTime:        3.832 s, estimated 15 s\r\nRan all test suites.\r\n",
+        "durationMs": 4554,
+        "testResults": {
+          "testFramework": "jest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 89,
+          "testsPassed": 89,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      }
+    ],
+    "executions": [
+      {
+        "source": "setup[0]",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "ci",
+          "--include=dev"
+        ],
+        "cwd": "D:\\IT\\HF_CRM",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "generate-api-client",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "db:generate"
+        ],
+        "cwd": "D:\\IT\\HF_CRM\\apps\\api",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "api-typecheck",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "typecheck"
+        ],
+        "cwd": "D:\\IT\\HF_CRM\\apps\\api",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "customer-storage-tests",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "test",
+          "--",
+          "--runTestsByPath",
+          "src/customers/customers.service.spec.ts",
+          "src/customers/contract-document-storage.service.spec.ts"
+        ],
+        "cwd": "D:\\IT\\HF_CRM\\apps\\api",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "backup-crypto-tests",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "run",
+          "test:backup-crypto"
+        ],
+        "cwd": "D:\\IT\\HF_CRM\\apps\\api",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Users\\PC\\AppData\\Local\\Author Software\\nvm\\.nodejs\\npm.cmd",
+        "args": [
+          "test"
+        ],
+        "cwd": "D:\\IT\\HF_CRM\\apps\\api",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}

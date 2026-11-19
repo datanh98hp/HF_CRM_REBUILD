@@ -30,6 +30,14 @@ services:
       retries: 10
     restart: unless-stopped
 
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav-debian:1.4}
+    networks:
+      - import_scanner
+    volumes:
+      - clamav_database:/var/lib/clamav
+    restart: unless-stopped
+
   migrate:
     build:
       context: .
@@ -83,14 +91,23 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-}
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
       MINIO_PREFIX: ${MINIO_PREFIX:-contracts}
-  
+      CUSTOMER_IMPORT_TEMP_DIR: /app/apps/api/import-customer-files
+      CUSTOMER_IMPORT_SCANNER_HOST: clamav
+      CUSTOMER_IMPORT_SCANNER_PORT: "3310"
+      CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS: ${CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS:-120000}
+    networks:
+      - default
+      - import_scanner
     volumes:
       - ${CONTRACT_DOCUMENT_HOST:-./apps/api/src/Assets/contracts}:/app/contracts
+      - customer_import_files:/app/apps/api/import-customer-files
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
     ports:
@@ -116,11 +133,22 @@ services:
       AUTH_ACCESS_TOKEN_SECRET: ${AUTH_ACCESS_TOKEN_SECRET:?Set AUTH_ACCESS_TOKEN_SECRET in .env}
       AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
       AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
+      CUSTOMER_IMPORT_TEMP_DIR: /app/apps/api/import-customer-files
+      CUSTOMER_IMPORT_SCANNER_HOST: clamav
+      CUSTOMER_IMPORT_SCANNER_PORT: "3310"
+      CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS: ${CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS:-120000}
+    networks:
+      - default
+      - import_scanner
+    volumes:
+      - customer_import_files:/app/apps/api/import-customer-files
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      clamav:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -163,4 +191,10 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  clamav_database:
+  customer_import_files:
   toolbox_node_modules:
+
+networks:
+  import_scanner:
+    driver: bridge

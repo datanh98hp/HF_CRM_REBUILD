@@ -11,6 +11,7 @@
   { "key": "audit.read", "groupKey": "audit", "description": "Read audit events within granted scope | Xem nhật ký hoạt động trong phạm vi được cấp." },
   { "key": "customers.read", "groupKey": "customers", "description": "Read customer data within granted scope | Xem dữ liệu khách hàng trong phạm vi được cấp." },
   { "key": "customers.manage", "groupKey": "customers", "description": "Create and update customer data within granted scope | Tạo và cập nhật dữ liệu khách hàng trong phạm vi được cấp." },
+  { "key": "customers.import", "groupKey": "customers", "description": "Import customer records in batches within granted scope | Nhập khách hàng theo lô trong phạm vi được cấp." },
   { "key": "customers.assign", "groupKey": "customers", "description": "Assign customers within granted scope | Phân công khách hàng trong phạm vi được cấp." },
   { "key": "customers.duplicates.review", "groupKey": "customers", "description": "Review duplicate customer candidates without merging records | Rà soát khách hàng trùng mà không tự gộp hồ sơ." },
   { "key": "loan-requests.read", "groupKey": "loans", "description": "Read loan requests within granted scope | Xem yêu cầu vay trong phạm vi được cấp." },

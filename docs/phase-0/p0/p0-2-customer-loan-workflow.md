@@ -1,6 +1,8 @@
 # P0-2 — Khách hàng, yêu cầu vay, hợp đồng và phân công
 
-**Trạng thái cập nhật 2026-11-18:** Baseline P0-2 vẫn hoạt động. Phần mở rộng có API/UI staff cho phân công hàng loạt, catalog/formula sản phẩm, yêu cầu vay theo sản phẩm, tạo hợp đồng với tính toán server-side và snapshot, duyệt toàn cục cho ADMIN/OPERATOR (kể cả hợp đồng do mình tạo), maker-checker MANAGE theo chi nhánh, cùng tìm kiếm mã hợp đồng, page size tùy chỉnh, tên chi nhánh, tài liệu và lịch sử. Duyệt hợp đồng tự chuyển khách hàng sang `CONVERTED`; chi tiết hợp đồng hiển thị thông tin sản phẩm từ snapshot. Full API unit suite đạt 11 suites/85 tests; API/PostgreSQL integration đạt sau khi cập nhật fixture kiểm tra chính sách duyệt toàn cục. Đã kiểm tra nâng cấp 17 migrations trên DB cô lập có dữ liệu legacy tổng hợp, giữ lại customer/contract và xác minh chuyển trạng thái/history; không chạy migration production. Browser `/customers`, `/loan-products`, `/plans`, `/tasks` được probe ở 375px và 1440px, không tràn ngang toàn trang; mobile detail sheet của sản phẩm chỉ đóng bằng nút Đóng. Còn mở: xác nhận grants theo cây chi nhánh thật và policy tài chính/allowlist với chủ nghiệp vụ; storage tệp hiện vẫn local, chưa có scanner/quarantine, retention policy hay quy trình backup/restore sẵn sàng production. CUSTOMER PWA, OTP provider thật và upload thumbnail an toàn tiếp tục hoãn.
+**Trạng thái cập nhật 2026-11-19:** Baseline P0-2 vẫn hoạt động. CUSTOMER chỉ thấy allowlist sản phẩm/hợp đồng: trước khi duyệt là tên/lãi suất/kỳ hạn; sau duyệt mới có nguồn/mô tả. API typecheck đạt; customer/storage focused tests đạt 10/10; synthetic backup crypto tests đạt 3/3; full API suite đạt 12 suites/89 tests. API/PostgreSQL integration và nâng cấp 17 migrations đã đạt trên môi trường/fixture cô lập, không chạy migration production. Browser `/customers`, `/loan-products`, `/plans`, `/tasks` tại 375px và 1440px không tràn ngang toàn trang. Fixtures/grants nhánh demo được người dùng duyệt chỉ cho demo; branch IDs/grants này không phải cấu hình production. Chính sách tài chính được hoãn đến khi có tài liệu nguồn có thẩm quyền.
+
+MinIO/S3-compatible storage là tùy chọn env-configured: chỉ dùng khi đã cấu hình đầy đủ endpoint, access key, secret key và bucket; khi chưa cấu hình thì dev/test tiếp tục dùng local storage, cấu hình dở dang sẽ fail startup thay vì âm thầm fallback. Production uploads fail-closed cho đến khi scanner được triển khai. Script backup/restore PostgreSQL mã hóa AES-256-GCM và ghi tại `<repoRoot>/backup/` (thư mục `backup/` ở root repo, được gitignore); lượt này **không tạo backup thật và không restore database**, chỉ chạy crypto tests bằng dữ liệu tổng hợp. Còn thiếu scanner/quarantine, retention/legal hold, RPO/RTO và restore verification. CUSTOMER PWA, OTP provider thật và thumbnail upload an toàn tiếp tục hoãn.
 
 ## Tiến độ mở rộng mới nhất
 
@@ -21,7 +23,7 @@
 - API catalog/formula có kiểm soát scope, version công thức bất biến, trạng thái sản phẩm và endpoint metadata đầu vào không tiết lộ biểu thức. Request theo sản phẩm kiểm tra amount/term; contract tính lại ở server và lưu snapshot product/formula. ADMIN/OPERATOR có quyền duyệt toàn cục, kể cả hợp đồng do chính mình tạo; MANAGE chỉ duyệt tại chi nhánh được gán và không tự duyệt hợp đồng do mình tạo. CUSTOMER không thể tạo contract.
 - Staff UI có route `/loan-products`, product-aware request/contract forms trên `/customers` và màn hàng đợi riêng `/loan-contracts` theo bố cục bảng + panel chi tiết. Trang hợp đồng lọc trạng thái, phân trang và chỉ hiện duyệt/từ chối theo quyền; thumbnail chỉ là URL metadata, chưa có upload binary.
 - Màn hợp đồng hỗ trợ tìm kiếm mã không phân biệt hoa/thường, page size mặc định 20 (API nhận 5–100), hiển thị tên chi nhánh và phân quyền duyệt: ADMIN/OPERATOR có quyền toàn cục, kể cả hợp đồng do mình tạo; MANAGE chỉ duyệt chi nhánh được gán và không tự duyệt.
-- Tài liệu DOCX/PDF/PNG/JPG tối đa 25 MB được lưu tạm dưới `apps/api/src/Assets/contracts` bằng storage key ngẫu nhiên; tải xuống cần xác thực, xóa mềm, thay thế giữ phiên bản cũ, mọi thao tác tài liệu được ghi lịch sử. Đây chưa phải lưu trữ production: chưa có scanner/quarantine, backup hoặc storage dùng chung. Lịch sử hiện bao gồm chuyển trạng thái và tài liệu; chưa có endpoint sửa điều khoản tài chính để ghi lịch sử các chỉnh sửa đó.
+- Tài liệu DOCX/PDF/PNG/JPG tối đa 25 MB dùng local storage cho dev/test khi chưa bật MinIO; MinIO/S3-compatible dùng khi env được cấu hình đầy đủ. Storage key ngẫu nhiên, tải xuống cần xác thực, xóa mềm, thay thế giữ phiên bản cũ, mọi thao tác tài liệu được ghi lịch sử. Production upload bị từ chối ở storage boundary cho đến khi có malware scanner; scanner/quarantine, retention/legal hold và storage vận hành production chưa triển khai. Lịch sử hiện bao gồm chuyển trạng thái và tài liệu; chưa có endpoint sửa điều khoản tài chính để ghi lịch sử các chỉnh sửa đó.
 
 ### Kiểm tra mới nhất
 
@@ -32,14 +34,14 @@
 - Compose test config resolve được với giá trị storage mặc định; integration/browser test dùng thư mục local và fixture tài liệu của lượt này đã được dọn. Không áp migration lên production.
 - Upgrade migration được thử trên DB cô lập: đánh dấu ba migration nền, tạo customer/contract cũ tổng hợp, chạy đủ 17 migrations, rồi xác nhận dữ liệu còn nguyên và contract được chuyển sang `COMPLETED` kèm status history. Đây không phải DB production.
 - Browser `/customers`, `/loan-products`, `/plans`, `/tasks` đã được probe ở 375px và 1440px; `document.scrollWidth` không vượt `clientWidth` trên cả bốn route. Product detail sheet mở được; backdrop/Escape không đóng, nút Đóng đóng sheet.
-- `git diff --check` đạt; Git chỉ cảnh báo chuẩn hóa LF/CRLF cho hai file TypeScript trên Windows.
+- API typecheck, customer/storage focused tests (10/10) và synthetic backup crypto tests (3/3) đạt trong lượt 2026-11-19. Không tạo backup thật, không restore DB, không thay đổi production.
 
 ### Còn lại
 
-1. Xác nhận với chủ nghiệp vụ cây chi nhánh thật, grants theo role/branch, nguồn dữ liệu tài chính và allowlist trường CUSTOMER được xem.
-2. Chỉ đưa dữ liệu/tệp thật vào sau khi chọn và triển khai private shared storage, malware scanner/quarantine, retention/legal-hold, backup/restore và tiêu chí vận hành.
-3. Compliance/chủ tín dụng phê duyệt nguồn dữ liệu, rate/fee/amortization/rounding và allowlist trước khi dùng kết quả tài chính như thông tin chính thức.
-4. Chốt manager/grants thật cho từng chi nhánh; giữ OTP provider thật và CUSTOMER PWA hoãn theo quyết định hiện tại.
+1. Cấu hình cây chi nhánh và grants production; demo fixtures/grants hiện có chỉ được duyệt cho demo, không dùng làm chuẩn production.
+2. Chờ tài liệu nguồn có thẩm quyền trước khi chốt policy tài chính; không coi rate, fee, amortization, rounding hoặc kết quả tính hiện tại là chính sách đã duyệt.
+3. Chỉ đưa dữ liệu/tệp thật vào sau khi có private storage và malware scanner/quarantine, retention/legal hold, backup/restore đã được kiểm chứng, cùng RPO/RTO.
+4. Giữ OTP provider thật và CUSTOMER PWA hoãn theo quyết định hiện tại.
 5. Upload thumbnail, scanner/quarantine, retention/legal hold và lưu trữ dùng chung an toàn vẫn chờ cổng P0-4; không bật upload thumbnail bằng URL metadata hiện có.
 6. Nếu cần cho phép sửa số tiền/kỳ hạn/điều khoản hợp đồng, cần chốt danh sách trường và quyền trước khi bổ sung endpoint cập nhật cùng lịch sử tương ứng.
 
@@ -194,11 +196,11 @@ Schema, trạng thái, allowlist, nhập ngoài và ranh giới quyền manager 
 
 - Theo dõi GitHub Actions trên remote sau push/PR: bỏ qua trong giai đoạn phát triển hiện tại theo quyết định của chủ dự án.
 - Gán MANAGE thật cho từng chi nhánh vận hành; migration chuyển nhánh cũ về `INACTIVE` để chờ manager trước khi kích hoạt lại.
-- Hoàn tất nghiệm thu mở rộng: grants thật theo cây chi nhánh và policy tài chính/allowlist; production file storage/scanning/quarantine/retention/backup. Browser probe bốn route ở 375px/1440px và synthetic legacy migration upgrade đã hoàn tất.
+- Hoàn tất nghiệm thu mở rộng: grants production theo cây chi nhánh; chờ tài liệu có thẩm quyền để chốt policy tài chính (không tự mở rộng CUSTOMER allowlist); scanner/quarantine, retention/legal hold, RPO/RTO và restore verification. MinIO cấu hình tùy chọn đã có; backup/restore scripts đã có nhưng chưa chạy trên DB thật.
 - SMS gateway và CUSTOMER mobile auth được hoãn theo yêu cầu; capability API/frontend báo trạng thái. Việc cấu hình và xác nhận hợp đồng bằng OTP được bỏ qua khi rà soát luồng hiện tại; OTP mock chỉ phục vụ integration test. Sẽ tích hợp sau khi các chức năng CRM khác hoàn thiện.
-- Chủ tín dụng/Compliance quyết định có thêm số tiền/lãi suất/dư nợ/lịch trả vào allowlist hay giữ trường hiện tại.
+- Không mở rộng CUSTOMER allowlist sang số tiền/lãi suất/dư nợ/lịch trả như thông tin chính thức cho đến khi nhận và duyệt tài liệu policy tài chính.
 - Staff UI `/customers` và `/loan-products` đã có; CUSTOMER PWA/request flow và OTP thật vẫn deferred.
 
 ## Cấu hình còn cần
 
-Manager thật cho từng chi nhánh và quyết định cuối về trường tài chính chi tiết. SMS provider và xác thực CUSTOMER mobile vẫn được giữ slot, chờ cấu hình sau.
+Manager/grants thật theo cây chi nhánh production; tài liệu nguồn/policy tài chính; scanner/quarantine, retention/legal hold, RPO/RTO và restore verification. SMS provider và xác thực CUSTOMER mobile vẫn được giữ slot, chờ cấu hình sau.

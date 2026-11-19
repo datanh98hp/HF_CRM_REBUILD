@@ -54,6 +54,13 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   LOAN_CONTRACT_DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu hợp đồng.',
   LOAN_CONTRACT_DOCUMENT_FILE_MISSING: 'Không tìm thấy tệp lưu trữ trên máy chủ.',
   LOAN_CONTRACT_DOCUMENT_STORAGE_KEY_INVALID: 'Thông tin lưu trữ tài liệu không hợp lệ.',
+  CUSTOMER_IMPORT_NOT_READY: 'Kho nhập dữ liệu, ClamAV hoặc worker chưa sẵn sàng.',
+  IMPORT_FILE_REQUIRED: 'Hãy chọn một tệp cần nhập.',
+  FILE_SIZE_LIMIT_EXCEEDED: 'Tệp vượt quá giới hạn 20 MB.',
+  IDEMPOTENCY_KEY_REQUIRED: 'Không thể tạo mã yêu cầu nhập; hãy chọn lại tệp.',
+  IDEMPOTENCY_KEY_REUSED: 'Mã yêu cầu này đã được dùng cho một chi nhánh khác.',
+  UNSUPPORTED_FILE_TYPE: 'Chỉ chấp nhận tệp CSV hoặc XLSX.',
+  IMPORT_QUEUE_UNAVAILABLE: 'Không thể đưa tệp vào hàng đợi. Hãy thử lại sau.',
 };
 
 function apiBaseUrl() {

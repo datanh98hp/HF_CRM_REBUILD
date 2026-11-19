@@ -42,4 +42,10 @@ describe('encrypted PostgreSQL backup stream', () => {
 
     await assert.rejects(collect(decryptBackupStream(Readable.from([encrypted]), key)));
   });
+
+  it('rejects ciphertext encrypted with a different key', async () => {
+    const encrypted = await encrypt(Buffer.from('synthetic database archive'), randomBytes(32));
+
+    await assert.rejects(collect(decryptBackupStream(Readable.from([encrypted]), randomBytes(32))));
+  });
 });

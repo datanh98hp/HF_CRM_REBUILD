@@ -31,7 +31,7 @@ P0-3 có API nền cho kế hoạch, task, phiên bản kết quả, xác minh, 
 
 - Tính eligibility, lịch trả nợ chính thức, tự động approve/reject.
 - Tích hợp CRM ngoài, báo cáo tùy biến/data warehouse và app native. CUSTOMER bắt đầu với mobile web/PWA.
-- Upload file thật trước khi scanner, retention, quyền xóa và legal hold được cấu hình/duyệt. Có thể chuẩn bị metadata/interface, nhưng không bật xử lý file nghiệp vụ ở production.
+- P0-4 import không dùng S3: file chỉ nằm tạm trong `apps/api/import-customer-files`, được quét bằng ClamAV nội bộ và xóa sau khi xử lý. Chỉ giữ các số lượng tổng hợp đã được duyệt; upload vẫn đóng cho tới khi pipeline hoàn tất.
 - Dashboard KPI đầy đủ trước khi chủ nghiệp vụ cung cấp danh mục hạng mục, đơn vị đo và các chỉ tiêu/kỳ cụ thể.
 
 ## 3. Thứ tự triển khai và tiêu chí nghiệm thu
@@ -66,7 +66,7 @@ Các việc này không ngăn tạo abstraction/schema cốt lõi, nhưng phải
 - OTP provider, nguồn dữ liệu chi tiết hợp đồng và allowlist trường CUSTOMER được đọc.
 - Danh mục hạng mục/đơn vị đo; quyền tạo/duyệt kế hoạch; kỳ/chỉ tiêu cho dashboard/KPI.
 - Queue provider settings, retry/dead-letter retention và cách vận hành worker.
-- Scanner, limits cho XLSX sau giải nén, retention, legal hold, quyền xóa, audit retention và chính sách pháp lý/production.
+- ClamAV nội bộ, mount thư mục tạm dùng chung API/worker, giới hạn XLSX sau giải nén và audit chỉ giữ số lượng tổng hợp. Không dùng S3 cho tệp import.
 
 ## 6. Rủi ro và biện pháp
 
@@ -74,7 +74,7 @@ Các việc này không ngăn tạo abstraction/schema cốt lõi, nhưng phải
 - **Role tùy chỉnh:** nguy cơ privilege escalation. Chỉ cấp subset của grantable set, chặn role system, kiểm tra scope actor/target, audit mutation cùng transaction và có kiểm thử IDOR.
 - **`CONVERTED` và contract:** không để nhân viên đặt trạng thái này nếu không có hợp đồng liên kết; cập nhật status và contract relation trong cùng transaction hoặc tính trạng thái theo quy tắc domain rõ ràng.
 - **PWA CUSTOMER:** không xem API mock là auth. Mock phải fail-closed theo environment; production yêu cầu OTP/session xác thực và mọi query lấy customer ID từ server-side identity.
-- **File/PII:** chỉ dùng fixture tổng hợp; không đưa dữ liệu thật vào dev/test. Không bật file thật hoặc production trước khi policy scanner/retention/legal được duyệt.
+- **File/PII:** P0-4 chỉ lưu file trong thư mục tạm cục bộ và xóa sau khi dùng; staging PII bị xóa khi batch terminal; audit chỉ giữ số lượng. Chỉ dùng fixture tổng hợp và không bật upload production trước khi toàn bộ pipeline/integration đạt.
 - **Phụ thuộc hiện tại:** báo cáo scaffold ghi còn production audit advisories và chưa xác nhận PostgreSQL/restore thực. Rà soát dependency hiện hành trước upload, dữ liệu thật hoặc release; không coi kết quả cũ là trạng thái hiện thời.
 
 ## 7. Cổng bắt đầu code P0

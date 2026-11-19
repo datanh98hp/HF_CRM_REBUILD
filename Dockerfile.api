@@ -21,6 +21,7 @@ COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/scripts ./apps/api/scripts
 COPY --from=build /app/apps/api/dist ./apps/api/dist
+RUN mkdir -p /app/apps/api/import-customer-files && chown -R app:app /app/apps/api/import-customer-files
 USER app
 EXPOSE 3001
 CMD ["node", "apps/api/dist/src/main.js"]

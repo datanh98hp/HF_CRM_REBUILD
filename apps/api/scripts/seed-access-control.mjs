@@ -735,7 +735,7 @@ try {
 
     const branchManagerPermissions = [
       'branches.read', 'users.read', 'users.manage', 'roles.read', 'roles.manage', 'audit.read',
-      'customers.read', 'customers.manage', 'customers.assign', 'customers.duplicates.review',
+      'customers.read', 'customers.manage', 'customers.import', 'customers.assign', 'customers.duplicates.review',
       'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read', 'loan-contracts.manage',
       'loan-contracts.review', 'loan-contracts.status.manage', 'loan-contracts.ingest',
       'loan-products.read', 'loan-products.manage', 'loan-products.publish',

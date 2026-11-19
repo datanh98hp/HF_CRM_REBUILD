@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { FileSpreadsheet } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
 import { CustomerWorkspace } from '@/components/customer-workspace';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { request } from '@/lib/crm-api';
@@ -11,6 +14,17 @@ export function CustomersPage() {
 
   return (
     <WorkspaceLayout activeSection="customers" requiredPermission="customers.read">
+      {can('customers.import') && (
+        <div className="mb-4 flex justify-end">
+          <Link
+            href="/customers/import"
+            className={buttonVariants({ variant: 'outline', className: 'h-10 min-h-10 w-full rounded-xl px-4 sm:w-auto' })}
+          >
+            <FileSpreadsheet aria-hidden="true" />
+            Nhập khách hàng
+          </Link>
+        </div>
+      )}
       <CustomerWorkspace
         accessToken={session.accessToken}
         request={request}

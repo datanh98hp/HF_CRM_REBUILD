@@ -44,6 +44,7 @@ import {
   UpdateLoanRequestStatusDto,
 } from './customer.dto.js';
 import { normalizeVietnamesePhone, normalizeVietnamesePhoneSearch } from './phone-normalizer.js';
+import { normalizeCustomerEmail, normalizeCustomerName } from './customer-normalization.js';
 import { ContractDocumentStorageService } from './contract-document-storage.service.js';
 import {
   evaluateLoanFormula,
@@ -77,20 +78,6 @@ const CONTRACT_DOCUMENT_MIME_TYPES: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.png': 'image/png',
 };
-
-function normalizedName(value: string): string {
-  return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
-    .replace(/[^a-zA-Z0-9]+/g, ' ').trim().toLowerCase();
-}
-
-function normalizedEmail(value?: string | null): string | null {
-  if (value === undefined || value === null || value.trim() === '') return null;
-  const email = value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new BadRequestException({ code: 'INVALID_EMAIL' });
-  }
-  return email;
-}
 
 @Injectable()
 export class CustomersService {
@@ -151,14 +138,14 @@ export class CustomersService {
     await this.assertBranchManagePermission(actor, 'customers.manage', dto.branchId);
     const phone = normalizeVietnamesePhone(dto.phone);
     const phoneNormalized = phone;
-    const emailNormalized = normalizedEmail(dto.email);
+    const emailNormalized = normalizeCustomerEmail(dto.email);
     const dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
     await this.assertBranchExists(dto.branchId);
 
     return this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.create({
         data: {
-          fullName: dto.fullName.trim(), normalizedName: normalizedName(dto.fullName), phone, phoneNormalized,
+          fullName: dto.fullName.trim(), normalizedName: normalizeCustomerName(dto.fullName), phone, phoneNormalized,
           email: emailNormalized, emailNormalized, dateOfBirth, provenance: dto.provenance.trim(),
           branchId: dto.branchId, createdById: actor.id,
         },
@@ -187,13 +174,13 @@ export class CustomersService {
     const nextPhone = dto.phone === undefined ? customer.phone : normalizeVietnamesePhone(dto.phone);
     const nextEmail = dto.email === undefined ? customer.email : dto.email;
     const nextDob = dto.dateOfBirth === undefined ? customer.dateOfBirth : dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
-    const email = normalizedEmail(nextEmail);
+    const email = normalizeCustomerEmail(nextEmail);
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.customer.update({
         where: { id: customer.id },
         data: {
-          fullName: nextFullName, normalizedName: normalizedName(nextFullName), phone: nextPhone,
+          fullName: nextFullName, normalizedName: normalizeCustomerName(nextFullName), phone: nextPhone,
           phoneNormalized: nextPhone, email, emailNormalized: email, dateOfBirth: nextDob,
           ...(dto.provenance ? { provenance: dto.provenance.trim() } : {}),
           ...(dto.verificationStatus ? { verificationStatus: dto.verificationStatus } : {}),
@@ -1218,7 +1205,7 @@ export class CustomersService {
     const phone = normalizeVietnamesePhone(dto.customerPhone);
     const dob = dto.customerDateOfBirth ? new Date(dto.customerDateOfBirth) : null;
     const name = dto.customerFullName.trim();
-    const normalized = normalizedName(name);
+    const normalized = normalizeCustomerName(name);
     const sourceSystem = dto.sourceSystem.trim();
     const externalContractId = dto.externalContractId.trim();
     const keyHash = createHash('sha256').update(idempotencyKey).digest('hex');
@@ -1227,7 +1214,7 @@ export class CustomersService {
       packageCode: dto.packageCode?.trim() ?? null, packageName: dto.packageName.trim(), packageVersion: dto.packageVersion?.trim() ?? null,
       loanType: dto.loanType?.trim() ?? null, termMonths: dto.termMonths ?? null, sourceUpdatedAt: dto.sourceUpdatedAt ?? null,
       customerFullName: name, customerPhone: phone, customerDateOfBirth: dto.customerDateOfBirth ?? null,
-      customerEmail: normalizedEmail(dto.customerEmail), branchId: dto.branchId,
+      customerEmail: normalizeCustomerEmail(dto.customerEmail), branchId: dto.branchId,
     })).digest('hex');
     const existing = await this.prisma.loanContract.findFirst({
       where: {
@@ -1249,7 +1236,7 @@ export class CustomersService {
         const customer = exact.length === 1 ? exact[0] : await tx.customer.create({
           data: {
             fullName: name, normalizedName: normalized, phone, phoneNormalized: phone,
-            dateOfBirth: dob, email: normalizedEmail(dto.customerEmail), emailNormalized: normalizedEmail(dto.customerEmail),
+            dateOfBirth: dob, email: normalizeCustomerEmail(dto.customerEmail), emailNormalized: normalizeCustomerEmail(dto.customerEmail),
             provenance: `external:${dto.sourceSystem}`, verificationStatus: 'UNVERIFIED', branchId: dto.branchId
           },
           include: { assignments: { where: { endedAt: null } } },

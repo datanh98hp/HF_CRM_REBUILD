@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { Job, UnrecoverableError, Worker } from 'bullmq';
 import { BACKGROUND_QUEUE_NAME } from '../background-queue/background-queue.constants.js';
 import { redisConnectionOptions } from '../background-queue/redis-connection.js';
+import { CustomerImportWorkerService } from '../customer-imports/customer-import-worker.service.js';
 import { RuntimeConfigService } from '../runtime-config/runtime-config.service.js';
 
 @Injectable()
@@ -9,7 +10,10 @@ export class WorkerRuntimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkerRuntimeService.name);
   private worker: Worker | undefined;
 
-  constructor(private readonly config: RuntimeConfigService) {}
+  constructor(
+    private readonly config: RuntimeConfigService,
+    private readonly customerImports: CustomerImportWorkerService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     this.worker = new Worker(
@@ -39,8 +43,15 @@ export class WorkerRuntimeService implements OnModuleInit, OnModuleDestroy {
     await this.worker?.close();
   }
 
-  private async process(job: Job<Record<string, unknown>>): Promise<{ status: 'ok' }> {
+  private async process(job: Job<Record<string, unknown>>): Promise<{ status: string }> {
     if (job.name === 'system.healthcheck') return { status: 'ok' };
+    if (job.name === 'customer-import.process') {
+      const { batchId, format } = job.data;
+      if (typeof batchId !== 'string' || (format !== 'csv' && format !== 'xlsx')) {
+        throw new UnrecoverableError('Customer import job metadata is invalid');
+      }
+      return this.customerImports.process(batchId, format);
+    }
     throw new UnrecoverableError(`No processor is registered for job type: ${job.name}`);
   }
 }

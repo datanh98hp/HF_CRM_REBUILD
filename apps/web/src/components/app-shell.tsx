@@ -7,6 +7,7 @@ import {
   CheckSquare,
   ChevronRight,
   FileCheck2,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -24,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type AccessSection = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -35,6 +36,7 @@ type ShellProps = {
   canReadBranches: boolean;
   canReadRoles: boolean;
   canReadCustomers: boolean;
+  canImportCustomers: boolean;
   canAccessPlans: boolean;
   canReadPlanCatalog: boolean;
   canReadTasks: boolean;
@@ -69,6 +71,7 @@ export function AppShell({
   canReadBranches,
   canReadRoles,
   canReadCustomers,
+  canImportCustomers,
   canAccessPlans,
   canReadPlanCatalog,
   canReadTasks,
@@ -114,6 +117,7 @@ export function AppShell({
       label: 'Khách hàng & tư vấn',
       items: [
         ...(canReadCustomers ? [{ key: 'customers', label: 'Khách hàng', icon: UsersRound, section: 'customers' as const }] : []),
+        ...(canImportCustomers ? [{ key: 'customer-import', label: 'Nhập khách hàng', icon: FileSpreadsheet, section: 'customer-import' as const }] : []),
         { key: 'chat', label: 'Hội thoại', icon: MessageSquare, disabled: true },
       ],
     },
@@ -147,6 +151,8 @@ export function AppShell({
     ? 'Khách hàng'
     : activeSection === 'products'
       ? 'Sản phẩm vay'
+    : activeSection === 'customer-import'
+      ? 'Nhập khách hàng'
     : activeSection === 'contracts'
       ? 'Quản lý Hợp đồng'
     : activeSection === 'users'

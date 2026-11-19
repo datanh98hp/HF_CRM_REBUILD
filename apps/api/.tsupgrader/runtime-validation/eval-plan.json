@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-11-19T09:40:00+07:00",
+  "generatedOnPlatform": "win32",
+  "projectType": "server",
+  "setup": [
+    {
+      "command": "npm.cmd",
+      "args": ["ci", "--include=dev"],
+      "cwd": "D:\\IT\\HF_CRM",
+      "timeoutSeconds": 600
+    }
+  ],
+  "assertions": [
+    {
+      "name": "generate-api-client",
+      "kind": "process",
+      "command": "npm.cmd",
+      "args": ["run", "db:generate"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "api-typecheck",
+      "kind": "process",
+      "command": "npm.cmd",
+      "args": ["run", "typecheck"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "customer-storage-tests",
+      "kind": "process",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "test",
+        "--",
+        "--runTestsByPath",
+        "src/customers/customers.service.spec.ts",
+        "src/customers/contract-document-storage.service.spec.ts"
+      ],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "backup-crypto-tests",
+      "kind": "process",
+      "command": "npm.cmd",
+      "args": ["run", "test:backup-crypto"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 60
+    },
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm.cmd",
+      "args": ["test"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    }
+  ]
+}

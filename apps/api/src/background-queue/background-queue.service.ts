@@ -35,6 +35,14 @@ export class BackgroundQueueService implements OnModuleDestroy {
     }
   }
 
+  async hasWorkers(): Promise<boolean> {
+    try {
+      return (await this.queue.getWorkersCount()) > 0;
+    } catch {
+      return false;
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     try {
       await this.queue.close();

@@ -104,6 +104,34 @@ enum FileScanStatus {
   DELETED
 }
 
+enum CustomerImportBatchStatus {
+  QUARANTINED
+  SCANNING
+  QUEUED
+  PROCESSING
+  NEEDS_REVIEW
+  READY_TO_CONFIRM
+  COMMITTING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum CustomerImportRowStatus {
+  VALIDATING
+  INVALID
+  DUPLICATE_REVIEW
+  READY
+  IMPORTED
+  SKIPPED_DUPLICATE
+}
+
+enum CustomerImportDuplicateDecision {
+  CONFIRMED_DUPLICATE
+  NOT_DUPLICATE
+}
+
 enum ContractOtpChallengeStatus {
   PENDING
   VERIFIED
@@ -131,6 +159,7 @@ model Branch {
   planBranches PlanBranch[]
   tasks Task[]
   evidenceFiles FileAsset[]
+  customerImportBatches CustomerImportBatch[]
   createdAt DateTime     @default(now()) @db.Timestamptz(3)
   updatedAt DateTime     @updatedAt @db.Timestamptz(3)
 
@@ -175,6 +204,9 @@ model User {
   reviewedPlans PlanApproval[] @relation("PlanApprovalReviewer")
   uploadedEvidenceFiles FileAsset[] @relation("EvidenceFileUploader")
   linkedTaskResultEvidence TaskResultEvidence[] @relation("TaskResultEvidenceLinker")
+  createdCustomerImportBatches CustomerImportBatch[] @relation("CustomerImportBatchCreator")
+  confirmedCustomerImportBatches CustomerImportBatch[] @relation("CustomerImportBatchConfirmer")
+  decidedCustomerImportRows CustomerImportRow[] @relation("CustomerImportRowDecider")
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
 
@@ -295,6 +327,7 @@ model Customer {
   initiatedContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractCustomerStatusActor")
   duplicateCandidates DuplicateCandidate[]      @relation("DuplicateSource")
   duplicateMatches   DuplicateCandidate[]       @relation("DuplicateMatch")
+  importedRows       CustomerImportRow[]         @relation("CustomerImportRowCustomer")
   createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime                   @updatedAt @db.Timestamptz(3)
 
@@ -728,6 +761,73 @@ model FileAsset {
   @@index([branchId, scanStatus, createdAt])
   @@index([uploadedById, createdAt])
   @@index([expiresAt, legalHold])
+}
+
+model CustomerImportBatch {
+  id              String                    @id @default(uuid()) @db.Uuid
+  branchId        String                    @db.Uuid
+  createdById     String                    @db.Uuid
+  confirmedById   String?                   @db.Uuid
+  idempotencyKey  String                    @db.VarChar(128)
+  tempFileKey     String?                   @db.VarChar(64)
+  fileSha256      String?                   @db.Char(64)
+  columnMapping   Json
+  selectedSheet   String?                   @db.VarChar(160)
+  status          CustomerImportBatchStatus  @default(QUARANTINED)
+  totalRows       Int                       @default(0)
+  validRows       Int                       @default(0)
+  invalidRows     Int                       @default(0)
+  duplicateRows   Int                       @default(0)
+  importedRows    Int                       @default(0)
+  skippedRows     Int                       @default(0)
+  failedInsertRows Int                      @default(0)
+  errorCode       String?                   @db.VarChar(80)
+  confirmedAt     DateTime?                 @db.Timestamptz(3)
+  completedAt     DateTime?                 @db.Timestamptz(3)
+  cancelledAt     DateTime?                 @db.Timestamptz(3)
+  expiresAt       DateTime?                 @db.Timestamptz(3)
+  branch          Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy       User                      @relation("CustomerImportBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedBy     User?                     @relation("CustomerImportBatchConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  rows            CustomerImportRow[]
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @db.Timestamptz(3)
+
+  @@unique([createdById, idempotencyKey])
+  @@index([branchId, status, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model CustomerImportRow {
+  id                    String                            @id @default(uuid()) @db.Uuid
+  batchId               String                            @db.Uuid
+  rowNumber             Int
+  sheetName             String                            @default("") @db.VarChar(160)
+  fullName              String?                           @db.VarChar(160)
+  normalizedName        String?                           @db.VarChar(160)
+  phone                 String?                           @db.VarChar(32)
+  phoneNormalized       String?                           @db.VarChar(24)
+  email                 String?                           @db.VarChar(254)
+  emailNormalized       String?                           @db.VarChar(254)
+  dateOfBirth           DateTime?                         @db.Date
+  status                CustomerImportRowStatus           @default(VALIDATING)
+  validationErrors      Json                              @default("[]")
+  duplicateMatches     Json                              @default("[]")
+  duplicateDecision    CustomerImportDuplicateDecision?
+  decisionReason       String?                           @db.VarChar(1000)
+  decidedById          String?                           @db.Uuid
+  decidedAt            DateTime?                         @db.Timestamptz(3)
+  customerId           String?                           @db.Uuid
+  batch                CustomerImportBatch               @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  decidedBy            User?                             @relation("CustomerImportRowDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  customer             Customer?                         @relation("CustomerImportRowCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                          @updatedAt @db.Timestamptz(3)
+
+  @@unique([batchId, sheetName, rowNumber])
+  @@index([batchId, status, rowNumber])
+  @@index([phoneNormalized])
+  @@index([emailNormalized])
 }
 
 model TaskResultEvidence {

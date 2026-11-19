@@ -256,7 +256,7 @@ export function RolesPage() {
                               </th>
                             </tr>
                             {permissionCatalog.filter((permission) => permission.groupKey === group).map((permission) => (
-                              <tr key={permission.key}>
+                              <tr key={permission.key} className="hover:bg-gray-400/10  ">
                                 <td>
                                   <strong>{permission.key}</strong>
                                   <small className="permission-description-en">{permissionDescriptionEnglish(permission)}</small>

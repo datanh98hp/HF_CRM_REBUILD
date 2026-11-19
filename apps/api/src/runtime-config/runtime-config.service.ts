@@ -12,6 +12,10 @@ export interface RuntimeConfig {
   databaseUrl: string;
   redisUrl: string;
   workerConcurrency: number;
+  customerImportTempDirectory: string;
+  customerImportScannerHost: string;
+  customerImportScannerPort: number;
+  customerImportScannerTimeoutMs: number;
   authAccessTokenSecret: string;
   authAccessTokenTtlSeconds: number;
   authRefreshTokenTtlDays: number;
@@ -41,6 +45,14 @@ function parseConcurrency(raw: string | undefined): number {
   const value = raw === undefined ? 5 : Number(raw);
   if (!Number.isInteger(value) || value < 1 || value > 50) {
     throw new Error('WORKER_CONCURRENCY must be an integer between 1 and 50');
+  }
+  return value;
+}
+
+function parseHostname(name: string, raw: string | undefined, fallback: string): string {
+  const value = (raw ?? fallback).trim();
+  if (!/^[a-zA-Z0-9.-]+$/.test(value) || value.startsWith('.') || value.endsWith('.')) {
+    throw new Error(`${name} must be a hostname or IPv4 address`);
   }
   return value;
 }
@@ -98,6 +110,26 @@ function loadRuntimeConfig(): RuntimeConfig {
     ]),
     redisUrl: parseUrl('REDIS_URL', process.env.REDIS_URL, ['redis:', 'rediss:']),
     workerConcurrency: parseConcurrency(process.env.WORKER_CONCURRENCY),
+    customerImportTempDirectory: resolve(
+      process.env.CUSTOMER_IMPORT_TEMP_DIR?.trim() || 'import-customer-files',
+    ),
+    customerImportScannerHost: parseHostname(
+      'CUSTOMER_IMPORT_SCANNER_HOST',
+      process.env.CUSTOMER_IMPORT_SCANNER_HOST,
+      'clamav',
+    ),
+    customerImportScannerPort: parsePort(
+      'CUSTOMER_IMPORT_SCANNER_PORT',
+      process.env.CUSTOMER_IMPORT_SCANNER_PORT,
+      3310,
+    ),
+    customerImportScannerTimeoutMs: parseBoundedInteger(
+      'CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS',
+      process.env.CUSTOMER_IMPORT_SCANNER_TIMEOUT_MS,
+      120_000,
+      1_000,
+      300_000,
+    ),
     authAccessTokenSecret,
     authAccessTokenTtlSeconds: parseBoundedInteger(
       'AUTH_ACCESS_TOKEN_TTL_SECONDS',

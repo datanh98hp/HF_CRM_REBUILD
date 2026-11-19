@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { CapabilitiesController } from './capabilities/capabilities.controller.js';
 import { PlansModule } from './plans/plans.module.js';
+import { CustomerImportsModule } from './customer-imports/customer-imports.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PlansModule } from './plans/plans.module.js';
     AuditModule,
     AuthModule,
     CustomersModule,
+    CustomerImportsModule,
     PlansModule,
     HealthModule,
   ],

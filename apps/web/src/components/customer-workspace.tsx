@@ -436,7 +436,7 @@ export function CustomerWorkspace({
   const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [branchId, setBranchId] = useState('');
-  const [provenance, setProvenance] = useState('Nhập trực tiếp');
+  const [provenance, setProvenance] = useState('Nhập thủ công');
   const [showStatusForm, setShowStatusForm] = useState(false);
   const [statusDraft, setStatusDraft] = useState('');
   const [statusReason, setStatusReason] = useState('');

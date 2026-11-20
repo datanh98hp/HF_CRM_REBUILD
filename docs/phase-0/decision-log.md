@@ -37,7 +37,7 @@
 - **Customer data:** số điện thoại bắt buộc; email và ngày sinh tùy chọn; ngày sinh + họ tên dùng cảnh báo trùng khi có đủ dữ liệu. Không bổ sung trường PII khác trong quyết định này.
 - **CUSTOMER access:** mobile web/PWA trước, app native sau; OTP số điện thoại là phương án xác thực production mặc định. API giả lập chỉ dùng dev/test. CUSTOMER đọc hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn dữ liệu có, và gói vay; OTP provider, nguồn dữ liệu và allowlist chi tiết cần cấu hình.
 - **Loan request/contract source:** CUSTOMER có thể gửi yêu cầu vay; nếu khách yêu cầu qua tư vấn viên, ADVISING ghi nhận yêu cầu. Yêu cầu là nguồn hồ sơ intake/tracking; hợp đồng chỉ được tạo/liên kết khi hợp đồng thực sự phát sinh, không tự động phê duyệt từ yêu cầu.
-- **Import:** ánh xạ họ tên, ngày sinh, số điện thoại; preview/mapping, validation từng dòng và phát hiện trùng chạy trong tác vụ nền; batch chỉ ghi khi toàn bộ dòng hợp lệ và người dùng xác nhận. Có lỗi thì không nhập một phần; hiển thị lỗi theo dòng để sửa/tải lại. Dòng nghi trùng cần rà soát/xác nhận thủ công trước khi batch được xác nhận. Chuẩn hóa theo cấu hình quốc gia.
+- **Import (đã thay đổi 2026-11-18, xem “Cập nhật quyết định — import nền”):** ánh xạ họ tên, ngày sinh, số điện thoại; kiểm tra từng dòng và phát hiện trùng chạy trong tác vụ nền. Quyết định ban đầu yêu cầu preview/mapping và xác nhận toàn batch; quyết định hiện hành là auto-import (không preview/xác nhận), ghi các dòng hợp lệ trong một transaction atomic, bỏ qua và đếm riêng dòng trùng/dòng lỗi. Chuẩn hóa theo cấu hình quốc gia.
 - **CONVERTED:** khách hàng có hợp đồng vay được tạo hoặc liên kết trong hệ thống CRM.
 - **Customer states:** cho phép chuyển trạng thái linh hoạt, nhưng mọi chuyển đổi phải có lý do và audit. `CONVERTED` yêu cầu có hợp đồng liên kết.
 - **Customer org/RBAC:** chi nhánh tổng → chi nhánh con; cho phép tạo role tùy chỉnh nhưng chỉ chọn permission từ catalog và trong quyền được ủy quyền.
@@ -56,7 +56,7 @@
 
 - **RBAC:** permission theo nhóm chức năng × scope (`OWN`, `ASSIGNED`, `BRANCH`, `ALL`) × node tổ chức; cây chi nhánh tổng → chi nhánh con. Hỗ trợ role tùy chỉnh từ permission catalog, giới hạn trong tập quyền được ủy quyền; mọi thay đổi quyền và audit ghi cùng transaction.
 - **CUSTOMER:** mobile web/PWA trước, app native sau; OTP số điện thoại là xác thực production mặc định; API giả lập chỉ bật ở dev/test và fail-closed ở production. Customer ID lấy từ session, dữ liệu hợp đồng phải thuộc customer đó, trường trả về theo allowlist.
-- **Import:** pipeline tải lên → tác vụ nền preview/mapping → tác vụ nền kiểm tra từng dòng và dò trùng → người dùng xem kết quả/lỗi → xác nhận → ghi toàn batch. Nếu có dòng lỗi thì không nhập một phần; cần sửa/tải lại để toàn file hợp lệ. Dòng nghi trùng phải được rà soát/xác nhận thủ công. Dùng batch ID/idempotency, báo lỗi theo dòng, không auto-merge. Chuẩn hóa khoảng trắng/Unicode, email chữ thường, phone theo quốc gia cấu hình.
+- **Import (sửa đổi 2026-11-18):** pipeline tải lên → kiểm tra tệp và quét ClamAV → tác vụ nền parse/kiểm tra từng dòng, dò trùng → tự động ghi các dòng hợp lệ trong một transaction atomic → xóa tệp. Không còn bước preview hay xác nhận toàn batch; dòng trùng và dòng lỗi bị bỏ qua, đếm riêng và không chặn các dòng hợp lệ; lỗi tệp/scanner dừng toàn batch. Dùng batch ID/idempotency, báo lỗi theo dòng (chỉ số dòng + mã lỗi trong 30 ngày), không auto-merge. Chuẩn hóa khoảng trắng/Unicode, email chữ thường, phone theo quốc gia cấu hình.
 - **Khách hàng:** chuyển trạng thái linh hoạt, bắt buộc lý do và audit; `CONVERTED` yêu cầu hợp đồng được tạo/liên kết trong CRM.
 - **Kế hoạch/KPI:** mỗi kế hoạch có hạng mục, đơn vị đo, chỉ tiêu và thời gian; nhân viên tạo task rồi chọn kế hoạch phù hợp. Tổng số thực đạt đã xác minh từ task liên kết được so với chỉ tiêu kế hoạch. Số thực đạt là trường số; nội dung báo cáo và file chứng minh lưu riêng. Trạng thái review: chờ xác minh, đã xác minh, cần bổ sung, từ chối; lưu người/thời điểm/lý do. Bổ sung thì gửi lại review; chỉ số đã xác minh mới vào KPI; sửa sau xác minh tạo lịch sử/điều chỉnh có audit.
 - **Dashboard:** metric phải có định nghĩa, nguồn, scope và trạng thái được tính; filter theo ngày/tháng, nhân viên, hạng mục. Lưu timestamp UTC, hiển thị theo `Asia/Ho_Chi_Minh` mặc định.
@@ -66,6 +66,13 @@
 - **Loan/integration:** MVP chỉ hiển thị sản phẩm đã duyệt; không tính eligibility/lịch trả nợ chính thức khi chưa có quy tắc tài chính được duyệt. CRM ngoài sau MVP; khi triển khai dùng transactional outbox, idempotency, retry/dead-letter và replay có quyền/audit.
 
 Các quyết định này chấp thuận phương án và nguyên tắc triển khai. Giá trị vận hành cụ thể (node tổ chức, OTP provider, nguồn/field hợp đồng, quốc gia chuẩn hóa phone, metric/mục tiêu, SLA, scanner, retention, RPO/RTO, residency) vẫn cần cấu hình hoặc phê duyệt bởi chủ sở hữu tương ứng trước khi bật chức năng liên quan.
+
+## Cập nhật quyết định — import nền (2026-11-18)
+
+- **Thay đổi:** bỏ bước preview/mapping và xác nhận thủ công cho import khách hàng; chuyển sang auto-import.
+- **Lý do:** không lưu staging dữ liệu khách hàng (PII) ngoài nhu cầu xử lý, pipeline gọn hơn cho giới hạn 10.000 dòng/tệp, và lỗi tệp/scanner vẫn dừng toàn batch nên không có rủi ro nhập dở tệp hỏng.
+- **Chốt:** chỉ CSV/XLSX ≤20 MB; quét ClamAV `INSTREAM` trước khi parse (thiếu scanner thì fail-closed); dòng hợp lệ ghi atomic trong một transaction Serializable; dòng trùng bỏ qua và đếm; dòng lỗi validation bỏ qua và đếm, chi tiết chỉ giữ số dòng + mã lỗi whitelist trong 30 ngày; audit chỉ giữ counts; tệp tạm xóa sau xử lý; retry ở `COMMITTING` chỉ cleanup/finalization, không import lại.
+- **Ảnh hưởng tài liệu:** mục Import ở “Bổ sung yêu cầu — 2026-11-07” và “Các mặc định đã được chấp thuận ngày 2026-11-05” đã được sửa theo quyết định này; chi tiết kỹ thuật và tiến độ tại [P0-4](p0/p0-4-background-import.md).
 
 ## Cách ghi nhận quyết định
 

@@ -4,7 +4,7 @@ Finance CRM is planned as a modular monolith: NestJS REST API, Next.js staff web
 
 ## Current implementation scope
 
-P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 provides staff authentication and scoped organization/access-control APIs, with staff web screens for users, branches and roles. P0-2 provides customer, assignment, care history, loan request/contract and related workflows. P0-3 includes scoped plan/task APIs, immutable result revisions, audited verification decisions, verified-only KPI aggregation, and a task/KPI workspace at `/tasks` based on selected wireframe B. Evidence metadata relations are implemented and migrated on the test database; binary upload/download, security-policy configuration, and target-environment acceptance remain open. P0-6 is in progress: staff customer/loan and access-administration screens are available, while customer PWA, realtime chat UI and remaining workflows are not complete. CI pipeline work is excluded from the current continuation. See the [implementation status](docs/phase-0/implementation-status.md) for current verification and limitations.
+P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and worker lifecycle, validated runtime configuration, and operational probes. P0-1 provides staff authentication and scoped organization/access-control APIs, with staff web screens for users, branches and roles. P0-2 provides customer, assignment, care history, loan product/formula, loan request/contract and document workflows. P0-3 includes scoped plan/task APIs, immutable result revisions, audited verification decisions, verified-only KPI aggregation, and a task/KPI workspace at `/tasks` based on selected wireframe B; evidence metadata relations exist but binary upload/download for task evidence is not implemented. P0-4 provides the background customer import pipeline (CSV/XLSX upload, local temp storage, ClamAV scan, worker parsing, atomic dedupe/import, file cleanup, count-only audit) with a staff UI at `/customers/import`; its partial-row extension ships two migrations that have not yet been applied or verified on an isolated test database, so import readiness stays fail-closed. P0-5 (realtime chat) has no code yet: no socket gateway, conversation model or chat UI. P0-6 is in progress: 13 staff routes exist (including `/customers/import`), while the dashboard, chat UI, customer PWA and remaining workflows are not complete. CI pipeline work is excluded from the current continuation. See the [implementation status](docs/phase-0/implementation-status.md) for current verification and limitations; it is the single source of truth for phase status (reconciled against the codebase on 2026-11-20).
 
 ## Requirements accepted so far
 
@@ -12,7 +12,7 @@ P0-0 provides the Prisma/PostgreSQL client foundation, Redis/BullMQ queue and wo
 - Loan requests can originate from CUSTOMER or be recorded by ADVISING; requests are intake/tracking, not automated eligibility or approval. A separate contract record is created/linked when a contract actually exists.
 - Realtime chat between ADVISING and CUSTOMER is in the MVP. External CRM integration and custom reporting are deferred.
 - A customer has one primary assigned adviser at a time, with assignment history retained.
-- Customer import uses background preview/row validation/duplicate review and commits the whole batch only after all rows are valid and confirmed.
+- Customer import runs in the background as an automatic full-batch pipeline: the file is scanned, parsed and imported without a preview/confirm step, valid rows are written atomically, duplicate and invalid rows are skipped and counted, and the temporary file is deleted afterwards. The earlier "preview then confirm the whole batch" requirement was replaced by this decision; see [P0-4](docs/phase-0/p0/p0-4-background-import.md).
 - CUSTOMER starts with mobile web/PWA; native app is later. Customer mock API is dev/test only.
 
 ## Documentation by phase
@@ -89,5 +89,7 @@ It uses the matching `.env.dev`, `.env.test`, or `.env.prod` file and Compose ov
 
 - Host: `npm run typecheck`, `npm run test`, `npm run build`.
 - Toolbox container: `bash scripts/docker-compose.sh dev app typecheck`, `... app test`, `... app build`.
+
+If API suites fail to load with missing modules (`exceljs`, `unzipper`, `@aws-sdk/client-s3`) or a stale Prisma Client, run `npm install` and `npm run db:generate` (or run the checks inside the toolbox container) before retrying.
 
 No production-readiness claim is made by this scaffold. See `AGENT.md`, the Phase 0 decision log, and P0 stage plans for required controls, gates and remaining configuration.

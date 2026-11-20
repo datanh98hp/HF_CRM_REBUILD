@@ -1,6 +1,6 @@
 # P0-4 — Import khách hàng nền theo giao dịch atomic
 
-**Trạng thái:** Pipeline cơ sở upload → ClamAV → worker → import PostgreSQL → xóa tệp đã được nghiệm thu trên stack test riêng. Bản mở rộng partial-row đã qua API suite, typecheck và build; migration mới cùng integration mixed-row chưa được áp dụng/chạy trên DB test riêng, nên chưa coi phần mở rộng runtime đã nghiệm thu.
+**Trạng thái (cập nhật 2026-11-20, đối chiếu code):** Pipeline upload → ClamAV → worker → import PostgreSQL → xóa tệp đã có code đầy đủ và đã được nghiệm thu trên stack test riêng. Bản mở rộng partial-row đã có schema + parser/worker/API/UI + 2 migration (`20261120121200_p0_4_partial_import_failures`, `20261120161000_p0_4_partial_import_finalization`) và đã qua API suite, typecheck, build; **hai migration này chưa được áp dụng trên DB test cô lập và integration mixed-row chưa chạy**, nên chưa coi phần mở rộng runtime đã nghiệm thu. Readiness trả `BLOCKED` với `IMPORT_SCHEMA_NOT_READY` cho tới khi DB đích có cột `failureDetailsExpiresAt`.
 **Phụ thuộc:** P0-0 (PostgreSQL/Redis/BullMQ), P0-1 (auth/RBAC/audit), P0-2 (customer/normalization/duplicate review), thư mục tạm cục bộ dùng chung giữa API/worker và ClamAV nội bộ.
 
 ## Mục tiêu
@@ -36,8 +36,8 @@ Migration dự kiến thêm:
 - `CustomerImportBatch`: `id`, `branchId`, `createdById`, khóa tệp tạm opaque, idempotency key, file hash trong lúc xử lý, trạng thái, số liệu tổng hợp, timestamps và mã lỗi tổng quát an toàn.
 - `CustomerImportRow` chỉ giữ chi tiết lỗi đã làm sạch (số dòng + mã lỗi); không lưu giá trị ô hoặc dữ liệu khách hàng. Worker tự xóa các bản ghi này sau 30 ngày.
 - Unique constraints cho idempotency key trong phạm vi người tạo; unique `(batchId, rowNumber)` hoặc `(batchId, sheetName, rowNumber)`; index cho batch/status và candidate lookup.
-- Batch terminal xóa file key/hash, mapping/sheet name và dữ liệu row nếu có; chỉ giữ counts cần cho audit.
-- `invalidRows` đếm dòng lỗi validation; `failedInsertRows` đếm số dòng hợp lệ bị rollback khi transaction ghi thất bại. Chi tiết chỉ chứa số dòng và mã lỗi, được xóa sau 30 ngày. Audit chỉ ghi counts tổng hợp, không ghi từng dòng.
+- Batch terminal xóa `tempFileKey`/`fileSha256`, mapping/sheet name, các count tổng `totalRows`/`validRows`/`skippedRows` và dữ liệu row nếu có; `importedRows`/`duplicateRows`/`invalidRows`/`failedInsertRows` cùng audit event vẫn giữ làm số liệu tổng hợp. Migration `20261120161000_p0_4_partial_import_finalization` bắt buộc bằng CHECK constraint: batch ở trạng thái terminal phải có `totalRows = 0`, `validRows = 0`, `skippedRows = 0`, `columnMapping = '{}'` và `selectedSheet IS NULL`.
+- `invalidRows` đếm dòng lỗi validation; `failedInsertRows` đếm số dòng hợp lệ bị rollback khi transaction ghi thất bại. Chi tiết chỉ chứa số dòng và mã lỗi, được xóa sau 30 ngày (`failureDetailsExpiresAt`, index theo cột này). Audit chỉ ghi counts tổng hợp, không ghi từng dòng.
 
 Batch states dùng trong pipeline:
 
@@ -81,7 +81,7 @@ Response không chứa object key, storage path, tên file, nội dung tệp, gi
 
 ### Giao diện
 
-Tạo route staff `/customers/import` và đường vào từ trang Khách hàng:
+Route staff `/customers/import` đã được triển khai và có đường vào từ trang Khách hàng:
 
 1. Chọn chi nhánh trong scope và CSV/XLSX; hiển thị định dạng và giới hạn.
 2. Tải lên để tự động quét và nhập; không có bước preview hay xác nhận.
@@ -96,7 +96,7 @@ Tạo route staff `/customers/import` và đường vào từ trang Khách hàng
 | 0. Chốt hợp đồng | Permission, parser limits, local temp directory, ClamAV nội bộ, auto-import, xóa tệp sau xử lý và audit chỉ giữ counts. | Đã chốt. Không dùng S3 cho import. |
 | 1. Schema/RBAC | Thêm batch/row states, relations, indexes/unique constraints; cập nhật permission catalog, role defaults, seed và migration. | Pha 0; validate migration trên PostgreSQL test. |
 | 2–6. Pipeline | Local temp storage, ClamAV `INSTREAM`, upload API, parser, worker, atomic import, history/readiness và UI auto-import. | Đã nối; phải giữ fail-closed khi scanner/worker/queue chưa sẵn sàng. |
-| 7. Nghiệm thu | Unit/full API tests, HTTP/PostgreSQL integration, permission/scope, parser resource-limit, restart/retry/idempotency, cleanup và audit counts. | Còn thiếu integration thật và full suite sau pipeline. |
+| 7. Nghiệm thu | Unit/full API tests, HTTP/PostgreSQL integration, permission/scope, parser resource-limit, restart/retry/idempotency, cleanup và audit counts. | Full API suite đã đạt; còn thiếu integration mixed-row/partial-row trên DB cô lập sau khi áp 2 migration mới. |
 
 ## Giới hạn parser đề xuất để chủ nghiệp vụ/security duyệt
 
@@ -152,7 +152,8 @@ Các giới hạn đã được duyệt cho MVP:
 ## Tiến độ implementation
 
 - **Đã triển khai:** schema/RBAC; local temp storage; ClamAV `INSTREAM`; readiness; upload/history/status API; CSV/XLSX parser; queue worker; atomic dedupe/import; count-only audit; UI auto-import và kết quả theo dòng.
-- **Đã xác minh:** API suite (17 suites/108 tests), API typecheck/build, readiness `READY`, toàn bộ 20 migrations up-to-date trên PostgreSQL test đã có dữ liệu, và P0-2 API/PostgreSQL integration.
+- **Đã xác minh:** API suite (17 suites/108 tests), API typecheck/build, readiness `READY`, toàn bộ 20 migration (tính đến lượt đó; repo hiện có 22) up-to-date trên PostgreSQL test đã có dữ liệu, và P0-2 API/PostgreSQL integration.
 - **Đã kiểm tra pipeline thật:** upload CLEAN tự import và bỏ qua dòng trùng; dữ liệu sai thất bại atomic; EICAR bị ClamAV chặn; audit chỉ giữ counts; terminal batch không còn file key/hash; thư mục tạm rỗng sau xử lý.
-- **Bản mở rộng partial-row:** parser/worker/API/UI tests, toàn bộ API suite hiện tại, API/web typecheck và build đều đạt. Readiness giữ `BLOCKED` cho tới khi schema có cột retention của migration `20261120121200_p0_4_partial_import_failures`. Migration chưa được áp dụng; cần xác minh migration và luồng mixed-row trên stack test cô lập trước khi triển khai.
+- **Bản mở rộng partial-row:** parser/worker/API/UI tests, toàn bộ API suite hiện tại, API/web typecheck và build đều đạt. Code gồm: chi tiết lỗi theo dòng với cửa sổ retention 30 ngày (`failureDetailsExpiresAt`), finalization dọn counts/mapping ở trạng thái terminal và CHECK constraint bắt buộc. Hai migration của bản mở rộng **chưa được áp dụng** trên DB test cô lập và luồng mixed-row chưa được kiểm chứng; readiness vì vậy vẫn `BLOCKED` ở môi trường chưa migrate.
+- **Đối chiếu code 2026-11-20:** xác nhận readiness kiểm tra 5 điều kiện (DB, cột `failureDetailsExpiresAt`, local temp storage, ClamAV, queue + worker); worker có processor `customer-import.process`; parser cap 20 MB/10.000 dòng/10 sheet/100 MB sau giải nén/1.000 entry/100 cột/4.096 ký tự mỗi ô. Lượt này không chạy migration, không chạy integration và không thay đổi mã nguồn.
 - **Giới hạn nghiệm thu:** xác minh thực hiện trên stack test cục bộ; triển khai production vẫn cần xác nhận cấu hình volume, quyền truy cập, cập nhật ClamAV và sao lưu/vận hành phù hợp môi trường thật.

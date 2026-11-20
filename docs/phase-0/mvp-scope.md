@@ -49,7 +49,7 @@ MVP chưa tự động quyết định khả năng phê duyệt khoản vay. N�
 - CUSTOMER có quyền read-only với hồ sơ cá nhân và hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn hỗ trợ, cùng thông tin gói vay; không đọc hồ sơ khách hàng khác và không sửa dữ liệu nghiệp vụ. Read-only không áp dụng cho gửi tin nhắn trong hội thoại được phép.
 - Các yêu cầu tra cứu từ chat phải dùng customer ID lấy từ phiên đã xác thực và lọc trạng thái gói vay public ở backend; không tin customer ID do client hoặc nội dung chat tự cung cấp.
 - Lưu tệp theo nhóm nghiệp vụ, tối thiểu gồm tệp nộp cho task và tệp import dữ liệu khách hàng; kiểm tra hợp lệ trước khi lưu.
-- Import khách hàng chạy bằng tác vụ nền: preview/mapping, kiểm tra từng dòng và phát hiện trùng đều xử lý bất đồng bộ; người dùng theo dõi trạng thái/kết quả và lỗi theo dòng. Batch chỉ được ghi sau khi mọi dòng hợp lệ, các dòng nghi trùng đã được rà soát/xác nhận thủ công và người dùng xác nhận batch; không nhập một phần file.
+- Import khách hàng chạy bằng tác vụ nền: quét tệp, kiểm tra từng dòng, phát hiện trùng và nhập đều xử lý bất đồng bộ; người dùng theo dõi trạng thái/kết quả và lỗi theo dòng. Thiết kế đã chốt (xem [P0-4](p0/p0-4-background-import.md)) là **auto-import, không có bước preview/xác nhận thủ công**: dòng hợp lệ được ghi trong một transaction atomic, dòng trùng và dòng lỗi bị bỏ qua và đếm riêng, lỗi tệp/scanner dừng toàn batch.
 - Cấu hình thời hạn lưu và dọn tệp hết hạn/không còn cần thiết theo chính sách được duyệt.
 - Người dùng được phân quyền tạo kế hoạch với hạng mục, đơn vị đo, chỉ tiêu và thời gian. Khi tạo task, nhân viên chọn kế hoạch phù hợp; số thực đạt đã xác minh từ task liên kết được cộng và so với chỉ tiêu. Báo cáo/số liệu có trạng thái xác minh riêng: `PENDING_VERIFICATION`, `VERIFIED`, `NEEDS_INFO`, `REJECTED`; quản trị viên xác minh thủ công dựa trên tài liệu trước khi số liệu được tính KPI. Lưu người xác minh, thời điểm và lý do; lý do cần có khi yêu cầu bổ sung hoặc từ chối.
 - Dashboard biểu đồ thống kê theo ngày/tháng và nhân viên, có lọc theo hạng mục tương ứng; cần đặc tả hạng mục, công thức, kỳ thống kê và cách chỉ tính số liệu đã xác minh vào KPI.
@@ -150,7 +150,7 @@ Ngày 2026-11-04 và 2026-11-05, chủ yêu cầu xác nhận/cập nhật các 
 
 ### Chi tiết còn cần làm rõ trước schema/triển khai tương ứng
 
-- Import đã chốt cột, pipeline nền và atomic batch; cần cấu hình quốc gia/định dạng số điện thoại.
+- Import đã chốt cột, pipeline nền và atomic batch; pipeline đã có code (P0-4) nhưng còn chờ áp dụng migration partial-row và kiểm chứng trên DB cô lập. Cần cấu hình quốc gia/định dạng số điện thoại.
 - Mô hình RBAC đã chốt; cần nạp cây chi nhánh tổng → chi nhánh con, role grants và ma trận thao tác.
 - Xác thực production mặc định OTP số điện thoại; cần chọn OTP provider và allowlist trường hợp đồng/gói vay. Yêu cầu vay được CUSTOMER gửi hoặc ADVISING ghi nhận; bản ghi hợp đồng sẽ tạo/liên kết trong CRM khi hợp đồng thực sự phát sinh.
 - Chính sách file đã chốt private storage/quarantine, kiểm tra chữ ký và malware scan trước khi dùng; cần chọn scanner, retention theo loại, người được quyền xóa, legal hold và lịch dọn.
@@ -162,7 +162,7 @@ Baseline bảo mật bắt buộc trong `AGENT.md` vẫn áp dụng trong thời
 
 ### Cách xử lý các điểm còn mở
 
-Các phương án mặc định trong [sổ quyết định](decision-log.md) đã được chủ yêu cầu chấp thuận ngày 2026-11-05 và là hướng triển khai. Các giá trị cấu hình cụ thể (như cây tổ chức, công thức KPI, retention và thông số vận hành) vẫn phải được chủ sở hữu tương ứng cung cấp trước khi bật chức năng liên quan. Import preview, kiểm tra từng dòng và hàng đợi rà trùng chạy nền; chỉ ghi dữ liệu sau bước xem kết quả và xác nhận.
+Các phương án mặc định trong [sổ quyết định](decision-log.md) đã được chủ yêu cầu chấp thuận ngày 2026-11-05 và là hướng triển khai. Các giá trị cấu hình cụ thể (như cây tổ chức, công thức KPI, retention và thông số vận hành) vẫn phải được chủ sở hữu tương ứng cung cấp trước khi bật chức năng liên quan. Riêng import, quyết định đã được cập nhật theo [P0-4](p0/p0-4-background-import.md): quét tệp và kiểm tra từng dòng chạy nền, tự động nhập các dòng hợp lệ theo batch atomic, bỏ qua dòng trùng/lỗi, không có bước xem kết quả hay xác nhận thủ công.
 
 ### Chưa quyết định
 

@@ -1,6 +1,6 @@
 # P0-5 — Chat realtime
 
-**Trạng thái:** Chưa triển khai.
+**Trạng thái (cập nhật 2026-11-20):** Chưa triển khai. Đối chiếu code không thấy `@WebSocketGateway`/socket.io server, không có model conversation/message trong `schema.prisma`, không có route hay component chat trong `apps/web`; tài liệu này chỉ là đặc tả.
 
 ## Mục tiêu
 

@@ -4,6 +4,8 @@
 
 Finance CRM là monorepo quản lý khách hàng, tư vấn tài chính, yêu cầu vay, hợp đồng, kế hoạch công việc và KPI cho hệ thống HFinance/VietP2P. Tên mã nguồn và sản phẩm là `finance-crm`, tập trung vào quy trình nội bộ dành cho nhân viên, quản lý chi nhánh và quản trị viên; khách hàng là persona tương lai/đang được mở dần với mobile web/PWA và API mock có giới hạn môi trường.
 
+> **Trạng thái tài liệu:** nội dung mô tả kiến trúc/luồng đã đối chiếu với mã nguồn ngày 2026-11-20. Trạng thái triển khai theo giai đoạn, bằng chứng kiểm thử và các cổng còn chặn nằm ở [implementation-status.md](docs/phase-0/implementation-status.md) — tài liệu đó là nguồn sự thật khi có khác biệt.
+
 Dự án được xây theo kiến trúc modular monolith, không chia thành các dịch vụ backend độc lập trong MVP:
 
 - API và logic nghiệp vụ: NestJS 11.
@@ -50,6 +52,7 @@ Các module chính:
 - `access-control`: chi nhánh, người dùng, role, permission grant và audit truy cập.
 - `audit`: ghi và truy vấn sự kiện thay đổi nhạy cảm.
 - `customers`: khách hàng, phân công, trùng lặp, yêu cầu vay, gói vay và hợp đồng.
+- `customer-imports`: readiness, upload, lịch sử và trạng thái import khách hàng bằng CSV/XLSX.
 - `plans`: kế hoạch, danh mục hạng mục, task, kết quả, xác minh và KPI.
 - `background-queue`: tạo và quản lý job BullMQ.
 - `worker`: worker xử lý job nền riêng.
@@ -62,18 +65,16 @@ API sử dụng DTO validation toàn cục, whitelist fields và từ chối fie
 
 ### 3.2. PostgreSQL và Prisma
 
-PostgreSQL là nguồn dữ liệu nghiệp vụ duy nhất. Prisma schema quản lý:
+PostgreSQL là nguồn dữ liệu nghiệp vụ duy nhất. Prisma schema (33 model) quản lý:
 
-- tổ chức chi nhánh cha/con;
-- người dùng, session, role, permission và grant;
+- tổ chức chi nhánh cha/con, người dùng, session, role, permission và grant;
 - khách hàng, phân công, lịch sử trạng thái và candidate trùng lặp;
-- yêu cầu vay, gói vay, công thức immutable và hợp đồng vay;
-- lịch sử trạng thái hợp đồng, tài liệu hợp đồng và OTP xác nhận;
-- kế hoạch, mục tiêu, task, assignment, kết quả, xác minh và evidence;
-- file asset liên kết tài nguyên;
+- yêu cầu vay, gói vay, phiên bản công thức immutable, hợp đồng vay, lịch sử trạng thái hợp đồng, tài liệu hợp đồng, lịch sử thay đổi hợp đồng và OTP xác nhận;
+- kế hoạch, phê duyệt plan, chi nhánh áp dụng, danh mục hạng mục, mục tiêu plan, task, assignment, kết quả, xác minh, evidence và file asset;
+- batch/row import khách hàng;
 - audit event.
 
-Các enum chính gồm `BranchStatus`, `UserStatus`, `AccessScope`, `CustomerStatus`, `LoanRequestStatus`, `LoanContractStatus`, `PlanStatus`, `TaskStatus`, `TaskVerificationStatus`, `FileScanStatus` và `ContractOtpChallengeStatus`.
+Các enum chính (19) gồm `BranchStatus`, `UserStatus`, `AccessScope`, `CustomerStatus`, `CustomerVerificationStatus`, `DuplicateReviewStatus`, `LoanRequestSource`, `LoanRequestStatus`, `LoanProductStatus`, `LoanContractStatus`, `PlanStatus`, `PlanApprovalDecision`, `TaskStatus`, `TaskVerificationStatus`, `FileScanStatus`, `CustomerImportBatchStatus`, `CustomerImportRowStatus`, `CustomerImportDuplicateDecision` và `ContractOtpChallengeStatus`.
 
 Schema và migration được lưu trong `apps/api/prisma`. Dữ liệu seed chỉ phù hợp cho phát triển/test và không được coi là dữ liệu cấu hình production.
 
@@ -81,15 +82,15 @@ Schema và migration được lưu trong `apps/api/prisma`. Dữ liệu seed ch�
 
 Redis cung cấp transport cho BullMQ, không thay thế PostgreSQL làm source of truth. API có thể enqueue job; worker riêng chạy xử lý nền.
 
-Worker hiện hỗ trợ task `system.healthcheck`. P0-4 import nền và P0-5 chat đang nằm trong kế hoạch, nhưng chưa hoàn tất processor/import/chat code tương ứng theo mô tả tại các tài liệu P0.
+Worker hiện xử lý hai loại job: `system.healthcheck` và `customer-import.process` (pipeline import P0-4: quét ClamAV, parse, dò trùng, ghi atomic và dọn tệp). Chat realtime (P0-5) không có processor/socket trong code ở thời điểm này.
 
 ### 3.4. Web Next.js
 
-Giao diện staff dùng Next.js App Router và bộ component shadcn-style/Base UI/Tailwind. Các route hiện có gồm:
+Giao diện staff dùng Next.js App Router và bộ component shadcn-style/Base UI/Tailwind. Các route hiện có (13 thư mục route trong `apps/web/src/app`) gồm:
 
 - `/login` và `/change-password`;
 - `/profile`;
-- `/customers`;
+- `/customers` và `/customers/import`;
 - `/loan-products`;
 - `/loan-contracts`;
 - `/plans`;
@@ -101,7 +102,7 @@ Giao diện staff dùng Next.js App Router và bộ component shadcn-style/Base 
 
 Điều hướng sidebar được hiển thị theo effective permissions từ backend. Đây là UX, không thay thế authorization tại API.
 
-Dashboard tổng quan, chat staff/customer và PWA/customer flow chỉ mới là capability/route chờ triển khai hoặc chưa hoàn tất; không nên coi là đã có trong runtime.
+Chưa có route dashboard tổng quan, route chat hay PWA shell cho CUSTOMER; web hiện không có manifest/service worker nên chưa phải PWA.
 
 ## 4. Bảo mật và phân quyền
 
@@ -214,28 +215,27 @@ Model `FileAsset`/`TaskResultEvidence` giữ metadata, link tài nguyên, upload
 Giới hạn dự kiến:
 
 - task submission: PDF/JPG/JPEG/PNG, tối đa 10 MB/file;
-- customer import: CSV/XLSX, tối đa 20 MB.
+- customer import: CSV/XLSX, tối đa 20 MB;
+- tài liệu hợp đồng: DOCX/PDF/PNG/JPG, tối đa 25 MB/file, lưu qua `ContractDocumentStorageService` (local dev/test hoặc MinIO/S3 khi env đầy đủ), không dùng `FileAsset`.
 
 Production upload không được coi là triển khai an toàn cho tới khi có scanner/quarantine, giới hạn MIME/signature, retention, legal hold và quyền xóa được chốt.
 
 ### 7.2. Import
 
-P0-4 đã có kế hoạch chi tiết nhưng chưa triển khai. Thiết kế mục tiêu là:
+P0-4 đã có code đầy đủ (API, parser, worker, UI, scanner) và đã nghiệm thu pipeline trên stack test cô lập; bản mở rộng partial-row còn chờ áp dụng migration và kiểm chứng. Thiết kế đã chốt là **auto-import, không có bước preview/xác nhận thủ công**:
 
-- preview/mapping;
-- parse/validate từng dòng bất đồng bộ;
-- phát hiện trùng để rà soát;
-- staging rows;
-- commit toàn batch sau xác nhận;
-- không promote từng dòng độc lập nếu batch chưa hợp lệ.
+- chỉ nhận CSV/XLSX ≤20 MB; từ chối XLS/XLSM, MIME/chữ ký không khớp, workbook mã hoá hoặc vượt resource cap;
+- quét ClamAV `INSTREAM` trước khi parse; thiếu scanner/queue/worker thì readiness trả `BLOCKED` và upload bị từ chối;
+- parser giới hạn 10.000 dòng, 10 sheet, 100 MB sau giải nén, 1.000 ZIP entry, 100 cột và 4.096 ký tự/ô;
+- dòng hợp lệ được ghi trong một transaction Serializable; dòng trùng và dòng lỗi bị bỏ qua và đếm riêng, không merge;
+- chi tiết lỗi chỉ giữ số dòng + mã lỗi đã whitelist trong 30 ngày; batch terminal xoá tệp tạm, mapping, sheet và các count tổng (`totalRows`/`validRows`/`skippedRows`), audit chỉ ghi counts;
+- retry ở trạng thái `COMMITTING` chỉ hoàn tất cleanup/finalization, không import lại.
 
-Scanner, giới hạn parser XLSX, retention và quyền import vẫn là release gate.
+Scanner/quarantine, retention/legal hold, quyền xoá và cấu hình volume dùng chung vẫn là release gate; readiness giữ `BLOCKED` cho tới khi migration partial-row được áp dụng trên môi trường đích.
 
 ### 7.3. Chat
 
-P0-5 đã có đặc tả kiến trúc: chat realtime ADVISING ↔ CUSTOMER qua Socket.IO hoặc cơ chế tương đương, message lưu trong PostgreSQL, cursor pagination và authorization cho join/send/read.
-
-Chat UI và server/socket event chưa được coi là đã hoàn tất; P0-6 customer PWA cũng chưa đóng.
+P0-5 hiện chỉ có đặc tả kiến trúc: chat realtime ADVISING ↔ CUSTOMER qua Socket.IO hoặc cơ chế tương đương, message lưu trong PostgreSQL, cursor pagination và authorization cho join/send/read. Chưa có socket gateway, model conversation/message, route hay component chat trong code; chat UI/server event chưa được coi là đã hoàn tất và P0-6 customer PWA cũng chưa đóng.
 
 ## 8. Docker và cấu hình môi trường
 
@@ -304,9 +304,12 @@ Mức hiện tại cần được đọc theo source/tree và kết quả kiểm
 - P0-1 có schema auth/RBAC/audit, auth session và API quản trị.
 - P0-2 có customer/loan/contract code, migration và tests trong môi trường cô lập.
 - P0-3 có plan/task/result/verification/KPI API, migration và UI `/plans`, `/plans/catalog`, `/tasks`.
+- P0-4 có API import (readiness/upload/history/detail), parser CSV/XLSX, ClamAV `INSTREAM`, worker `customer-import.process`, import atomic, migration batch/row và UI `/customers/import`.
 - Có script integration P0-2/P0-3 sử dụng PostgreSQL Docker cô lập.
 - Có unit test backup crypto với synthetic payload.
 - Có các route staff đã được probe theo kích thước desktop và 375px trong các lượt kiểm tra ghi nhận.
+
+Lượt rà soát tài liệu 2026-11-20 ghi nhận giới hạn môi trường: `node_modules` trên host thiếu `exceljs`, `unzipper`, `@aws-sdk/client-s3` và Prisma Client generated đã cũ, nên 6/17 suite API không nạp được khi chạy ngoài container; cần `npm install`/toolbox rồi `npm run db:generate` trước khi kiểm chứng lại.
 
 Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 
@@ -318,7 +321,7 @@ Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 - retention/legal hold;
 - CUSTOMER OTP/provider thật;
 - chat realtime;
-- import nền;
+- áp dụng migration partial-row và integration mixed-row cho import;
 - dashboard/report đầy đủ;
 - CI/CD pipeline;
 - dependency/container vulnerability scan hiện hành;
@@ -330,9 +333,9 @@ Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 - P0-1: auth, RBAC, organization, branch, grant và audit foundation đã có.
 - P0-2: backend và UI customer/loan/contract đang triển khai ở mức lát cắt baseline; một số chính sách tài chính và grant production vẫn mở.
 - P0-3: kế hoạch/task/kết quả/xác minh/KPI và UI liên quan đã có code/migration trong phạm vi code hiện tại.
-- P0-4: import nền chưa triển khai.
-- P0-5: chat realtime chưa triển khai.
-- P0-6: web staff một phần đã có; CUSTOMER PWA và các route còn lại chưa hoàn tất.
+- P0-4: pipeline import nền đã có code và đã nghiệm thu trên stack test cô lập; bản mở rộng partial-row chưa áp dụng/kiểm chứng migration, readiness vẫn fail-closed cho tới khi schema đích có cột retention.
+- P0-5: chat realtime chưa triển khai — không có socket gateway, model conversation/message hay UI.
+- P0-6: web staff một phần đã có (13 route, gồm `/customers/import`); dashboard, chat UI, CUSTOMER PWA và các route còn lại chưa hoàn tất.
 
 Chi tiết và tiến độ chuẩn ghi trong:
 

@@ -1,6 +1,6 @@
 # P0-0 — Nền dữ liệu và worker
 
-**Trạng thái:** Đã triển khai nền mã nguồn; chờ xác nhận tích hợp runtime với Docker/PostgreSQL/Redis.
+**Trạng thái (cập nhật 2026-11-20):** Đã triển khai và đã chạy trong stack Compose dev/test: Prisma Client/PostgreSQL, Redis + BullMQ, worker riêng, runtime config validation và probe `/health`,`/ready` hoạt động; migration P0-1..P0-3 đã áp dụng trên PostgreSQL dev/test. Chưa có môi trường production, chưa chạy migration/seed trên production.
 
 ## Mục tiêu
 

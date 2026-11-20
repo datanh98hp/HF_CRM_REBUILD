@@ -36,14 +36,33 @@ Trang **Vai trò & quyền** dùng để xem hoặc cấu hình role tùy chỉn
 
 Trang **Khách hàng** cung cấp các thao tác trong phạm vi được cấp quyền, bao gồm tìm kiếm và quản lý hồ sơ. Tài khoản CRM chỉ xem hoặc cập nhật dữ liệu khi API cho phép theo quyền và phạm vi; Customer chỉ được truy cập hồ sơ/nghiệp vụ của chính mình.
 
+### Phân công hàng loạt
+
+Chọn nhiều khách hàng bằng checkbox (giữ lựa chọn khi chuyển trang), chọn một tư vấn viên `ADVISING` đang hoạt động trong phạm vi, nhập lý do rồi gửi. Mỗi request áp dụng cùng một tư vấn viên cho tất cả khách đã chọn (tối đa 100); nếu có khách hoặc nhân viên ngoài phạm vi, toàn bộ request bị từ chối.
+
+### Nhập khách hàng từ tệp
+
+1. Mở **Nhập khách hàng** (`/customers/import`) từ trang Khách hàng.
+2. Chọn chi nhánh trong phạm vi và tệp CSV/XLSX tối đa 20 MB, rồi tải lên.
+3. Hệ thống tự quét bằng ClamAV và nhập nền; **không có bước preview hay xác nhận**. Dòng hợp lệ được ghi trong một giao dịch, dòng trùng và dòng lỗi bị bỏ qua và đếm riêng.
+4. Theo dõi trạng thái batch và số liệu nhập/trùng/lỗi; chi tiết lỗi chỉ gồm số dòng và mã lỗi và chỉ còn trong 30 ngày.
+5. Tệp tạm bị xóa sau khi xử lý. Nếu thiếu scanner, worker, queue hoặc schema chưa migrate, màn hình báo chặn và nút tải lên bị khóa (readiness `BLOCKED`).
+
+## Sản phẩm vay và hợp đồng
+
+- **Sản phẩm vay** (`/loan-products`): xem catalog và chi tiết gói vay. ADMIN/OPERATOR cấu hình sản phẩm và phiên bản công thức bất biến (DSL số học an toàn, không dùng `eval`); nhân viên chỉ nhập đầu vào để tính, không nhận công thức để sửa. Sản phẩm chỉ hiện cho CUSTOMER khi đang hoạt động.
+- **Hợp đồng** (`/loan-contracts`): tạo hợp đồng từ khách hàng/yêu cầu vay và sản phẩm; server kiểm tra điều kiện số tiền/kỳ hạn và tính lại kết quả khi bấm **Tính**, lưu snapshot sản phẩm/công thức cùng hợp đồng.
+- Duyệt/từ chối: `ADMIN`/`OPERATOR` toàn hệ thống duyệt được cả hợp đồng do mình tạo; `MANAGE` chỉ duyệt trong chi nhánh được gán và không tự duyệt hợp đồng của mình. Hợp đồng hoàn tất cần CUSTOMER xác nhận OTP; ở dev/test OTP chỉ ở chế độ mock và capability API báo trạng thái chưa cấu hình.
+- Tài liệu hợp đồng: DOCX/PDF/PNG/JPG tối đa 25 MB, có tải xuống cần xác thực, thay thế giữ phiên bản cũ, xóa mềm và ghi lịch sử. Production chưa bật upload cho tới khi có scanner/quarantine.
+
 ## Kế hoạch và chỉ tiêu
 
 1. Mở **Kế hoạch** để xem các kế hoạch trong phạm vi được cấp quyền.
 2. Chọn một kế hoạch để xem chi nhánh, thời gian và các chỉ tiêu mục tiêu.
-3. Người có quyền `plans.manage` có thể chọn **Tạo kế hoạch**, chọn chi nhánh đang hoạt động, khoảng thời gian và khai báo một hoặc nhiều chỉ tiêu với đơn vị/mục tiêu.
-4. Người có quyền `plans.manage` có thể chỉnh sửa ngày bắt đầu/kết thúc, trạng thái và thêm hoặc gỡ các chi nhánh áp dụng. Chi nhánh được thêm phải đang hoạt động và nằm trong phạm vi được cấp.
+3. Người có quyền `plans.manage` có thể chọn **Tạo kế hoạch**, chọn chi nhánh đang hoạt động, khoảng thời gian và khai báo một hoặc nhiều chỉ tiêu với đơn vị/mục tiêu lấy từ danh mục KPI.
+4. Người có quyền `plans.manage` có thể sửa ngày bắt đầu/kết thúc và chi nhánh áp dụng khi kế hoạch còn ở bản nháp hoặc bị từ chối; kế hoạch đang chờ duyệt không sửa được. Trạng thái kế hoạch không đổi trực tiếp mà đi qua luồng gửi duyệt/phê duyệt, riêng lưu trữ chỉ áp dụng cho kế hoạch đang thực hiện.
 5. Tài khoản có role `ADMIN` hoặc `OPERATOR` toàn hệ thống mới được xóa kế hoạch. Hệ thống yêu cầu xác nhận; thao tác xóa là xóa mềm, ẩn kế hoạch khỏi danh sách nhưng giữ dữ liệu trong cơ sở dữ liệu.
-6. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Chuyển kế hoạch sang **Đang thực hiện** trước khi tạo task.
+6. Kế hoạch mới được lưu ở trạng thái **Bản nháp**. Bấm **Gửi duyệt** để chuyển sang **Chờ duyệt**, sau đó người có `plans.approve` duyệt thành **Đang thực hiện** hoặc từ chối kèm lý do (có thể sửa và gửi lại). Người tạo không tự duyệt được, trừ khi có grant `ADMIN`/`OPERATOR` toàn hệ thống; quản lý chi nhánh khác có thể duyệt. Chỉ kế hoạch **Đang thực hiện** mới tạo được task.
 
 ## Công việc, kết quả và KPI
 

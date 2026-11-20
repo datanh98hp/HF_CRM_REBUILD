@@ -1,6 +1,6 @@
 # P0-1 — Tổ chức, auth, RBAC và audit
 
-**Trạng thái:** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần. Role editor đã chuẩn hóa dữ liệu quyền trả về trước khi gửi lại, và DTO chấp nhận đầy đủ ma trận permission/scope; API tests (8 suites/49 tests) và web typecheck đạt. Còn cổng kiểm thử tích hợp/security/production và xác nhận cấu hình môi trường thật.
+**Trạng thái (cập nhật 2026-11-20):** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần. Role editor đã chuẩn hóa dữ liệu quyền trả về trước khi gửi lại, và DTO chấp nhận đầy đủ ma trận permission/scope; API tests (8 suites/49 tests) và web typecheck đạt. Repo chưa có suite integration/security riêng cho P0-1 (chỉ có script integration P0-2/P0-3); quyền chi nhánh được kiểm chứng gián tiếp qua integration P0-2. Còn cổng kiểm thử security/production và xác nhận cấu hình môi trường thật.
 
 ## Mục tiêu
 

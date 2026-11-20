@@ -786,6 +786,7 @@ model CustomerImportBatch {
   completedAt     DateTime?                 @db.Timestamptz(3)
   cancelledAt     DateTime?                 @db.Timestamptz(3)
   expiresAt       DateTime?                 @db.Timestamptz(3)
+  failureDetailsExpiresAt DateTime?           @db.Timestamptz(3)
   branch          Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
   createdBy       User                      @relation("CustomerImportBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
   confirmedBy     User?                     @relation("CustomerImportBatchConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
@@ -796,6 +797,7 @@ model CustomerImportBatch {
   @@unique([createdById, idempotencyKey])
   @@index([branchId, status, createdAt])
   @@index([createdById, createdAt])
+  @@index([failureDetailsExpiresAt])
 }
 
 model CustomerImportRow {

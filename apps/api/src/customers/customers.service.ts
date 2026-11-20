@@ -1513,6 +1513,7 @@ export class CustomersService {
   }
 
   private serializeCustomerLoanProduct(product: {
+    id: string;
     name: string;
     source: string;
     description: string | null;
@@ -1521,6 +1522,7 @@ export class CustomersService {
     annualInterestRate: Prisma.Decimal;
   }) {
     return {
+      id: product.id,
       name: product.name,
       annualInterestRate: product.annualInterestRate.toFixed(4),
       minTermMonths: product.minTermMonths,

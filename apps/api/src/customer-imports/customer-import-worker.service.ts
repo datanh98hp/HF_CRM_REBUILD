@@ -3,14 +3,25 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
   CustomerImportBatchStatus,
+  CustomerImportRowStatus,
   Prisma,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { ActorContext } from '../common/actor-context.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { ClamAvScannerService } from './clamav-scanner.service.js';
-import { CustomerImportFileError, parseCustomerImportFile, type CustomerImportFileFormat, type CustomerImportRecord } from './customer-import-parser.js';
+import {
+  CustomerImportFileError,
+  parseCustomerImportFile,
+  type CustomerImportFileFormat,
+  type CustomerImportParseResult,
+  type CustomerImportRecord,
+  type CustomerImportRowFailure,
+} from './customer-import-parser.js';
 import { CustomerImportTempStorageService } from './customer-import-temp-storage.service.js';
+
+const FAILURE_DETAILS_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+const FAILURE_DETAILS_CLEANUP_BATCH_SIZE = 500;
 
 const TERMINAL_STATUSES = new Set<CustomerImportBatchStatus>([
   CustomerImportBatchStatus.COMPLETED,
@@ -60,12 +71,14 @@ export class CustomerImportWorkerService {
     if (!batch) throw new Error('Customer import batch does not exist');
     if (TERMINAL_STATUSES.has(batch.status)) return { status: batch.status };
     if (!isFileFormat(format) || !batch.tempFileKey || !batch.fileSha256) {
-      await this.failBatch(batch, 'IMPORT_METADATA_INVALID', 0);
+      await this.failBatch(batch, 'IMPORT_METADATA_INVALID', 0, [], []);
       return { status: CustomerImportBatchStatus.FAILED };
     }
 
     let promotionCommitted = batch.status === CustomerImportBatchStatus.COMMITTING;
     let failedInsertRows = 0;
+    let rowFailures: CustomerImportRowFailure[] = [];
+    let databaseFailureRowNumbers: number[] = [];
     try {
       if (promotionCommitted) {
         await this.storage.remove(batch.tempFileKey);
@@ -87,12 +100,14 @@ export class CustomerImportWorkerService {
           const file = await readFile(path);
           const digest = createHash('sha256').update(file).digest('hex');
           if (digest !== batch.fileSha256) throw new CustomerImportFileError('FILE_CHANGED_AFTER_UPLOAD');
-          const records = await parseCustomerImportFile(file, format);
-          await this.promoteBatch(batch, records, (eligibleRows) => {
-            failedInsertRows = eligibleRows;
+          const parsed = await parseCustomerImportFile(file, format);
+          rowFailures = parsed.failures;
+          await this.promoteBatch(batch, parsed, (eligibleRecords) => {
+            failedInsertRows = eligibleRecords.length;
+            databaseFailureRowNumbers = eligibleRecords.map((record) => record.rowNumber);
           });
           promotionCommitted = true;
-          return records.length;
+          return parsed.totalRows;
         });
       }
 
@@ -110,16 +125,45 @@ export class CustomerImportWorkerService {
         await this.finalizeBatch(batch);
         return { status: CustomerImportBatchStatus.COMPLETED };
       }
-      await this.failBatch(batch, errorCode, failedInsertRows);
+      await this.failBatch(batch, errorCode, failedInsertRows, rowFailures, databaseFailureRowNumbers);
       return { status: CustomerImportBatchStatus.FAILED };
     }
   }
 
+  async cleanupExpiredFailureDetails(now = new Date()): Promise<number> {
+    const expiredBatches = await this.prisma.customerImportBatch.findMany({
+      where: { failureDetailsExpiresAt: { lte: now } },
+      orderBy: { failureDetailsExpiresAt: 'asc' },
+      take: FAILURE_DETAILS_CLEANUP_BATCH_SIZE,
+      select: { id: true },
+    });
+    if (!expiredBatches.length) return 0;
+
+    const batchIds = expiredBatches.map(({ id }) => id);
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.customerImportRow.deleteMany({
+        where: {
+          batchId: { in: batchIds },
+          status: CustomerImportRowStatus.INVALID,
+        },
+      });
+      await tx.customerImportBatch.updateMany({
+        where: {
+          id: { in: batchIds },
+          failureDetailsExpiresAt: { lte: now },
+        },
+        data: { failureDetailsExpiresAt: null },
+      });
+      return deleted.count;
+    });
+  }
+
   private async promoteBatch(
     batch: { id: string; branchId: string; createdById: string },
-    records: CustomerImportRecord[],
-    setEligibleRows: (count: number) => void,
+    parsed: CustomerImportParseResult,
+    setEligibleRecords: (records: CustomerImportRecord[]) => void,
   ): Promise<void> {
+    const { records, failures } = parsed;
     let importedRows = 0;
     let duplicateRows = 0;
 
@@ -155,7 +199,7 @@ export class CustomerImportWorkerService {
       }
 
       importedRows = customers.length;
-      setEligibleRows(importedRows);
+      setEligibleRecords(customers);
       if (customers.length) {
         await tx.customer.createMany({
           data: customers.map((customer) => ({
@@ -174,12 +218,26 @@ export class CustomerImportWorkerService {
       }
 
       await tx.customerImportRow.deleteMany({ where: { batchId: batch.id } });
+      if (failures.length) {
+        await tx.customerImportRow.createMany({
+          data: failures.map(({ rowNumber, errorCodes }) => ({
+            batchId: batch.id,
+            rowNumber,
+            status: CustomerImportRowStatus.INVALID,
+            validationErrors: errorCodes,
+          })),
+        });
+      }
       await tx.customerImportBatch.update({
         where: { id: batch.id },
         data: {
           status: CustomerImportBatchStatus.COMMITTING,
           importedRows,
           duplicateRows,
+          totalRows: parsed.totalRows,
+          validRows: records.length,
+          invalidRows: failures.length,
+          skippedRows: duplicateRows,
           failedInsertRows: 0,
           errorCode: null,
         },
@@ -199,21 +257,28 @@ export class CustomerImportWorkerService {
         where: { id: batch.id, status: CustomerImportBatchStatus.COMMITTING },
         data: {
           status: CustomerImportBatchStatus.COMPLETED,
-          totalRows: 0,
-          validRows: 0,
-          invalidRows: 0,
-          skippedRows: 0,
           tempFileKey: null,
           fileSha256: null,
           columnMapping: {},
           selectedSheet: null,
+          totalRows: 0,
+          validRows: 0,
+          skippedRows: 0,
           errorCode: null,
+          failureDetailsExpiresAt: current.invalidRows > 0
+            ? new Date(Date.now() + FAILURE_DETAILS_RETENTION_MS)
+            : null,
           completedAt: new Date(),
         },
       });
       if (transition.count !== 1) return;
 
-      await tx.customerImportRow.deleteMany({ where: { batchId: batch.id } });
+      await tx.customerImportRow.deleteMany({
+        where: {
+          batchId: batch.id,
+          status: { not: CustomerImportRowStatus.INVALID },
+        },
+      });
       await this.audit.write(tx, {
         actor: this.actor(batch.createdById),
         action: 'customer.import.completed',
@@ -223,6 +288,7 @@ export class CustomerImportWorkerService {
         afterState: {
           importedRows: current.importedRows,
           duplicateRows: current.duplicateRows,
+          invalidRows: current.invalidRows,
           failedInsertRows: current.failedInsertRows,
         },
       });
@@ -285,7 +351,16 @@ export class CustomerImportWorkerService {
     batch: { id: string; branchId: string; createdById: string },
     errorCode: string,
     failedInsertRows: number,
+    rowFailures: CustomerImportRowFailure[],
+    databaseFailureRowNumbers: number[],
   ): Promise<void> {
+    const failureDetails = [
+      ...rowFailures,
+      ...databaseFailureRowNumbers.map((rowNumber) => ({
+        rowNumber,
+        errorCodes: ['DATABASE_INSERT_FAILED'],
+      })),
+    ];
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.customerImportBatch.findUnique({ where: { id: batch.id } });
       if (!current || TERMINAL_STATUSES.has(current.status) ||
@@ -297,28 +372,41 @@ export class CustomerImportWorkerService {
           importedRows: 0,
           duplicateRows: 0,
           failedInsertRows,
+          invalidRows: rowFailures.length,
           totalRows: 0,
           validRows: 0,
-          invalidRows: 0,
           skippedRows: 0,
           tempFileKey: null,
           fileSha256: null,
           columnMapping: {},
           selectedSheet: null,
           errorCode,
+          failureDetailsExpiresAt: failureDetails.length
+            ? new Date(Date.now() + FAILURE_DETAILS_RETENTION_MS)
+            : null,
           completedAt: new Date(),
         },
       });
       if (transition.count !== 1) return;
 
       await tx.customerImportRow.deleteMany({ where: { batchId: batch.id } });
+      if (failureDetails.length) {
+        await tx.customerImportRow.createMany({
+          data: failureDetails.map(({ rowNumber, errorCodes }) => ({
+            batchId: batch.id,
+            rowNumber,
+            status: CustomerImportRowStatus.INVALID,
+            validationErrors: errorCodes,
+          })),
+        });
+      }
       await this.audit.write(tx, {
         actor: this.actor(batch.createdById),
         action: 'customer.import.failed',
         targetType: 'customer-import-batch',
         targetId: batch.id,
         branchId: batch.branchId,
-        afterState: { importedRows: 0, duplicateRows: 0, failedInsertRows },
+        afterState: { importedRows: 0, duplicateRows: 0, invalidRows: rowFailures.length, failedInsertRows },
       });
     });
   }

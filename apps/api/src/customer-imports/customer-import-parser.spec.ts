@@ -56,30 +56,59 @@ async function createZipWithSpoofedUncompressedSize(): Promise<Buffer> {
 }
 
 describe('parseCustomerImportFile', () => {
-  it('parses UTF-8 CSV with BOM, quoted commas, and optional values', async () => {
+  it('parses the customer template CSV with an ignored sequence column', async () => {
     const data = Buffer.from(
-      '\uFEFFHọ tên,Số điện thoại,Email,Ngày sinh\r\n"Nguyễn Thị Lan Anh, Jr.",0912345678,,1992-03-14\r\n',
+      '\uFEFFTT,Họ tên,Số điện thoại,Email,Ngày sinh\r\n1,"Nguyễn Thị Lan Anh, Jr.",0912345678,,1992-03-14\r\n',
       'utf8',
     );
 
-    await expect(parseCustomerImportFile(data, 'csv')).resolves.toMatchObject([
-      {
-        fullName: 'Nguyễn Thị Lan Anh, Jr.',
-        normalizedName: 'nguyen thi lan anh jr',
-        phone: '0912345678',
-        email: null,
-        dateOfBirth: new Date('1992-03-14T00:00:00.000Z'),
-      },
-    ]);
+    await expect(parseCustomerImportFile(data, 'csv')).resolves.toMatchObject({
+      records: [
+        {
+          rowNumber: 2,
+          fullName: 'Nguyễn Thị Lan Anh, Jr.',
+          normalizedName: 'nguyen thi lan anh jr',
+          phone: '0912345678',
+          email: null,
+          dateOfBirth: new Date('1992-03-14T00:00:00.000Z'),
+        },
+      ],
+      failures: [],
+      totalRows: 1,
+    });
   });
 
-  it('rejects malformed, invalid, and over-limit CSV data', async () => {
+  it('continues past invalid rows and reports their file line numbers', async () => {
+    const data = Buffer.from(
+      'Họ tên,Số điện thoại,Email,Ngày sinh\n' +
+      '"Nguyễn\nThị Lan Anh",0912345678,,1992-03-14\n' +
+      ',123,invalid-email,2030-01-01\n' +
+      'Trần Quốc Bảo,,,\n',
+      'utf8',
+    );
+
+    await expect(parseCustomerImportFile(data, 'csv')).resolves.toMatchObject({
+      records: [{ rowNumber: 2, fullName: 'Nguyễn\nThị Lan Anh', phone: '0912345678' }],
+      failures: [
+        {
+          rowNumber: 4,
+          errorCodes: [
+            'FULL_NAME_REQUIRED',
+            'INVALID_PHONE',
+            'INVALID_EMAIL',
+            'INVALID_DATE_OF_BIRTH',
+          ],
+        },
+        { rowNumber: 5, errorCodes: ['PHONE_REQUIRED'] },
+      ],
+      totalRows: 3,
+    });
+  });
+
+  it('rejects malformed CSV and over-limit data', async () => {
     await expect(
       parseCustomerImportFile(Buffer.from('Họ tên,Số điện thoại\n"broken,0912345678'), 'csv'),
     ).rejects.toMatchObject({ code: 'INVALID_CSV' });
-    await expect(
-      parseCustomerImportFile(Buffer.from('Họ tên,Số điện thoại\nNguyễn An,123'), 'csv'),
-    ).rejects.toMatchObject({ code: 'INVALID_IMPORT_DATA' });
     await expect(
       parseCustomerImportFile(Buffer.alloc(20 * 1024 * 1024 + 1), 'csv'),
     ).rejects.toMatchObject({ code: 'FILE_SIZE_LIMIT_EXCEEDED' });
@@ -88,13 +117,17 @@ describe('parseCustomerImportFile', () => {
   it('reads the first visible XLSX sheet and rejects formula cells', async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Khach hang');
-    worksheet.addRow(['Họ tên', 'Số điện thoại', 'Email', 'Ngày sinh']);
-    worksheet.addRow(['Nguyễn Thị Lan Anh', '0912345678', '', '1992-03-14']);
+    worksheet.addRow(['TT', 'Họ tên', 'Số điện thoại', 'Email', 'Ngày sinh']);
+    worksheet.addRow(['1', 'Nguyễn Thị Lan Anh', '0912345678', '', '1992-03-14']);
     const data = Buffer.from(await workbook.xlsx.writeBuffer());
 
-    await expect(parseCustomerImportFile(data, 'xlsx')).resolves.toHaveLength(1);
+    await expect(parseCustomerImportFile(data, 'xlsx')).resolves.toMatchObject({
+      records: [{ rowNumber: 2, fullName: 'Nguyễn Thị Lan Anh' }],
+      failures: [],
+      totalRows: 1,
+    });
 
-    worksheet.getCell('A2').value = { formula: 'CONCAT("Nguyễn"," An")' };
+    worksheet.getCell('B2').value = { formula: 'CONCAT("Nguyễn"," An")' };
     const formulaWorkbook = Buffer.from(await workbook.xlsx.writeBuffer());
     await expect(parseCustomerImportFile(formulaWorkbook, 'xlsx')).rejects.toMatchObject({
       code: 'UNSUPPORTED_XLSX_FEATURE',

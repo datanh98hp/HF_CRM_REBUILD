@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { extname } from 'node:path';
-import { CustomerImportBatchStatus } from '../generated/prisma/client.js';
+import {
+  CustomerImportBatchStatus,
+  CustomerImportRowStatus,
+} from '../generated/prisma/client.js';
 import { AccessControlService } from '../access-control/access-control.service.js';
 import { ActorContext } from '../common/actor-context.js';
 import { BackgroundQueueService } from '../background-queue/background-queue.service.js';
@@ -19,6 +22,15 @@ import { CUSTOMER_IMPORT_MAX_BYTES, type CustomerImportFileFormat } from './cust
 import { CustomerImportTempStorageService } from './customer-import-temp-storage.service.js';
 
 const QUEUE_JOB = 'customer-import.process';
+const SAFE_IMPORT_ERROR_CODES = new Set([
+  'FULL_NAME_REQUIRED',
+  'INVALID_FULL_NAME',
+  'PHONE_REQUIRED',
+  'INVALID_PHONE',
+  'INVALID_EMAIL',
+  'INVALID_DATE_OF_BIRTH',
+  'DATABASE_INSERT_FAILED',
+]);
 const TERMINAL_STATUSES = new Set<CustomerImportBatchStatus>([
   CustomerImportBatchStatus.COMPLETED,
   CustomerImportBatchStatus.FAILED,
@@ -61,6 +73,18 @@ export class CustomerImportsService {
   async getReadiness(): Promise<CustomerImportReadiness> {
     const missingRequirements: string[] = [];
     await this.prisma.$queryRaw`SELECT 1`;
+    const importSchema = await this.prisma.$queryRaw<Array<{ ready: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'CustomerImportBatch'
+          AND column_name = 'failureDetailsExpiresAt'
+      ) AS ready
+    `;
+    if (!importSchema[0]?.ready) {
+      missingRequirements.push('IMPORT_SCHEMA_NOT_READY');
+    }
     if (!(await this.storage.isWritable())) {
       missingRequirements.push('LOCAL_TEMP_STORAGE_UNAVAILABLE');
     }
@@ -186,10 +210,30 @@ export class CustomerImportsService {
 
   async getBatch(actor: ActorContext, batchId: string) {
     this.assertStaff(actor);
-    const batch = await this.prisma.customerImportBatch.findUnique({ where: { id: batchId } });
+    const batch = await this.prisma.customerImportBatch.findUnique({
+      where: { id: batchId },
+      include: {
+        rows: {
+          where: { status: CustomerImportRowStatus.INVALID },
+          orderBy: { rowNumber: 'asc' },
+          select: { rowNumber: true, validationErrors: true },
+        },
+      },
+    });
     if (!batch) throw new NotFoundException({ code: 'IMPORT_BATCH_NOT_FOUND' });
     await this.access.assertPermission(actor.id, 'customers.import', undefined, batch.branchId);
-    return this.serializeBatch(batch);
+    const failureDetailsAvailable = batch.failureDetailsExpiresAt !== null &&
+      batch.failureDetailsExpiresAt > new Date();
+    return {
+      ...this.serializeBatch(batch),
+      failedRows: failureDetailsAvailable
+        ? batch.rows.map(({ rowNumber, validationErrors }) => ({
+          rowNumber,
+          errorCodes: this.errorCodes(validationErrors),
+        }))
+        : [],
+      failureDetailsExpired: batch.invalidRows + batch.failedInsertRows > 0 && !failureDetailsAvailable,
+    };
   }
 
   private async markEnqueueFailure(batchId: string): Promise<void> {
@@ -214,8 +258,10 @@ export class CustomerImportsService {
     status: CustomerImportBatchStatus;
     importedRows: number;
     duplicateRows: number;
+    invalidRows: number;
     failedInsertRows: number;
     errorCode: string | null;
+    failureDetailsExpiresAt: Date | null;
     createdAt: Date;
     completedAt: Date | null;
   }) {
@@ -224,11 +270,20 @@ export class CustomerImportsService {
       status: batch.status,
       importedRows: batch.importedRows,
       duplicateRows: batch.duplicateRows,
+      invalidRows: batch.invalidRows,
       failedInsertRows: batch.failedInsertRows,
       errorCode: batch.errorCode,
+      failureDetailsExpiresAt: batch.failureDetailsExpiresAt?.toISOString() ?? null,
       createdAt: batch.createdAt,
       completedAt: batch.completedAt,
     };
+  }
+
+  private errorCodes(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((code): code is string =>
+      typeof code === 'string' && SAFE_IMPORT_ERROR_CODES.has(code),
+    );
   }
 
   private assertStaff(actor: ActorContext): void {

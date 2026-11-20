@@ -9,6 +9,7 @@ import { RuntimeConfigService } from '../runtime-config/runtime-config.service.j
 export class WorkerRuntimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkerRuntimeService.name);
   private worker: Worker | undefined;
+  private failureDetailsCleanupTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly config: RuntimeConfigService,
@@ -37,9 +38,15 @@ export class WorkerRuntimeService implements OnModuleInit, OnModuleDestroy {
     });
 
     await this.worker.waitUntilReady();
+    await this.cleanupExpiredFailureDetails();
+    this.failureDetailsCleanupTimer = setInterval(() => {
+      void this.cleanupExpiredFailureDetails();
+    }, 60 * 60 * 1_000);
+    this.failureDetailsCleanupTimer.unref();
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.failureDetailsCleanupTimer) clearInterval(this.failureDetailsCleanupTimer);
     await this.worker?.close();
   }
 
@@ -53,5 +60,19 @@ export class WorkerRuntimeService implements OnModuleInit, OnModuleDestroy {
       return this.customerImports.process(batchId, format);
     }
     throw new UnrecoverableError(`No processor is registered for job type: ${job.name}`);
+  }
+
+  private async cleanupExpiredFailureDetails(): Promise<void> {
+    try {
+      const deletedRows = await this.customerImports.cleanupExpiredFailureDetails();
+      if (deletedRows) {
+        this.logger.log(`Purged expired customer import row details (rows=${deletedRows})`);
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to purge expired customer import row details',
+        error instanceof Error ? error.name : 'UnknownError',
+      );
+    }
   }
 }

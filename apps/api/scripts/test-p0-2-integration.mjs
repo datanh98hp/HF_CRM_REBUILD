@@ -180,6 +180,9 @@ try {
   await seedBranchManager();
   const operatorToken = await login(operatorUsername, operatorPassword);
   const operatorHeaders = { authorization: `Bearer ${operatorToken}`, 'content-type': 'application/json' };
+  const importHistory = await responseJson(await fetch(`${baseUrl}/customers/import-batches`, { headers: operatorHeaders }));
+  check(importHistory.status === 200 && Array.isArray(importHistory.body),
+    'customer import history route is not shadowed by customer detail');
 
   const childCustomerId = randomUUID();
   const outsideCustomerId = randomUUID();

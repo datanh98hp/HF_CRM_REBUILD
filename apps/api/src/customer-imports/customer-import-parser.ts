@@ -14,7 +14,16 @@ const MAX_CELL_CHARACTERS = 4_096;
 
 export type CustomerImportFileFormat = 'csv' | 'xlsx';
 
+export type CustomerImportValidationErrorCode =
+  | 'FULL_NAME_REQUIRED'
+  | 'INVALID_FULL_NAME'
+  | 'PHONE_REQUIRED'
+  | 'INVALID_PHONE'
+  | 'INVALID_EMAIL'
+  | 'INVALID_DATE_OF_BIRTH';
+
 export interface CustomerImportRecord {
+  rowNumber: number;
   fullName: string;
   normalizedName: string;
   phone: string;
@@ -22,6 +31,22 @@ export interface CustomerImportRecord {
   email: string | null;
   emailNormalized: string | null;
   dateOfBirth: Date | null;
+}
+
+export interface CustomerImportRowFailure {
+  rowNumber: number;
+  errorCodes: CustomerImportValidationErrorCode[];
+}
+
+export interface CustomerImportParseResult {
+  records: CustomerImportRecord[];
+  failures: CustomerImportRowFailure[];
+  totalRows: number;
+}
+
+interface SourceRow {
+  rowNumber: number;
+  values: string[];
 }
 
 export class CustomerImportFileError extends Error {
@@ -35,12 +60,14 @@ function fail(code: string): never {
   throw new CustomerImportFileError(code);
 }
 
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
+function parseCsv(text: string): SourceRow[] {
+  const rows: SourceRow[] = [];
   let row: string[] = [];
   let field = '';
   let quoted = false;
   let quoteClosed = false;
+  let physicalLineNumber = 1;
+  let rowStartLine = 1;
 
   const pushField = () => {
     row.push(field);
@@ -49,7 +76,7 @@ function parseCsv(text: string): string[][] {
   };
   const pushRow = () => {
     pushField();
-    rows.push(row);
+    rows.push({ rowNumber: rowStartLine, values: row });
     row = [];
     if (rows.length > CUSTOMER_IMPORT_MAX_ROWS + 1) fail('ROW_LIMIT_EXCEEDED');
   };
@@ -67,13 +94,20 @@ function parseCsv(text: string): string[][] {
         }
       } else {
         field += character;
+        if (character === '\n') physicalLineNumber += 1;
       }
     } else if (quoteClosed) {
       if (character === ',') pushField();
-      else if (character === '\n') pushRow();
+      else if (character === '\n') {
+        pushRow();
+        physicalLineNumber += 1;
+        rowStartLine = physicalLineNumber;
+      }
       else if (character === '\r' && text[index + 1] === '\n') {
         index += 1;
         pushRow();
+        physicalLineNumber += 1;
+        rowStartLine = physicalLineNumber;
       } else if (character !== ' ' && character !== '\t') {
         fail('INVALID_CSV');
       }
@@ -84,9 +118,13 @@ function parseCsv(text: string): string[][] {
       pushField();
     } else if (character === '\n') {
       pushRow();
+      physicalLineNumber += 1;
+      rowStartLine = physicalLineNumber;
     } else if (character === '\r' && text[index + 1] === '\n') {
       index += 1;
       pushRow();
+      physicalLineNumber += 1;
+      rowStartLine = physicalLineNumber;
     } else {
       field += character;
     }
@@ -114,6 +152,7 @@ function fieldIndexes(header: string[]): Map<string, number> {
     ['full name', 'fullName'],
     ['name', 'fullName'],
     ['so dien thoai', 'phone'],
+    ['sdt', 'phone'],
     ['phone', 'phone'],
     ['phone number', 'phone'],
     ['mobile', 'phone'],
@@ -151,32 +190,54 @@ function parseDate(value: string): Date | null {
   return date;
 }
 
-function toRecords(rows: string[][]): CustomerImportRecord[] {
+function toRecords(rows: SourceRow[]): CustomerImportParseResult {
   if (!rows.length) fail('EMPTY_IMPORT_FILE');
-  const indexes = fieldIndexes(rows[0]);
+  const indexes = fieldIndexes(rows[0].values);
   const records: CustomerImportRecord[] = [];
+  const failures: CustomerImportRowFailure[] = [];
 
-  for (const row of rows.slice(1)) {
+  for (const sourceRow of rows.slice(1)) {
+    const row = sourceRow.values;
     if (row.every((value) => value.trim() === '')) continue;
     const fullName = (row[indexes.get('fullName')!] ?? '').trim();
-    if (fullName.length < 2 || fullName.length > 160) fail('INVALID_IMPORT_DATA');
+    const errorCodes: CustomerImportValidationErrorCode[] = [];
+    if (!fullName) errorCodes.push('FULL_NAME_REQUIRED');
+    else if (fullName.length < 2 || fullName.length > 160) errorCodes.push('INVALID_FULL_NAME');
 
     const phone = (row[indexes.get('phone')!] ?? '').trim();
-    let phoneNormalized: string;
-    try {
-      phoneNormalized = normalizeVietnamesePhone(phone);
-    } catch {
-      fail('INVALID_IMPORT_DATA');
+    let phoneNormalized = '';
+    if (!phone) {
+      errorCodes.push('PHONE_REQUIRED');
+    } else {
+      try {
+        phoneNormalized = normalizeVietnamesePhone(phone);
+      } catch {
+        errorCodes.push('INVALID_PHONE');
+      }
     }
 
     let email: string | null;
     try {
       email = normalizeCustomerEmail(row[indexes.get('email') ?? -1] ?? '');
     } catch {
-      fail('INVALID_IMPORT_DATA');
+      email = null;
+      errorCodes.push('INVALID_EMAIL');
     }
-    const dateOfBirth = parseDate(row[indexes.get('dateOfBirth') ?? -1] ?? '');
+    let dateOfBirth: Date | null = null;
+    try {
+      dateOfBirth = parseDate(row[indexes.get('dateOfBirth') ?? -1] ?? '');
+    } catch (error) {
+      if (!(error instanceof CustomerImportFileError) || error.code !== 'INVALID_IMPORT_DATA') throw error;
+      errorCodes.push('INVALID_DATE_OF_BIRTH');
+    }
+
+    if (errorCodes.length) {
+      failures.push({ rowNumber: sourceRow.rowNumber, errorCodes });
+      continue;
+    }
+
     records.push({
+      rowNumber: sourceRow.rowNumber,
       fullName,
       normalizedName: normalizeCustomerName(fullName),
       phone: phoneNormalized,
@@ -188,8 +249,9 @@ function toRecords(rows: string[][]): CustomerImportRecord[] {
     if (records.length > CUSTOMER_IMPORT_MAX_ROWS) fail('ROW_LIMIT_EXCEEDED');
   }
 
-  if (!records.length) fail('EMPTY_IMPORT_FILE');
-  return records;
+  const totalRows = records.length + failures.length;
+  if (!totalRows) fail('EMPTY_IMPORT_FILE');
+  return { records, failures, totalRows };
 }
 
 function inspectXlsxArchive(buffer: Buffer): void {
@@ -290,7 +352,7 @@ async function inspectXlsxExpandedSize(buffer: Buffer): Promise<void> {
   }
 }
 
-async function xlsxRows(buffer: Buffer): Promise<string[][]> {
+async function xlsxRows(buffer: Buffer): Promise<SourceRow[]> {
   inspectXlsxArchive(buffer);
   await inspectXlsxExpandedSize(buffer);
   let workbook: ExcelJS.Workbook;
@@ -306,8 +368,8 @@ async function xlsxRows(buffer: Buffer): Promise<string[][]> {
   const sheet = sheets.find((item) => item.state === 'visible');
   if (!sheet || sheet.rowCount > CUSTOMER_IMPORT_MAX_ROWS + 1) fail('ROW_LIMIT_EXCEEDED');
 
-  const rows: string[][] = [];
-  sheet.eachRow({ includeEmpty: false }, (row) => {
+  const rows: SourceRow[] = [];
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (row.cellCount > MAX_COLUMNS) fail('COLUMN_LIMIT_EXCEEDED');
     const values: string[] = [];
     row.eachCell({ includeEmpty: true }, (cell, column) => {
@@ -318,7 +380,7 @@ async function xlsxRows(buffer: Buffer): Promise<string[][]> {
       ) fail('UNSUPPORTED_XLSX_FEATURE');
       values[column - 1] = fieldValue(value);
     });
-    rows.push(values.map((value) => value ?? ''));
+    rows.push({ rowNumber, values: values.map((value) => value ?? '') });
     if (rows.length > CUSTOMER_IMPORT_MAX_ROWS + 1) fail('ROW_LIMIT_EXCEEDED');
   });
   return rows;
@@ -327,7 +389,7 @@ async function xlsxRows(buffer: Buffer): Promise<string[][]> {
 export async function parseCustomerImportFile(
   buffer: Buffer,
   format: CustomerImportFileFormat,
-): Promise<CustomerImportRecord[]> {
+): Promise<CustomerImportParseResult> {
   if (buffer.length === 0) fail('EMPTY_IMPORT_FILE');
   if (buffer.length > CUSTOMER_IMPORT_MAX_BYTES) fail('FILE_SIZE_LIMIT_EXCEEDED');
 

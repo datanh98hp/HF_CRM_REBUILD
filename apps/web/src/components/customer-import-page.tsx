@@ -54,10 +54,22 @@ type ImportBatch = {
   status: string;
   importedRows: number;
   duplicateRows: number;
+  invalidRows: number;
   failedInsertRows: number;
   errorCode: string | null;
+  failureDetailsExpiresAt: string | null;
   createdAt: string;
   completedAt: string | null;
+};
+
+type ImportRowFailure = {
+  rowNumber: number;
+  errorCodes: string[];
+};
+
+type ImportBatchDetails = ImportBatch & {
+  failedRows: ImportRowFailure[];
+  failureDetailsExpired: boolean;
 };
 
 type MobilePanel = 'prepare' | 'preview';
@@ -73,8 +85,8 @@ function batchStatusLabel(status: string): string {
     case 'QUEUED': return 'Đang chờ worker';
     case 'SCANNING': return 'Đang quét ClamAV';
     case 'PROCESSING': return 'Đang kiểm tra dữ liệu';
-    case 'COMMITTING': return 'Đang hoàn tất và xóa tệp';
-    case 'COMPLETED': return 'Đã nhập xong';
+    case 'COMMITTING': return 'Đang xóa tệp tạm';
+    case 'COMPLETED': return 'Hoàn tất';
     case 'FAILED': return 'Không thể nhập';
     case 'CANCELLED': return 'Đã hủy';
     case 'EXPIRED': return 'Đã hết hạn';
@@ -87,9 +99,35 @@ function batchErrorMessage(batch: ImportBatch): string {
   if (batch.errorCode === 'SCANNER_UNAVAILABLE') return 'Không kết nối được ClamAV; dữ liệu chưa được nhập.';
   if (batch.errorCode === 'IMPORT_QUEUE_UNAVAILABLE') return 'Hàng đợi không khả dụng; batch chưa được nhập.';
   if (batch.errorCode === 'MISSING_REQUIRED_COLUMNS') return 'Không tìm thấy đủ cột Họ tên và Số điện thoại; không có dòng nào được nhập.';
-  if (batch.errorCode === 'INVALID_IMPORT_DATA') return 'Có dữ liệu không hợp lệ; không có dòng nào được nhập. Hãy sửa tệp rồi tải lại.';
+  if (batch.errorCode === 'INVALID_IMPORT_DATA') return 'Tệp chứa dữ liệu không thể đọc; không có dòng nào được nhập.';
   if (batch.failedInsertRows > 0) return 'Giao dịch đã rollback; không có dữ liệu nhập dở.';
   return 'Tệp hoặc dữ liệu không hợp lệ; không có khách hàng nào được nhập.';
+}
+
+function failureMessage(code: string): string {
+  switch (code) {
+    case 'FULL_NAME_REQUIRED': return 'Thiếu họ tên';
+    case 'INVALID_FULL_NAME': return 'Họ tên phải có từ 2 đến 160 ký tự';
+    case 'PHONE_REQUIRED': return 'Thiếu số điện thoại';
+    case 'INVALID_PHONE': return 'Số điện thoại không hợp lệ';
+    case 'INVALID_EMAIL': return 'Email không hợp lệ';
+    case 'INVALID_DATE_OF_BIRTH': return 'Ngày sinh không hợp lệ hoặc ở tương lai';
+    case 'DATABASE_INSERT_FAILED': return 'Lỗi ghi dữ liệu; giao dịch đã hoàn tác';
+    default: return 'Dữ liệu không hợp lệ';
+  }
+}
+
+function hasFailureDetails(batch: ImportBatch): boolean {
+  return batch.invalidRows + batch.failedInsertRows > 0 &&
+    batch.failureDetailsExpiresAt !== null &&
+    Date.parse(batch.failureDetailsExpiresAt) > Date.now();
+}
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes === 0) return '0 B';
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+  return `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(sizeBytes / (1024 * 1024))} MB`;
 }
 
 export function CustomerImportPage() {
@@ -103,8 +141,13 @@ export function CustomerImportPage() {
   const [uploadError, setUploadError] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [detailsBatch, setDetailsBatch] = useState<ImportBatch | null>(null);
+  const [details, setDetails] = useState<ImportBatchDetails | null>(null);
+  const [detailsError, setDetailsError] = useState('');
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const idempotencyKey = useRef<string | null>(null);
+  const detailsRequestId = useRef(0);
   const [activePanel, setActivePanel] = useState<MobilePanel>('prepare');
 
   useEffect(() => {
@@ -132,6 +175,30 @@ export function CustomerImportPage() {
   }, [session]);
 
   const hasPendingBatches = batches.some((batch) => ACTIVE_BATCH_STATUSES.has(batch.status));
+
+  async function showFailureDetails(batch: ImportBatch) {
+    if (!session) return;
+    const requestId = ++detailsRequestId.current;
+    setDetailsBatch(batch);
+    setDetails(null);
+    setDetailsError('');
+    setIsLoadingDetails(true);
+    try {
+      const result = await request<ImportBatchDetails>(
+        `/customers/import-batches/${batch.id}`,
+        {},
+        session.accessToken,
+      );
+      if (detailsRequestId.current === requestId) setDetails(result);
+    } catch (error) {
+      if (detailsRequestId.current === requestId) {
+        setDetailsError(messageFor(error, 'Không thể tải chi tiết dòng lỗi.'));
+      }
+    } finally {
+      if (detailsRequestId.current === requestId) setIsLoadingDetails(false);
+    }
+  }
+
   useEffect(() => {
     if (!session || !hasPendingBatches) return;
     let active = true;
@@ -222,6 +289,48 @@ export function CustomerImportPage() {
             Quay lại khách hàng
           </Link>
         </header>
+
+        <Dialog
+          open={detailsBatch !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              detailsRequestId.current += 1;
+              setDetailsBatch(null);
+              setDetails(null);
+              setDetailsError('');
+              setIsLoadingDetails(false);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-2xl" closeLabel="Đóng">
+            <DialogHeader className="pr-10">
+              <DialogTitle>Các dòng chưa được nhập</DialogTitle>
+              <DialogDescription>
+                Chỉ hiển thị số dòng và lý do; chi tiết này được tự xóa sau 30 ngày.
+              </DialogDescription>
+            </DialogHeader>
+            {isLoadingDetails ? (
+              <p className="py-4 text-sm text-muted-foreground" role="status">Đang tải chi tiết dòng lỗi…</p>
+            ) : detailsError ? (
+              <p className="py-4 text-sm text-destructive" role="alert">{detailsError}</p>
+            ) : details?.failureDetailsExpired ? (
+              <p className="py-4 text-sm text-muted-foreground">Chi tiết dòng lỗi đã hết hạn và được xóa.</p>
+            ) : details?.failedRows.length ? (
+              <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-lg bg-muted p-3 font-mono text-xs leading-5 text-foreground">
+                {details.failedRows
+                  .map(({ rowNumber, errorCodes }) => `Dòng ${rowNumber}: ${errorCodes.map(failureMessage).join(' · ')}`)
+                  .join('\n')}
+              </pre>
+            ) : (
+              <p className="py-4 text-sm text-muted-foreground">Không có dòng lỗi cần hiển thị.</p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" className="min-h-10" />}>
+                Đóng
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1 lg:hidden" role="group" aria-label="Các bước nhập khách hàng">
           <Button
@@ -318,12 +427,11 @@ Trần Quốc Bảo,0987654321,,`}
                           <li>Ngày sinh phải hợp lệ và không ở tương lai; không thêm dữ liệu ngoài các trường khách hàng được liệt kê.</li>
                         </ul>
                       </section>
-
                       <p className="rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-                        Sau khi ClamAV báo an toàn, dữ liệu hợp lệ sẽ được nhập tự động trong một giao dịch. Dòng trùng được bỏ qua, không tự gộp; tệp bị nhiễm hoặc dữ liệu không hợp lệ sẽ được ghi trạng thái và xóa.
+                        Sau khi ClamAV báo an toàn, các dòng hợp lệ được nhập tự động trong một giao dịch. Dòng lỗi dữ liệu được bỏ qua và báo số dòng; dòng trùng được đếm riêng. Lỗi tệp hoặc scanner sẽ dừng toàn batch.
                       </p>
                       <p className="rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-                        Lịch sử chỉ giữ trạng thái và số lượng nhập thành công, trùng, hoặc lỗi ghi; không giữ nội dung tệp hay dữ liệu khách hàng đã xử lý.
+                        Tệp tạm tự xóa sau xử lý. Lịch sử không lưu giá trị trong tệp; số dòng và mã lỗi được giữ 30 ngày.
                       </p>
                     </div>
 
@@ -398,7 +506,7 @@ Trần Quốc Bảo,0987654321,,`}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="min-w-0 flex-1 text-sm text-muted-foreground">
                   {selectedFile
-                    ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB · tệp tạm sẽ tự xóa sau xử lý`
+                    ? `${formatFileSize(selectedFile.size)} · tệp tạm sẽ tự xóa sau xử lý`
                     : 'CSV hoặc XLSX · tối đa 20 MB · tối đa 10.000 dòng'}
                 </div>
                 <Button
@@ -438,7 +546,7 @@ Trần Quốc Bảo,0987654321,,`}
             <CardHeader className="px-4 sm:px-5">
               <CardTitle className="text-base">Kết quả nhập gần đây</CardTitle>
               <CardDescription>
-                Trạng thái batch và số liệu tổng hợp; nội dung từng dòng không được lưu sau xử lý.
+                Trạng thái và số liệu tổng hợp; chỉ giữ số dòng lỗi và mã lỗi trong 30 ngày.
               </CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-5">
@@ -463,15 +571,51 @@ Trần Quốc Bảo,0987654321,,`}
                             </time>
                           </div>
                           {batch.status === 'COMPLETED' ? (
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {batch.importedRows} nhập thành công · {batch.duplicateRows} trùng · {batch.failedInsertRows} lỗi ghi
-                            </p>
+                            <>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Đã nhập dữ liệu và xóa tệp tạm thành công.
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {batch.importedRows} nhập thành công · {batch.duplicateRows} trùng · {batch.invalidRows} dòng lỗi dữ liệu · {batch.failedInsertRows} lỗi ghi
+                              </p>
+                              {hasFailureDetails(batch) ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="mt-2 min-h-9"
+                                  disabled={isLoadingDetails}
+                                  onClick={() => { void showFailureDetails(batch); }}
+                                >
+                                  Xem dòng lỗi
+                                </Button>
+                              ) : batch.invalidRows > 0 ? (
+                                <p className="mt-1 text-xs text-muted-foreground">Chi tiết dòng lỗi đã hết hạn.</p>
+                              ) : null}
+                            </>
                           ) : batch.status === 'FAILED' ? (
-                            <p className="mt-1 text-sm text-muted-foreground">{batchErrorMessage(batch)}</p>
+                            <>
+                              <p className="mt-1 text-sm text-muted-foreground">{batchErrorMessage(batch)}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {batch.importedRows} nhập thành công · {batch.duplicateRows} trùng · {batch.invalidRows} dòng lỗi dữ liệu · {batch.failedInsertRows} lỗi ghi
+                              </p>
+                              {hasFailureDetails(batch) ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="mt-2 min-h-9"
+                                  disabled={isLoadingDetails}
+                                  onClick={() => { void showFailureDetails(batch); }}
+                                >
+                                  Xem dòng lỗi
+                                </Button>
+                              ) : batch.invalidRows + batch.failedInsertRows > 0 ? (
+                                <p className="mt-1 text-xs text-muted-foreground">Chi tiết dòng lỗi đã hết hạn.</p>
+                              ) : null}
+                            </>
                           ) : (
                             <p className="mt-1 text-sm text-muted-foreground">
                               {batch.status === 'COMMITTING'
-                                ? 'Dữ liệu đã ghi; đang xóa tệp tạm trước khi hoàn tất.'
+                                ? 'Dữ liệu đã ghi; chỉ báo hoàn tất sau khi xóa tệp tạm thành công.'
                                 : 'Đang quét, kiểm tra và xử lý tệp trong nền.'}
                             </p>
                           )}

@@ -235,6 +235,7 @@ describe('CustomersService contract approval', () => {
     }]);
 
     await expect(service.listLoanProducts({ id: customer.id, type: 'CUSTOMER' }, {})).resolves.toEqual([{
+      id: 'product-id',
       name: 'Short-term support',
       annualInterestRate: '12.0000',
       minTermMonths: 6,

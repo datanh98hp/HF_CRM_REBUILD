@@ -19,8 +19,9 @@ import { CustomerImportsModule } from './customer-imports/customer-imports.modul
     AccessControlModule,
     AuditModule,
     AuthModule,
-    CustomersModule,
+    // Register the static import-batches route before the generic customers/:customerId route.
     CustomerImportsModule,
+    CustomersModule,
     PlansModule,
     HealthModule,
   ],

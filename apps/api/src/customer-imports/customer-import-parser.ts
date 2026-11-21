@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { Readable } from 'node:stream';
 import { Parse } from 'unzipper';
 import { normalizeCustomerEmail, normalizeCustomerName } from '../customers/customer-normalization.js';
+import { CUSTOMER_SEX_VALUES } from '../customers/customer-fields.js';
 import { normalizeVietnamesePhone } from '../customers/phone-normalizer.js';
 
 export const CUSTOMER_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
@@ -20,7 +21,12 @@ export type CustomerImportValidationErrorCode =
   | 'PHONE_REQUIRED'
   | 'INVALID_PHONE'
   | 'INVALID_EMAIL'
-  | 'INVALID_DATE_OF_BIRTH';
+  | 'INVALID_DATE_OF_BIRTH'
+  | 'INVALID_CCCD'
+  | 'INVALID_ADDRESS'
+  | 'INVALID_PLACE_OF_ORIGIN'
+  | 'INVALID_SEX'
+  | 'INVALID_PLACE_OF_ISSUE';
 
 export interface CustomerImportRecord {
   rowNumber: number;
@@ -31,6 +37,11 @@ export interface CustomerImportRecord {
   email: string | null;
   emailNormalized: string | null;
   dateOfBirth: Date | null;
+  cccd: string | null;
+  address: string | null;
+  placeOfOrigin: string | null;
+  sex: typeof CUSTOMER_SEX_VALUES[number] | null;
+  placeOfIssue: string | null;
 }
 
 export interface CustomerImportRowFailure {
@@ -137,10 +148,11 @@ function parseCsv(text: string): SourceRow[] {
   return rows;
 }
 
-function fieldValue(value: unknown): string {
+function fieldValue(value: unknown, formattedValue?: string): string {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return formattedValue ?? String(value);
   fail('INVALID_WORKBOOK_CELL');
 }
 
@@ -162,6 +174,20 @@ function fieldIndexes(header: string[]): Map<string, number> {
     ['date of birth', 'dateOfBirth'],
     ['dateofbirth', 'dateOfBirth'],
     ['dob', 'dateOfBirth'],
+    ['cccd', 'cccd'],
+    ['can cuoc cong dan', 'cccd'],
+    ['identity card', 'cccd'],
+    ['identity number', 'cccd'],
+    ['dia chi', 'address'],
+    ['address', 'address'],
+    ['que quan', 'placeOfOrigin'],
+    ['place of origin', 'placeOfOrigin'],
+    ['gioi tinh', 'sex'],
+    ['sex', 'sex'],
+    ['gender', 'sex'],
+    ['noi cap', 'placeOfIssue'],
+    ['place of issue', 'placeOfIssue'],
+    ['issuing place', 'placeOfIssue'],
   ]);
   const indexes = new Map<string, number>();
   header.forEach((value, index) => {
@@ -175,11 +201,47 @@ function fieldIndexes(header: string[]): Map<string, number> {
   return indexes;
 }
 
+function optionalText(
+  value: string | undefined,
+  maxLength: number,
+  errorCode: CustomerImportValidationErrorCode,
+  errorCodes: CustomerImportValidationErrorCode[],
+): string | null {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  if (trimmed.length > maxLength) {
+    errorCodes.push(errorCode);
+    return null;
+  }
+  return trimmed;
+}
+
+function optionalSex(value: string | undefined, errorCodes: CustomerImportValidationErrorCode[]) {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  const normalized = normalizeCustomerName(trimmed);
+  const sex = CUSTOMER_SEX_VALUES.find((candidate) => normalizeCustomerName(candidate) === normalized);
+  if (!sex) {
+    errorCodes.push('INVALID_SEX');
+    return null;
+  }
+  return sex;
+}
+
 function parseDate(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) fail('INVALID_IMPORT_DATA');
-  const [year, month, day] = trimmed.split('-').map(Number);
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const vietnameseDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  let dateParts: [number, number, number];
+  if (isoDate) {
+    dateParts = [Number(isoDate[1]), Number(isoDate[2]), Number(isoDate[3])];
+  } else if (vietnameseDate) {
+    dateParts = [Number(vietnameseDate[3]), Number(vietnameseDate[2]), Number(vietnameseDate[1])];
+  } else {
+    fail('INVALID_IMPORT_DATA');
+  }
+  const [year, month, day] = dateParts;
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
     date.getUTCFullYear() !== year ||
@@ -230,6 +292,21 @@ function toRecords(rows: SourceRow[]): CustomerImportParseResult {
       if (!(error instanceof CustomerImportFileError) || error.code !== 'INVALID_IMPORT_DATA') throw error;
       errorCodes.push('INVALID_DATE_OF_BIRTH');
     }
+    const cccd = optionalText(row[indexes.get('cccd') ?? -1], 32, 'INVALID_CCCD', errorCodes);
+    const address = optionalText(row[indexes.get('address') ?? -1], 500, 'INVALID_ADDRESS', errorCodes);
+    const placeOfOrigin = optionalText(
+      row[indexes.get('placeOfOrigin') ?? -1],
+      160,
+      'INVALID_PLACE_OF_ORIGIN',
+      errorCodes,
+    );
+    const sex = optionalSex(row[indexes.get('sex') ?? -1], errorCodes);
+    const placeOfIssue = optionalText(
+      row[indexes.get('placeOfIssue') ?? -1],
+      160,
+      'INVALID_PLACE_OF_ISSUE',
+      errorCodes,
+    );
 
     if (errorCodes.length) {
       failures.push({ rowNumber: sourceRow.rowNumber, errorCodes });
@@ -245,6 +322,11 @@ function toRecords(rows: SourceRow[]): CustomerImportParseResult {
       email,
       emailNormalized: email,
       dateOfBirth,
+      cccd,
+      address,
+      placeOfOrigin,
+      sex,
+      placeOfIssue,
     });
     if (records.length > CUSTOMER_IMPORT_MAX_ROWS) fail('ROW_LIMIT_EXCEEDED');
   }
@@ -378,7 +460,10 @@ async function xlsxRows(buffer: Buffer): Promise<SourceRow[]> {
         cell.hyperlink ||
         (typeof value === 'object' && value !== null && ('formula' in value || 'sharedFormula' in value))
       ) fail('UNSUPPORTED_XLSX_FEATURE');
-      values[column - 1] = fieldValue(value);
+      const zeroPaddedValue = typeof value === 'number' && /^0+$/.test(cell.numFmt)
+        ? String(value).padStart(cell.numFmt.length, '0')
+        : undefined;
+      values[column - 1] = fieldValue(value, zeroPaddedValue);
     });
     rows.push({ rowNumber, values: values.map((value) => value ?? '') });
     if (rows.length > CUSTOMER_IMPORT_MAX_ROWS + 1) fail('ROW_LIMIT_EXCEEDED');

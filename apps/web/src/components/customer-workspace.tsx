@@ -20,6 +20,11 @@ type Customer = {
   phone: string;
   email: string | null;
   dateOfBirth: string | null;
+  cccd?: string | null;
+  address?: string | null;
+  placeOfOrigin?: string | null;
+  sex?: 'Nam' | 'Nữ' | 'Khác' | null;
+  placeOfIssue?: string | null;
   provenance: string;
   verificationStatus: string;
   status: string;
@@ -213,6 +218,12 @@ function formulaInputError(value: string, variable: FormulaInputDefinition) {
 
 function date(value: string | null) {
   return value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(new Date(value)) : '—';
+}
+
+function formatDateOfBirth(value: string | null) {
+  if (!value) return '—';
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return isoDate ? `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}` : date(value);
 }
 
 function errorMessage(error: unknown, fallback: string) {
@@ -431,10 +442,16 @@ export function CustomerWorkspace({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [cccd, setCccd] = useState('');
+  const [address, setAddress] = useState('');
+  const [placeOfOrigin, setPlaceOfOrigin] = useState('');
+  const [sex, setSex] = useState('');
+  const [placeOfIssue, setPlaceOfIssue] = useState('');
   const [branchId, setBranchId] = useState('');
   const [provenance, setProvenance] = useState('Nhập thủ công');
   const [showStatusForm, setShowStatusForm] = useState(false);
@@ -594,6 +611,7 @@ export function CustomerWorkspace({
     setNotice('');
     setShowStatusForm(false);
     setShowAssignmentForm(false);
+    setShowEdit(false);
     setDuplicateAction(null);
     setShowContractForm(false);
     setStatusDraft(customer.status);
@@ -737,6 +755,11 @@ export function CustomerWorkspace({
           phone,
           email: email || undefined,
           dateOfBirth: dateOfBirth || undefined,
+          cccd: cccd.trim() || undefined,
+          address: address.trim() || undefined,
+          placeOfOrigin: placeOfOrigin.trim() || undefined,
+          sex: sex || undefined,
+          placeOfIssue: placeOfIssue.trim() || undefined,
           provenance,
           branchId,
         }),
@@ -748,6 +771,11 @@ export function CustomerWorkspace({
       setPhone('');
       setEmail('');
       setDateOfBirth('');
+      setCccd('');
+      setAddress('');
+      setPlaceOfOrigin('');
+      setSex('');
+      setPlaceOfIssue('');
       setBranchId('');
       setProvenance('Nhập trực tiếp');
       await selectCustomer(created);
@@ -755,6 +783,43 @@ export function CustomerWorkspace({
       setNotice('Đã tạo khách hàng.');
     } catch (err) {
       setError(errorMessage(err, 'Không thể tạo khách hàng.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateCustomer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    setError('');
+    setNotice('');
+    setSaving(true);
+    try {
+      const formData = new FormData(event.currentTarget);
+      const value = (name: string) => String(formData.get(name) ?? '').trim();
+      const optional = (name: string) => value(name) || null;
+      const updated = await request<Customer>(`/customers/${selected.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fullName: value('fullName'),
+          phone: value('phone'),
+          email: optional('email'),
+          dateOfBirth: optional('dateOfBirth'),
+          cccd: optional('cccd'),
+          address: optional('address'),
+          placeOfOrigin: optional('placeOfOrigin'),
+          sex: optional('sex'),
+          placeOfIssue: optional('placeOfIssue'),
+        }),
+      }, accessToken);
+      setSelected(updated);
+      setCustomers((current) => current.map((customer) => customer.id === updated.id
+        ? { ...customer, ...updated }
+        : customer));
+      setShowEdit(false);
+      setNotice('Đã cập nhật hồ sơ khách hàng.');
+    } catch (err) {
+      setError(errorMessage(err, 'Không thể cập nhật hồ sơ khách hàng.'));
     } finally {
       setSaving(false);
     }
@@ -1135,6 +1200,26 @@ export function CustomerWorkspace({
           <label className="grid gap-1 text-sm font-medium text-slate-800">Ngày sinh
             <input value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" className={inputClass} />
           </label>
+          <label className="grid gap-1 text-sm font-medium text-slate-800">CCCD
+            <input value={cccd} onChange={(event) => setCccd(event.target.value)} maxLength={32} className={inputClass} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium text-slate-800">Địa chỉ
+            <input value={address} onChange={(event) => setAddress(event.target.value)} maxLength={500} className={inputClass} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium text-slate-800">Quê quán
+            <input value={placeOfOrigin} onChange={(event) => setPlaceOfOrigin(event.target.value)} maxLength={160} className={inputClass} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium text-slate-800">Giới tính
+            <select value={sex} onChange={(event) => setSex(event.target.value)} className={inputClass}>
+              <option value="">Chọn giới tính (không bắt buộc)</option>
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+              <option value="Khác">Khác</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium text-slate-800">Nơi cấp
+            <input value={placeOfIssue} onChange={(event) => setPlaceOfIssue(event.target.value)} maxLength={160} className={inputClass} />
+          </label>
           <label className="grid gap-1 text-sm font-medium text-slate-800">Chi nhánh *
             <select value={branchId} onChange={(event) => setBranchId(event.target.value)} required className={inputClass}>
               <option value="">Chọn chi nhánh trong phạm vi được cấp</option>
@@ -1300,6 +1385,7 @@ export function CustomerWorkspace({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{label(selected.status)}</span>
+                  {canManageCustomers && !loadingDetail && selected.cccd !== undefined && !showEdit && <button type="button" onClick={() => setShowEdit(true)} className={secondaryButtonClass}>Sửa hồ sơ</button>}
                   <button ref={mobileDetailCloseRef} type="button" onClick={() => setMobileDetailOpen(false)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 xl:hidden">‹ Danh sách</button>
                 </div>
               </div>
@@ -1307,12 +1393,58 @@ export function CustomerWorkspace({
               {loadingDetail
                 ? <p className="py-6 text-sm text-slate-600">Đang tải chi tiết hồ sơ…</p>
                 : <>
-                  <dl className="my-4 grid grid-cols-2 gap-3 text-sm">
-                    <div><dt className="text-slate-500">Nguồn</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.provenance}</dd></div>
-                    <div><dt className="text-slate-500">Xác minh</dt><dd className="mt-1 font-medium text-slate-900">{selected.verificationStatus === 'VERIFIED' ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
-                    <div><dt className="text-slate-500">Ngày sinh</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.dateOfBirth)}</dd></div>
-                    <div><dt className="text-slate-500">Tạo lúc</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.createdAt)}</dd></div>
-                  </dl>
+                  {showEdit
+                    ? <form onSubmit={updateCustomer} className="my-4 grid gap-3 border-b border-slate-200 pb-4 sm:grid-cols-2">
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Họ tên *
+                        <input name="fullName" defaultValue={selected.fullName} minLength={2} maxLength={160} required className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Số điện thoại *
+                        <input name="phone" defaultValue={selected.phone} type="tel" minLength={8} maxLength={32} required className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Email
+                        <input name="email" defaultValue={selected.email ?? ''} type="email" maxLength={254} className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Ngày sinh
+                        <input name="dateOfBirth" defaultValue={selected.dateOfBirth?.slice(0, 10) ?? ''} type="date" className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">CCCD
+                        <input name="cccd" defaultValue={selected.cccd ?? ''} maxLength={32} className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Địa chỉ
+                        <input name="address" defaultValue={selected.address ?? ''} maxLength={500} className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Quê quán
+                        <input name="placeOfOrigin" defaultValue={selected.placeOfOrigin ?? ''} maxLength={160} className={inputClass} />
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Giới tính
+                        <select name="sex" defaultValue={selected.sex ?? ''} className={inputClass}>
+                          <option value="">Chọn giới tính (không bắt buộc)</option>
+                          <option value="Nam">Nam</option>
+                          <option value="Nữ">Nữ</option>
+                          <option value="Khác">Khác</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm font-medium text-slate-800">Nơi cấp
+                        <input name="placeOfIssue" defaultValue={selected.placeOfIssue ?? ''} maxLength={160} className={inputClass} />
+                      </label>
+                      <div className="flex items-end gap-2 sm:col-span-2">
+                        <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60">
+                          {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
+                        </button>
+                        <button type="button" disabled={saving} onClick={() => setShowEdit(false)} className={secondaryButtonClass}>Hủy</button>
+                      </div>
+                    </form>
+                    : <dl className="my-4 grid grid-cols-2 gap-3 text-sm">
+                      <div><dt className="text-slate-500">Nguồn</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.provenance}</dd></div>
+                      <div><dt className="text-slate-500">Xác minh</dt><dd className="mt-1 font-medium text-slate-900">{selected.verificationStatus === 'VERIFIED' ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
+                      <div><dt className="text-slate-500">Ngày sinh</dt><dd className="mt-1 font-medium text-slate-900">{formatDateOfBirth(selected.dateOfBirth)}</dd></div>
+                      <div><dt className="text-slate-500">CCCD</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.cccd ?? '—'}</dd></div>
+                      <div><dt className="text-slate-500">Giới tính</dt><dd className="mt-1 font-medium text-slate-900">{selected.sex ?? '—'}</dd></div>
+                      <div><dt className="text-slate-500">Quê quán</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfOrigin ?? '—'}</dd></div>
+                      <div><dt className="text-slate-500">Nơi cấp</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfIssue ?? '—'}</dd></div>
+                      <div className="col-span-2"><dt className="text-slate-500">Địa chỉ</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.address ?? '—'}</dd></div>
+                      <div><dt className="text-slate-500">Tạo lúc</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.createdAt)}</dd></div>
+                    </dl>}
 
                   {canManageCustomers && <section className="border-t border-slate-200 py-4" aria-labelledby="customer-status-heading">
                     <div className="flex flex-wrap items-center justify-between gap-2">

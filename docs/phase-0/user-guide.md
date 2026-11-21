@@ -36,6 +36,10 @@ Trang **Vai trò & quyền** dùng để xem hoặc cấu hình role tùy chỉn
 
 Trang **Khách hàng** cung cấp các thao tác trong phạm vi được cấp quyền, bao gồm tìm kiếm và quản lý hồ sơ. Tài khoản CRM chỉ xem hoặc cập nhật dữ liệu khi API cho phép theo quyền và phạm vi; Customer chỉ được truy cập hồ sơ/nghiệp vụ của chính mình.
 
+### Trường hồ sơ và ngày sinh
+
+Hồ sơ có các trường bắt buộc họ tên/số điện thoại; email và ngày sinh tùy chọn; CCCD, địa chỉ, quê quán, giới tính và nơi cấp cũng tùy chọn. Ngày sinh hiển thị `dd/MM/yyyy`; API tiếp tục dùng ISO. Khi import, các cột hồ sơ tùy chọn có thể để trống.
+
 ### Phân công hàng loạt
 
 Chọn nhiều khách hàng bằng checkbox (giữ lựa chọn khi chuyển trang), chọn một tư vấn viên `ADVISING` đang hoạt động trong phạm vi, nhập lý do rồi gửi. Mỗi request áp dụng cùng một tư vấn viên cho tất cả khách đã chọn (tối đa 100); nếu có khách hoặc nhân viên ngoài phạm vi, toàn bộ request bị từ chối.

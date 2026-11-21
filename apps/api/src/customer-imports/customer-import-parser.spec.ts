@@ -105,6 +105,61 @@ describe('parseCustomerImportFile', () => {
     });
   });
 
+  it('accepts Vietnamese day/month/year dates and rejects impossible or future dates', async () => {
+    const data = Buffer.from(
+      'Họ tên,Số điện thoại,Email,Ngày sinh\n' +
+      'Nguyễn Lan Anh,0911396778,,28/10/2006\n' +
+      'Nguyễn Thị Minh Ánh,0912907568,,05/05/2005\n' +
+      'Vũ Thị Phương Thảo,0943357511,,\n' +
+      'Nguyễn Ngày Sai,0912345670,,31/02/2006\n' +
+      'Nguyễn Ngày Tương Lai,0912345671,,31/12/2099\n',
+      'utf8',
+    );
+
+    await expect(parseCustomerImportFile(data, 'csv')).resolves.toMatchObject({
+      records: [
+        { rowNumber: 2, dateOfBirth: new Date('2006-10-28T00:00:00.000Z') },
+        { rowNumber: 3, dateOfBirth: new Date('2005-05-05T00:00:00.000Z') },
+        { rowNumber: 4, dateOfBirth: null },
+      ],
+      failures: [
+        { rowNumber: 5, errorCodes: ['INVALID_DATE_OF_BIRTH'] },
+        { rowNumber: 6, errorCodes: ['INVALID_DATE_OF_BIRTH'] },
+      ],
+      totalRows: 5,
+    });
+  });
+
+  it('parses optional profile columns and validates the allowed sex values', async () => {
+    const data = Buffer.from(
+      'Họ tên,Số điện thoại,CCCD,address,place_of_origin,sex,place_of_issue\n' +
+      'Nguyễn Thị Lan Anh,0912345678,001234567890,"12 Nguyễn Trãi, Thanh Xuân",Hà Nam,Nữ,Cục Cảnh sát\n' +
+      'Trần Quốc Bảo,0987654321,,,,,\n' +
+      'Lê Minh Anh,0900000000,,,,unknown,\n',
+      'utf8',
+    );
+
+    await expect(parseCustomerImportFile(data, 'csv')).resolves.toMatchObject({
+      records: [{
+        rowNumber: 2,
+        cccd: '001234567890',
+        address: '12 Nguyễn Trãi, Thanh Xuân',
+        placeOfOrigin: 'Hà Nam',
+        sex: 'Nữ',
+        placeOfIssue: 'Cục Cảnh sát',
+      }, {
+        rowNumber: 3,
+        cccd: null,
+        address: null,
+        placeOfOrigin: null,
+        sex: null,
+        placeOfIssue: null,
+      }],
+      failures: [{ rowNumber: 4, errorCodes: ['INVALID_SEX'] }],
+      totalRows: 3,
+    });
+  });
+
   it('rejects malformed CSV and over-limit data', async () => {
     await expect(
       parseCustomerImportFile(Buffer.from('Họ tên,Số điện thoại\n"broken,0912345678'), 'csv'),
@@ -117,12 +172,20 @@ describe('parseCustomerImportFile', () => {
   it('reads the first visible XLSX sheet and rejects formula cells', async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Khach hang');
-    worksheet.addRow(['TT', 'Họ tên', 'Số điện thoại', 'Email', 'Ngày sinh']);
-    worksheet.addRow(['1', 'Nguyễn Thị Lan Anh', '0912345678', '', '1992-03-14']);
+    worksheet.addRow(['TT', 'Họ tên', 'Số điện thoại', 'Email', 'Ngày sinh', 'CCCD']);
+    worksheet.addRow(['1', 'Nguyễn Thị Lan Anh', '0912345678', '', '1992-03-14', 1234567890]);
+    worksheet.getCell('E2').value = new Date('1992-03-14T00:00:00.000Z');
+    worksheet.getCell('E2').numFmt = 'dd/mm/yyyy';
+    worksheet.getCell('F2').numFmt = '000000000000';
     const data = Buffer.from(await workbook.xlsx.writeBuffer());
 
     await expect(parseCustomerImportFile(data, 'xlsx')).resolves.toMatchObject({
-      records: [{ rowNumber: 2, fullName: 'Nguyễn Thị Lan Anh' }],
+      records: [{
+        rowNumber: 2,
+        fullName: 'Nguyễn Thị Lan Anh',
+        dateOfBirth: new Date('1992-03-14T00:00:00.000Z'),
+        cccd: '001234567890',
+      }],
       failures: [],
       totalRows: 1,
     });

@@ -1,0 +1,6 @@
+ALTER TABLE "Customer"
+  ADD COLUMN "cccd" VARCHAR(32),
+  ADD COLUMN "address" VARCHAR(500),
+  ADD COLUMN "placeOfOrigin" VARCHAR(160),
+  ADD COLUMN "sex" VARCHAR(16),
+  ADD COLUMN "placeOfIssue" VARCHAR(160);

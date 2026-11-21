@@ -306,6 +306,11 @@ model Customer {
   fullName           String                     @db.VarChar(160)
   normalizedName     String                     @db.VarChar(160)
   dateOfBirth        DateTime?                  @db.Date
+  cccd               String?                    @db.VarChar(32)
+  address            String?                    @db.VarChar(500)
+  placeOfOrigin      String?                    @db.VarChar(160)
+  sex                String?                    @db.VarChar(16)
+  placeOfIssue       String?                    @db.VarChar(160)
   phone              String                     @db.VarChar(32)
   phoneNormalized    String                     @db.VarChar(24)
   email              String?                    @db.VarChar(254)

@@ -1,6 +1,6 @@
 # P0-4 — Import khách hàng nền theo giao dịch atomic
 
-**Trạng thái (cập nhật 2026-11-20, đối chiếu code):** Pipeline upload → ClamAV → worker → import PostgreSQL → xóa tệp đã có code đầy đủ và đã được nghiệm thu trên stack test riêng. Bản mở rộng partial-row đã có schema + parser/worker/API/UI + 2 migration (`20261120121200_p0_4_partial_import_failures`, `20261120161000_p0_4_partial_import_finalization`) và đã qua API suite, typecheck, build; **hai migration này chưa được áp dụng trên DB test cô lập và integration mixed-row chưa chạy**, nên chưa coi phần mở rộng runtime đã nghiệm thu. Readiness trả `BLOCKED` với `IMPORT_SCHEMA_NOT_READY` cho tới khi DB đích có cột `failureDetailsExpiresAt`.
+**Trạng thái (cập nhật 2026-11-21, đối chiếu code):** Pipeline upload → ClamAV → worker → import PostgreSQL → xóa tệp đã có code đầy đủ và đã được nghiệm thu trên stack test riêng. Bản mở rộng partial-row có schema + parser/worker/API/UI + 2 migration (`20261120121200_p0_4_partial_import_failures`, `20261120161000_p0_4_partial_import_finalization`); parser cũng nhận các trường hồ sơ khách hàng tùy chọn. `db:validate`, `db:generate`, typecheck API + web và 4 API suite/37 test tập trung đạt. **Hai migration partial-row và migration trường hồ sơ `20261121170000_customer_optional_profile_fields` chưa được áp dụng trên DB test cô lập; integration mixed-row chưa chạy**, nên chưa coi phần mở rộng runtime đã nghiệm thu. Readiness trả `BLOCKED` với `IMPORT_SCHEMA_NOT_READY` cho tới khi DB đích có cột `failureDetailsExpiresAt`.
 **Phụ thuộc:** P0-0 (PostgreSQL/Redis/BullMQ), P0-1 (auth/RBAC/audit), P0-2 (customer/normalization/duplicate review), thư mục tạm cục bộ dùng chung giữa API/worker và ClamAV nội bộ.
 
 ## Mục tiêu
@@ -12,10 +12,10 @@ Cho nhân viên có quyền tải CSV/XLSX và chọn chi nhánh. Hệ thống q
 - Chỉ nhận CSV và XLSX, tối đa **20 MB**; từ chối XLS/XLSM. Tệp được lưu tạm tại `apps/api/import-customer-files` trong API container, scan bằng ClamAV trước khi parse và xóa sau khi import hoặc khi xử lý lỗi. Docker Compose dùng volume local riêng, chỉ mount vào API/worker; nếu DB commit xong nhưng xóa tệp lỗi, batch ở `COMMITTING` và retry chỉ dọn tệp/hoàn tất, không import lần hai.
 - Không dùng S3/Object Storage cho import. API và worker phải mount cùng volume cục bộ; triển khai nhiều host cần shared filesystem hoặc phải giữ import bị khóa.
 - Không preview hoặc lưu dữ liệu staging từng dòng. Parser giới hạn tài nguyên và xử lý tối đa 10.000 dòng. Dòng không hợp lệ bị bỏ qua; chỉ lưu số dòng và mã lỗi đã được whitelist tối đa 30 ngày, không lưu giá trị ô hoặc PII. Sau đó xóa chi tiết, chỉ giữ trạng thái và số lượng tổng hợp: thành công, trùng, dòng lỗi dữ liệu và insert thất bại.
-- Trường nhập theo schema Customer hiện tại: họ tên và số điện thoại bắt buộc; email và ngày sinh tùy chọn. Chi nhánh là lựa chọn bắt buộc ở cấp batch. Không nhập thêm PII ngoài schema đã duyệt.
+- Trường nhập theo schema Customer hiện tại: họ tên và số điện thoại bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn. CCCD được lưu dạng chuỗi để giữ số 0 đầu; giới tính nhận `Nam`, `Nữ` hoặc `Khác`. Chi nhánh là lựa chọn bắt buộc ở cấp batch. Không nhập thêm PII ngoài schema đã duyệt.
 - Dùng chuẩn hóa số điện thoại Việt Nam hiện có (`normalizeVietnamesePhone`), chuẩn hóa tên/email và quy tắc dò trùng của P0-2; không tạo một cách chuẩn hóa riêng cho import.
 - Customer tạo từ import có `createdById` là người tải lên và `provenance` do hệ thống gán là `IMPORT`. Không tự phân công tư vấn viên.
-- Dò trùng theo phone/email đã chuẩn hóa và họ tên + ngày sinh khi có đủ dữ liệu. Không tự gộp hồ sơ.
+- Dò trùng theo họ tên + số điện thoại đã chuẩn hóa, email đã chuẩn hóa và họ tên + ngày sinh khi có đủ dữ liệu. Không tự gộp hồ sơ.
 - Dòng trùng được bỏ qua tự động; không gộp và không tạo candidate mới. Retry cùng batch không được tạo customer trùng.
 - Tệp thật không được chấp nhận nếu scanner chưa cấu hình. Trước khi có scanner, chỉ kiểm thử bằng fixture tổng hợp trong dev/test; không có đường tắt parse trực tiếp.
 
@@ -104,6 +104,9 @@ Các giới hạn đã được duyệt cho MVP:
 
 - CSV UTF-8 (có hoặc không BOM), delimiter dấu phẩy và quoting chuẩn; không tự suy diễn delimiter.
 - XLSX chỉ workbook không mã hóa, không macro, không external links; worker đọc sheet đầu tiên đang hiển thị; formula cell bị từ chối, không đánh giá công thức.
+- Ngày sinh chấp nhận `dd/MM/yyyy` theo định dạng ngày Việt Nam, ISO `yyyy-MM-dd`, hoặc ô ngày XLSX; từ chối ngày không tồn tại và ngày trong tương lai.
+- Các cột tùy chọn `CCCD`, `Địa chỉ`, `Quê quán`, `Giới tính`, `Nơi cấp` được nhận diện khi có trong tiêu đề; ô trống lưu `NULL`, giới tính ngoài `Nam`/`Nữ`/`Khác` làm dòng đó thất bại.
+- Trong XLSX, CCCD cần được lưu dưới dạng văn bản hoặc dùng định dạng số có đủ chữ số 0 đầu; CSV giữ nguyên mã CCCD dạng chuỗi.
 - Giới hạn tối đa: 10.000 dòng dữ liệu, 10 sheet/workbook, 100 MB sau giải nén và 1.000 ZIP entries; kiểm tra trước khi cấp phát tài nguyên lớn.
 
 ## Tiêu chí nghiệm thu
@@ -124,7 +127,7 @@ Các giới hạn đã được duyệt cho MVP:
 
 1. CSV hợp lệ có BOM/quotes; XLSX hợp lệ đọc sheet đầu tiên đang hiển thị; header hỗ trợ alias Việt/Anh.
 2. Thiếu tên/điện thoại, phone sai theo P0-2, email sai, DOB tương lai/không hợp lệ, dòng trống và Unicode/tên dài.
-3. Duplicate phone, email, name+DOB; cùng một phone lặp trong file; xác nhận counts và không tạo customer trùng.
+3. Duplicate name+phone, email, name+DOB; cùng một cặp name+phone lặp trong file; xác nhận counts và không tạo customer trùng.
 4. Sai extension/MIME/signature, XLS/XLSM, encrypted/broken workbook, zip bomb/entry vượt cap, file >20 MB, scanner reject/timeout.
 5. Batch trống, vượt số dòng, retry parse, worker dừng giữa chừng, retry ở `COMMITTING`, lỗi xóa tệp và batch hết hạn.
 6. User thiếu `customers.import`, branch grant sai, batch của user khác.
@@ -152,8 +155,9 @@ Các giới hạn đã được duyệt cho MVP:
 ## Tiến độ implementation
 
 - **Đã triển khai:** schema/RBAC; local temp storage; ClamAV `INSTREAM`; readiness; upload/history/status API; CSV/XLSX parser; queue worker; atomic dedupe/import; count-only audit; UI auto-import và kết quả theo dòng.
-- **Đã xác minh:** API suite (17 suites/108 tests), API typecheck/build, readiness `READY`, toàn bộ 20 migration (tính đến lượt đó; repo hiện có 22) up-to-date trên PostgreSQL test đã có dữ liệu, và P0-2 API/PostgreSQL integration.
+- **Đã xác minh:** API suite (17 suites/108 tests), API typecheck/build, readiness `READY`, toàn bộ 20 migration (tính đến lượt đó; repo hiện có 23) up-to-date trên PostgreSQL test đã có dữ liệu, và P0-2 API/PostgreSQL integration.
 - **Đã kiểm tra pipeline thật:** upload CLEAN tự import và bỏ qua dòng trùng; dữ liệu sai thất bại atomic; EICAR bị ClamAV chặn; audit chỉ giữ counts; terminal batch không còn file key/hash; thư mục tạm rỗng sau xử lý.
 - **Bản mở rộng partial-row:** parser/worker/API/UI tests, toàn bộ API suite hiện tại, API/web typecheck và build đều đạt. Code gồm: chi tiết lỗi theo dòng với cửa sổ retention 30 ngày (`failureDetailsExpiresAt`), finalization dọn counts/mapping ở trạng thái terminal và CHECK constraint bắt buộc. Hai migration của bản mở rộng **chưa được áp dụng** trên DB test cô lập và luồng mixed-row chưa được kiểm chứng; readiness vì vậy vẫn `BLOCKED` ở môi trường chưa migrate.
 - **Đối chiếu code 2026-11-20:** xác nhận readiness kiểm tra 5 điều kiện (DB, cột `failureDetailsExpiresAt`, local temp storage, ClamAV, queue + worker); worker có processor `customer-import.process`; parser cap 20 MB/10.000 dòng/10 sheet/100 MB sau giải nén/1.000 entry/100 cột/4.096 ký tự mỗi ô. Lượt này không chạy migration, không chạy integration và không thay đổi mã nguồn.
+- **Kiểm tra cập nhật 2026-11-21:** `db:validate`, `db:generate`, typecheck API + web và 4 API suite/37 test tập trung đạt. Không áp dụng migration và không chạy integration DB trong lượt này.
 - **Giới hạn nghiệm thu:** xác minh thực hiện trên stack test cục bộ; triển khai production vẫn cần xác nhận cấu hình volume, quyền truy cập, cập nhật ClamAV và sao lưu/vận hành phù hợp môi trường thật.

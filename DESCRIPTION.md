@@ -4,7 +4,7 @@
 
 Finance CRM là monorepo quản lý khách hàng, tư vấn tài chính, yêu cầu vay, hợp đồng, kế hoạch công việc và KPI cho hệ thống HFinance/VietP2P. Tên mã nguồn và sản phẩm là `finance-crm`, tập trung vào quy trình nội bộ dành cho nhân viên, quản lý chi nhánh và quản trị viên; khách hàng là persona tương lai/đang được mở dần với mobile web/PWA và API mock có giới hạn môi trường.
 
-> **Trạng thái tài liệu:** nội dung mô tả kiến trúc/luồng đã đối chiếu với mã nguồn ngày 2026-11-20. Trạng thái triển khai theo giai đoạn, bằng chứng kiểm thử và các cổng còn chặn nằm ở [implementation-status.md](docs/phase-0/implementation-status.md) — tài liệu đó là nguồn sự thật khi có khác biệt.
+> **Trạng thái tài liệu:** nội dung mô tả kiến trúc/luồng đã đối chiếu với mã nguồn ngày 2026-11-21. Trạng thái triển khai theo giai đoạn, bằng chứng kiểm thử và các cổng còn chặn nằm ở [implementation-status.md](docs/phase-0/implementation-status.md) — tài liệu đó là nguồn sự thật khi có khác biệt.
 
 Dự án được xây theo kiến trúc modular monolith, không chia thành các dịch vụ backend độc lập trong MVP:
 
@@ -302,14 +302,14 @@ Mức hiện tại cần được đọc theo source/tree và kết quả kiểm
 
 - API, web và Prisma foundation đã có cấu trúc build/typecheck.
 - P0-1 có schema auth/RBAC/audit, auth session và API quản trị.
-- P0-2 có customer/loan/contract code, migration và tests trong môi trường cô lập.
+- P0-2 có customer/loan/contract code, migration và tests trong môi trường cô lập; hồ sơ khách hàng có thêm các trường tùy chọn CCCD, địa chỉ, quê quán, giới tính và nơi cấp. Migration mới có trong code nhưng chưa được áp dụng/kiểm chứng trên DB.
 - P0-3 có plan/task/result/verification/KPI API, migration và UI `/plans`, `/plans/catalog`, `/tasks`.
 - P0-4 có API import (readiness/upload/history/detail), parser CSV/XLSX, ClamAV `INSTREAM`, worker `customer-import.process`, import atomic, migration batch/row và UI `/customers/import`.
 - Có script integration P0-2/P0-3 sử dụng PostgreSQL Docker cô lập.
 - Có unit test backup crypto với synthetic payload.
 - Có các route staff đã được probe theo kích thước desktop và 375px trong các lượt kiểm tra ghi nhận.
 
-Lượt rà soát tài liệu 2026-11-20 ghi nhận giới hạn môi trường: `node_modules` trên host thiếu `exceljs`, `unzipper`, `@aws-sdk/client-s3` và Prisma Client generated đã cũ, nên 6/17 suite API không nạp được khi chạy ngoài container; cần `npm install`/toolbox rồi `npm run db:generate` trước khi kiểm chứng lại.
+Đối chiếu và kiểm tra 2026-11-21: `npm run db:validate`, `npm run db:generate`, typecheck API + web và 4 API suite tập trung/37 test đạt trên host. Full API suite và integration DB cho các migration mới chưa chạy; các dependency/migration còn lại cần được xác minh trong môi trường DB test cô lập.
 
 Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 

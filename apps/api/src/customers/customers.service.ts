@@ -147,6 +147,11 @@ export class CustomersService {
         data: {
           fullName: dto.fullName.trim(), normalizedName: normalizeCustomerName(dto.fullName), phone, phoneNormalized,
           email: emailNormalized, emailNormalized, dateOfBirth, provenance: dto.provenance.trim(),
+          cccd: dto.cccd?.trim() || null,
+          address: dto.address?.trim() || null,
+          placeOfOrigin: dto.placeOfOrigin?.trim() || null,
+          sex: dto.sex ?? null,
+          placeOfIssue: dto.placeOfIssue?.trim() || null,
           branchId: dto.branchId, createdById: actor.id,
         },
         include: { assignments: { where: { endedAt: null } } },
@@ -156,14 +161,14 @@ export class CustomersService {
         actor, action: 'customer.created', targetType: 'customer', targetId: customer.id, branchId: customer.branchId,
         afterState: { status: customer.status, provenance: customer.provenance }, requestId: requestId(request),
       });
-      return this.serializeCustomer(customer);
+      return this.serializeCustomer(customer, false, true);
     });
   }
 
   async detail(actor: ActorContext, customerId: string) {
     const customer = await this.customerOrThrow(customerId);
     await this.assertCustomerRead(actor, customer);
-    return this.serializeCustomer(customer, actor.type === 'CUSTOMER');
+    return this.serializeCustomer(customer, actor.type === 'CUSTOMER', actor.type !== 'CUSTOMER');
   }
 
   async update(actor: ActorContext, customerId: string, dto: UpdateCustomerDto, request?: ActorRequest) {
@@ -182,6 +187,11 @@ export class CustomersService {
         data: {
           fullName: nextFullName, normalizedName: normalizeCustomerName(nextFullName), phone: nextPhone,
           phoneNormalized: nextPhone, email, emailNormalized: email, dateOfBirth: nextDob,
+          ...(dto.cccd !== undefined ? { cccd: dto.cccd?.trim() || null } : {}),
+          ...(dto.address !== undefined ? { address: dto.address?.trim() || null } : {}),
+          ...(dto.placeOfOrigin !== undefined ? { placeOfOrigin: dto.placeOfOrigin?.trim() || null } : {}),
+          ...(dto.sex !== undefined ? { sex: dto.sex } : {}),
+          ...(dto.placeOfIssue !== undefined ? { placeOfIssue: dto.placeOfIssue?.trim() || null } : {}),
           ...(dto.provenance ? { provenance: dto.provenance.trim() } : {}),
           ...(dto.verificationStatus ? { verificationStatus: dto.verificationStatus } : {}),
         },
@@ -192,7 +202,7 @@ export class CustomersService {
         actor, action: 'customer.updated', targetType: 'customer', targetId: updated.id, branchId: updated.branchId,
         beforeState: this.customerAuditState(customer), afterState: this.customerAuditState(updated), requestId: requestId(request),
       });
-      return this.serializeCustomer(updated);
+      return this.serializeCustomer(updated, false, true);
     });
   }
 
@@ -1649,7 +1659,7 @@ export class CustomersService {
     }
   }
 
-  private serializeCustomer(customer: CustomerRecord, customerView = false) {
+  private serializeCustomer(customer: CustomerRecord, customerView = false, includeProfileFields = false) {
     if (customerView) {
       return {
         id: customer.id, fullName: customer.fullName, dateOfBirth: customer.dateOfBirth,
@@ -1659,6 +1669,13 @@ export class CustomersService {
     return {
       id: customer.id, fullName: customer.fullName, dateOfBirth: customer.dateOfBirth, phone: customer.phone, email: customer.email,
       provenance: customer.provenance, verificationStatus: customer.verificationStatus, status: customer.status, branchId: customer.branchId,
+      ...(includeProfileFields ? {
+        cccd: customer.cccd,
+        address: customer.address,
+        placeOfOrigin: customer.placeOfOrigin,
+        sex: customer.sex,
+        placeOfIssue: customer.placeOfIssue,
+      } : {}),
       primaryAdviserId: customer.assignments[0]?.adviserId ?? null,
       primaryAssignedAt: customer.assignments[0]?.assignedAt ?? null,
       createdAt: customer.createdAt, updatedAt: customer.updatedAt,

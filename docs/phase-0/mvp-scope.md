@@ -87,7 +87,8 @@ Các trạng thái: `NEW`, `CONTACTED`, `QUALIFIED`, `IN_PROGRESS`, `CONVERTED`,
 
 - Số điện thoại là bắt buộc; email là tùy chọn.
 - Ngày sinh là tùy chọn. Họ tên + ngày sinh dùng kiểm tra ứng viên trùng khi cả hai trường có dữ liệu.
-- Phương án tối thiểu được duyệt không bổ sung PII khác. Có thể bổ sung sau khi chốt trường, mục đích, tính bắt buộc và quyền xem.
+- Bổ sung đã được chấp thuận ngày 2026-11-21: CCCD, địa chỉ, quê quán, giới tính và nơi cấp là tùy chọn/nullable. CCCD lưu dạng chuỗi để giữ số 0 đầu; giới tính nhận `Nam`, `Nữ`, `Khác`.
+- Ngày sinh hiển thị trên giao diện theo `dd/MM/yyyy`; API tiếp tục trao đổi ngày theo ISO. Không bổ sung PII nào khác ngoài các trường đã nêu.
 - Cảnh báo rà soát thủ công khi trùng số điện thoại/email đã chuẩn hóa hoặc trùng họ tên + ngày sinh; không tự động gộp.
 
 ### File và lưu giữ
@@ -143,7 +144,7 @@ Ngày 2026-11-04 và 2026-11-05, chủ yêu cầu xác nhận/cập nhật các 
 - Chuyển trạng thái khách hàng linh hoạt nhưng bắt buộc lý do và audit; `CONVERTED` cần hợp đồng liên kết.
 - RBAC cho phép role tùy chỉnh chỉ từ permission catalog và trong tập quyền được ủy quyền.
 - Dashboard có biểu đồ theo ngày/tháng và nhân viên, lọc theo hạng mục.
-- Số điện thoại bắt buộc, email và ngày sinh tùy chọn; họ tên + ngày sinh cảnh báo trùng khi cả hai trường có dữ liệu, xác nhận thủ công.
+- Số điện thoại bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn. Họ tên + ngày sinh cảnh báo trùng khi cả hai trường có dữ liệu, xác nhận thủ công.
 - Vai trò nhân viên gồm `OPERATOR`, `ADMIN`, `MANAGE`, `ADVISING`; `CUSTOMER` chat và chỉ đọc dữ liệu được phép như mục 2/4.
 - RBAC cấu hình quyền theo nhóm chức năng, cấp độ dữ liệu (`OWN`, `ASSIGNED`, `BRANCH`, `ALL`) và node trong cây chi nhánh tổng → chi nhánh con; cho phép role tùy chỉnh từ permission catalog trong phạm vi được ủy quyền. Backend thực thi permission + scope; không cho tự nâng quyền; thay đổi nhạy cảm được audit.
 - File task: PDF/JPG/JPEG/PNG tối đa 10 MB; file import: CSV/XLSX tối đa 20 MB. Lưu local trên server qua abstraction để có thể chuyển sang S3 sau; kiểm tra trước khi sử dụng và hỗ trợ retention/dọn file.

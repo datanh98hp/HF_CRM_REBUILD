@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsArray,
   IsObject,
   IsInt,
@@ -27,6 +28,7 @@ import {
   LoanRequestSource,
   LoanRequestStatus,
 } from '../generated/prisma/client.js';
+import { CUSTOMER_SEX_VALUES } from './customer-fields.js';
 
 export enum LoanProductType {
   SHORT_TERM_SUPPORT = 'Gói hỗ trợ ngắn hạn',
@@ -49,6 +51,21 @@ export class CreateCustomerDto {
   @IsOptional() @IsDateString()
   dateOfBirth?: string;
 
+  @IsOptional() @IsString() @Length(1, 32)
+  cccd?: string;
+
+  @IsOptional() @IsString() @Length(1, 500)
+  address?: string;
+
+  @IsOptional() @IsString() @Length(1, 160)
+  placeOfOrigin?: string;
+
+  @IsOptional() @IsIn(CUSTOMER_SEX_VALUES)
+  sex?: typeof CUSTOMER_SEX_VALUES[number];
+
+  @IsOptional() @IsString() @Length(1, 160)
+  placeOfIssue?: string;
+
   @IsString() @Length(2, 120)
   provenance!: string;
 
@@ -68,6 +85,21 @@ export class UpdateCustomerDto {
 
   @IsOptional() @IsDateString()
   dateOfBirth?: string | null;
+
+  @IsOptional() @IsString() @Length(1, 32)
+  cccd?: string | null;
+
+  @IsOptional() @IsString() @Length(1, 500)
+  address?: string | null;
+
+  @IsOptional() @IsString() @Length(1, 160)
+  placeOfOrigin?: string | null;
+
+  @IsOptional() @IsIn(CUSTOMER_SEX_VALUES)
+  sex?: typeof CUSTOMER_SEX_VALUES[number] | null;
+
+  @IsOptional() @IsString() @Length(1, 160)
+  placeOfIssue?: string | null;
 
   @IsOptional() @IsString() @Length(2, 120)
   provenance?: string;

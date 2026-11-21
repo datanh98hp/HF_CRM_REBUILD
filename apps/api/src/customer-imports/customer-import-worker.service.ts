@@ -175,25 +175,26 @@ export class CustomerImportWorkerService {
       if (transition.count !== 1) throw new Error('Customer import batch is not processable');
 
       const existing = await this.findExistingDuplicates(tx, records);
-      const seenPhones = new Set<string>();
+      const seenNamePhones = new Set<string>();
       const seenEmails = new Set<string>();
       const seenNameBirthdays = new Set<string>();
       const customers: CustomerImportRecord[] = [];
 
       for (const record of records) {
+        const namePhoneKey = `${record.normalizedName}\u0000${record.phoneNormalized}`;
         const birthKey = dateKey(record.dateOfBirth);
         const nameBirthdayKey = birthKey ? `${record.normalizedName}\u0000${birthKey}` : '';
         const duplicate =
-          existing.phones.has(record.phoneNormalized) ||
+          existing.namePhones.has(namePhoneKey) ||
           (record.emailNormalized !== null && existing.emails.has(record.emailNormalized)) ||
           (nameBirthdayKey !== '' && existing.nameBirthdays.has(nameBirthdayKey)) ||
-          seenPhones.has(record.phoneNormalized) ||
+          seenNamePhones.has(namePhoneKey) ||
           (record.emailNormalized !== null && seenEmails.has(record.emailNormalized)) ||
           (nameBirthdayKey !== '' && seenNameBirthdays.has(nameBirthdayKey));
 
         if (duplicate) duplicateRows += 1;
         else customers.push(record);
-        seenPhones.add(record.phoneNormalized);
+        seenNamePhones.add(namePhoneKey);
         if (record.emailNormalized) seenEmails.add(record.emailNormalized);
         if (nameBirthdayKey) seenNameBirthdays.add(nameBirthdayKey);
       }
@@ -210,6 +211,11 @@ export class CustomerImportWorkerService {
             email: customer.email,
             emailNormalized: customer.emailNormalized,
             dateOfBirth: customer.dateOfBirth,
+            cccd: customer.cccd,
+            address: customer.address,
+            placeOfOrigin: customer.placeOfOrigin,
+            sex: customer.sex,
+            placeOfIssue: customer.placeOfIssue,
             provenance: 'IMPORT',
             branchId: batch.branchId,
             createdById: batch.createdById,
@@ -298,11 +304,14 @@ export class CustomerImportWorkerService {
   private async findExistingDuplicates(
     tx: Prisma.TransactionClient,
     records: CustomerImportRecord[],
-  ): Promise<{ phones: Set<string>; emails: Set<string>; nameBirthdays: Set<string> }> {
-    const phones = new Set<string>();
+  ): Promise<{ namePhones: Set<string>; emails: Set<string>; nameBirthdays: Set<string> }> {
+    const namePhones = new Set<string>();
     const emails = new Set<string>();
     const nameBirthdays = new Set<string>();
     const phoneValues = [...new Set(records.map((record) => record.phoneNormalized))];
+    const namePhoneKeys = new Set(
+      records.map((record) => `${record.normalizedName}\u0000${record.phoneNormalized}`),
+    );
     const emailValues = [...new Set(records.flatMap((record) => record.emailNormalized ? [record.emailNormalized] : []))];
     const nameBirthdayValues = new Map<string, { normalizedName: string; dateOfBirth: Date }>();
 
@@ -318,9 +327,12 @@ export class CustomerImportWorkerService {
     for (const group of chunks(phoneValues, 500)) {
       const matches = await tx.customer.findMany({
         where: { phoneNormalized: { in: group } },
-        select: { phoneNormalized: true },
+        select: { normalizedName: true, phoneNormalized: true },
       });
-      for (const match of matches) phones.add(match.phoneNormalized);
+      for (const match of matches) {
+        const key = `${match.normalizedName}\u0000${match.phoneNormalized}`;
+        if (namePhoneKeys.has(key)) namePhones.add(key);
+      }
     }
     for (const group of chunks(emailValues, 500)) {
       const matches = await tx.customer.findMany({
@@ -344,7 +356,7 @@ export class CustomerImportWorkerService {
       }
     }
 
-    return { phones, emails, nameBirthdays };
+    return { namePhones, emails, nameBirthdays };
   }
 
   private async failBatch(

@@ -4,6 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
   CreateLoanProductDto,
+  CreateCustomerDto,
   CustomerListQueryDto,
   AssignCustomerDto,
   BulkAssignCustomersDto,
@@ -11,6 +12,7 @@ import {
   LoanProductType,
   LoanProductFormulaHistoryQueryDto,
   UpdateLoanProductDto,
+  UpdateCustomerDto,
 } from './customer.dto.js';
 
 describe('CustomerListQueryDto', () => {
@@ -32,6 +34,41 @@ describe('CustomerListQueryDto', () => {
     const query = plainToInstance(CustomerListQueryDto, { take: '102' });
 
     expect(await validate(query)).not.toHaveLength(0);
+  });
+});
+
+describe('Customer profile DTOs', () => {
+  it('accepts optional nullable profile fields and validates sex values', async () => {
+    const create = plainToInstance(CreateCustomerDto, {
+      fullName: 'Nguyễn Thị Lan Anh',
+      phone: '0912345678',
+      cccd: '001234567890',
+      address: '12 Nguyễn Trãi',
+      placeOfOrigin: 'Hà Nam',
+      sex: 'Nữ',
+      placeOfIssue: 'Cục Cảnh sát',
+      provenance: 'Nhập trực tiếp',
+      branchId: '4c27419c-3035-4e40-9f4d-8155065688f4',
+    });
+    const createWithoutProfileFields = plainToInstance(CreateCustomerDto, {
+      fullName: 'Trần Quốc Bảo',
+      phone: '0987654321',
+      provenance: 'Nhập trực tiếp',
+      branchId: '4c27419c-3035-4e40-9f4d-8155065688f4',
+    });
+    const clear = plainToInstance(UpdateCustomerDto, {
+      cccd: null,
+      address: null,
+      placeOfOrigin: null,
+      sex: null,
+      placeOfIssue: null,
+    });
+    const invalidSex = plainToInstance(UpdateCustomerDto, { sex: 'Không xác định' });
+
+    await expect(validate(create)).resolves.toEqual([]);
+    await expect(validate(createWithoutProfileFields)).resolves.toEqual([]);
+    await expect(validate(clear)).resolves.toEqual([]);
+    expect(await validate(invalidSex)).not.toHaveLength(0);
   });
 });
 

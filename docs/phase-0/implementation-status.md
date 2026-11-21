@@ -1,17 +1,18 @@
 # Finance CRM — Báo cáo triển khai nền tảng đầu tiên
 
-> **Cập nhật trạng thái 2026-11-20 (đối chiếu trực tiếp với mã nguồn):** Báo cáo này là nguồn trạng thái duy nhất; các file kế hoạch P0 mô tả đặc tả, không thay thế báo cáo này.
+> **Cập nhật trạng thái 2026-11-21 (đối chiếu mã nguồn và kiểm tra trên host):** Báo cáo này là nguồn trạng thái duy nhất; các file kế hoạch P0 mô tả đặc tả, không thay thế báo cáo này.
 >
 > - **P0-0/P0-1:** Nền dữ liệu, auth, RBAC/audit và API quản trị đã có. Quyền thao tác vẫn phụ thuộc vào grants/scope được cấu hình và xác thực tại backend.
 > - **Quản lý chi nhánh:** Chi nhánh được tạo chưa có quản lý nhưng phải ở trạng thái INACTIVE. Chỉ kích hoạt khi đã có quản lý đang hoạt động và cha (nếu có) ACTIVE. Cấp `MANAGE` chỉ qua luồng phân công quản lý; role grant thông thường không cấp được quyền này. Khi quản lý bị gỡ hoặc tài khoản quản lý bị vô hiệu hóa, chi nhánh cùng các hậu duệ ACTIVE tự chuyển INACTIVE, có audit.
-> - **P0-2:** Baseline và phần mở rộng customer/loan đang hoạt động (catalog sản phẩm, công thức version bất biến, snapshot hợp đồng, bulk assignment, maker-checker, tài liệu hợp đồng, MinIO tuỳ chọn). Các fixture/grants nhánh demo được người dùng duyệt chỉ cho demo; branch IDs và role grants đó **không** phải cấu hình production đã phê duyệt. API CUSTOMER giới hạn thông tin sản phẩm/hợp đồng theo allowlist: khi chưa duyệt chỉ tên/lãi suất/kỳ hạn; sau duyệt mới thêm nguồn/mô tả. Chính sách tài chính thực tế vẫn hoãn đến khi nhận tài liệu nguồn có thẩm quyền. Upload ở production fail-closed cho đến khi có scanner. Có script backup/restore PostgreSQL mã hóa, ghi vào `<repoRoot>/backup/`; chỉ kiểm tra crypto bằng dữ liệu tổng hợp, chưa tạo backup thật hoặc restore DB.
+> - **P0-2:** Baseline và phần mở rộng customer/loan đang hoạt động (catalog sản phẩm, công thức version bất biến, snapshot hợp đồng, bulk assignment, maker-checker, tài liệu hợp đồng, MinIO tuỳ chọn). Đã bổ sung các trường hồ sơ nullable CCCD, địa chỉ, quê quán, giới tính, nơi cấp; UI hiển thị ngày sinh `dd/MM/yyyy`, API giữ ISO. Migration `20261121170000_customer_optional_profile_fields` đã tạo nhưng **chưa áp dụng/kiểm chứng trên DB**. Các fixture/grants nhánh demo chỉ cho demo; branch IDs và role grants đó **không** phải cấu hình production đã phê duyệt. Chính sách tài chính thực tế vẫn hoãn đến khi nhận tài liệu nguồn có thẩm quyền. Upload production fail-closed khi chưa có scanner. Có script backup/restore PostgreSQL mã hóa; chỉ kiểm tra crypto bằng dữ liệu tổng hợp, chưa tạo backup thật hoặc restore DB.
 > - **P0-3:** API kế hoạch/task/kết quả theo phiên bản/xác minh có audit/KPI, danh mục KPI, duyệt/từ chối plan và bộ lọc kỳ KPI đã có; UI `/plans`, `/plans/catalog`, `/tasks`. Migration/seed đã áp dụng trên đúng database local dev/test; kiểm thử API/PostgreSQL P0-3 đạt 19 assertion. P0-3 **chưa có** API intake/download binary cho evidence (bảng `FileAsset`/`TaskResultEvidence` đã có và API chỉ liên kết metadata file `AVAILABLE`; không có endpoint nào tạo `FileAsset` trong code). UI end-to-end và dashboard KPI trực quan còn mở.
-> - **P0-4:** Pipeline import đã có code đầy đủ: schema `CustomerImportBatch`/`CustomerImportRow`, RBAC `customers.import`, local temp storage trong `apps/api/import-customer-files`, ClamAV `INSTREAM` nội bộ, parser CSV/XLSX có resource cap, worker BullMQ, import atomic kèm dò trùng, audit chỉ giữ counts, UI `/customers/import`. Readiness fail-closed và yêu cầu cột `failureDetailsExpiresAt` có trong DB. Bản mở rộng partial-row có schema + 2 migration (`20261120121200`, `20261120161000`) nhưng **chưa được áp dụng/kiểm chứng trên DB test** trong các lượt đã ghi nhận; chi tiết tại [P0-4](p0/p0-4-background-import.md).
+> - **P0-4:** Pipeline import đã có code đầy đủ: schema `CustomerImportBatch`/`CustomerImportRow`, RBAC `customers.import`, local temp storage trong `apps/api/import-customer-files`, ClamAV `INSTREAM` nội bộ, parser CSV/XLSX có resource cap, worker BullMQ, import atomic kèm dò trùng, audit chỉ giữ counts, UI `/customers/import`. Parser nhận thêm các trường hồ sơ tùy chọn. Readiness fail-closed và yêu cầu cột `failureDetailsExpiresAt` trong DB. Hai migration partial-row (`20261120121200`, `20261120161000`) và migration trường hồ sơ khách hàng (`20261121170000`) **chưa được áp dụng/kiểm chứng trên DB test**; chưa chạy integration mixed-row sau các thay đổi này. Chi tiết tại [P0-4](p0/p0-4-background-import.md).
 > - **P0-5:** Chưa triển khai. Không có `@WebSocketGateway`/socket.io server, không có route hay component chat trong web, không có model conversation/message trong `schema.prisma`. Chỉ có đặc tả tại [P0-5](p0/p0-5-realtime-chat.md).
 > - **P0-6:** Chỉ có staff web. Danh sách route thực tế trong `apps/web/src/app`: `/login`, `/change-password`, `/profile`, `/customers`, `/customers/import`, `/loan-products`, `/loan-contracts`, `/plans`, `/plans/catalog`, `/tasks`, `/staff`, `/branches`, `/roles`. Không có dashboard tổng quan, không có chat UI, không có manifest/service worker (chưa phải PWA). Xem [P0-6](p0/p0-6-web-pwa.md).
-> - **Quy mô code đã đối chiếu:** 22 migration Prisma; 33 model và 19 enum trong `schema.prisma`; 39 permission trong `permission-catalog.json`; 8 controller (auth, access, customers, customer-imports, plans, tasks, capabilities, health); 17 file `*.spec.ts` ở API; 13 route web.
-> - **Kiểm tra chạy trong lượt rà soát 2026-11-20 (host, không Docker):** `npm test --workspace @finance-crm/api` nạp được 11/17 suite và đạt 72 test; 6 suite **không nạp được** vì `node_modules` trên host thiếu `exceljs`, `unzipper`, `@aws-sdk/client-s3` (đều có trong `package.json`/lockfile nhưng chưa cài) và Prisma Client generated trên host đã cũ (thiếu `LoanProductStatus`). `prisma generate` bị từ chối ghi/xoá trên host ở lượt này nên client chưa được sinh lại; cần `npm install` (hoặc chạy trong toolbox/compose) rồi `npm run db:generate` trước khi chạy lại. Repo không thay đổi mã nguồn trong lượt này (`git status` sạch).
-> - **Còn mở:** nghiệm thu toàn bộ P0-6 (dashboard, UI end-to-end); P0-5 chat; áp dụng + kiểm chứng migration partial-row của P0-4 trên DB cô lập; grants/cây chi nhánh production; tài liệu chính sách tài chính; scanner/quarantine, retention/legal hold, RPO/RTO và restore verification; cấu hình OTP/provider CUSTOMER và các cổng production.
+> - **Quy mô code đã đối chiếu:** 23 migration Prisma; 33 model và 19 enum trong `schema.prisma`; 39 permission trong `permission-catalog.json`; 8 controller (auth, access, customers, customer-imports, plans, tasks, capabilities, health); 17 file `*.spec.ts` ở API; 13 route web.
+> - **Kiểm tra chạy 2026-11-21 (host):** `npm run db:validate`, `npm run db:generate`, `npm run typecheck` (API + web) đạt; 4 API suite tập trung đạt 37 test. Full API suite và integration DB cho migration mới **chưa chạy**; không migration nào được áp dụng trong lượt này.
+> - **Worktree:** thay đổi code và tài liệu của lượt này chưa commit.
+> - **Còn mở:** nghiệm thu toàn bộ P0-6 (dashboard, UI end-to-end); P0-5 chat; áp dụng + kiểm chứng các migration partial-row P0-4 và hồ sơ khách hàng trên DB cô lập; integration mixed-row; grants/cây chi nhánh production; tài liệu chính sách tài chính; scanner/quarantine, retention/legal hold, RPO/RTO và restore verification; cấu hình OTP/provider CUSTOMER và các cổng production.
 
 **Ngày báo cáo gốc:** 2026-11-05 (phần "Đã triển khai" bên dưới giữ nguyên nội dung lịch sử của lượt đó).
 
@@ -19,7 +20,7 @@
 
 **Chuẩn bị P0:** Xem [kế hoạch triển khai tổng](p0-implementation-plan.md) và [mục lục các giai đoạn P0](p0/README.md) để biết thứ tự module, tiêu chí nghiệm thu và cổng dữ liệu thật.
 
-**Yêu cầu được bổ sung sau scaffold:** Giai đoạn 0 bổ sung chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với phê duyệt plan, xác minh thủ công và upload file vào MVP. Trạng thái 2026-11-20: P0-2 và P0-3 đã có API/UI lát cắt; P0-4 đã có pipeline import hoàn chỉnh và đang chờ nghiệm thu bản mở rộng partial-row; upload/download binary cho task evidence, chat realtime và CUSTOMER PWA vẫn còn mở.
+**Yêu cầu được bổ sung sau scaffold:** Giai đoạn 0 bổ sung chat realtime ADVISING ↔ CUSTOMER, CUSTOMER read-only tra cứu dữ liệu của mình/gói vay, import chạy nền có kiểm tra từng dòng/rà trùng, quy trình kế hoạch-task-KPI với phê duyệt plan, xác minh thủ công và upload file vào MVP. Trạng thái 2026-11-21: P0-2 và P0-3 đã có API/UI lát cắt; hồ sơ customer đã mở rộng thêm trường nullable và format ngày sinh; P0-4 có pipeline import nhưng đang chờ nghiệm thu migration partial-row/hồ sơ mới; upload/download binary cho task evidence, chat realtime và CUSTOMER PWA vẫn còn mở.
 
 ## Đã triển khai (báo cáo gốc 2026-11-05)
 
@@ -38,9 +39,9 @@
 - Ba unit test cho liveness/readiness đã chạy thành công sau khi chuyển readiness sang Prisma và Redis.
 - Role ngoài OPERATOR được seed không quyền mặc định để chủ quản trị cấu hình; cây chi nhánh thật, OTP provider, grants/scope trên môi trường mục tiêu, scanner/retention vẫn cần thiết lập trước khi bật chức năng tương ứng.
 
-## Bổ sung sau 2026-11-05 (đối chiếu code 2026-11-20)
+## Bổ sung sau 2026-11-05 (đối chiếu code 2026-11-21)
 
-- **Migration:** 22 migration, từ `20261105000000_p0_1_access_control` đến `20261120161000_p0_4_partial_import_finalization`. Migration P0-2/P0-3 đã áp dụng trên dev/test; hai migration P0-4 cuối (partial-row) **chưa** được áp dụng trong các lượt đã ghi nhận.
+- **Migration:** 23 migration, từ `20261105000000_p0_1_access_control` đến `20261121170000_customer_optional_profile_fields`. Migration P0-2/P0-3 nền đã áp dụng trên dev/test; hai migration partial-row P0-4 và migration trường hồ sơ mới **chưa** được áp dụng/kiểm chứng trên DB.
 - **Schema:** 33 model, gồm customer/assignment/status history/duplicate, loan product + formula version, loan request/contract + status history + document + change history + OTP challenge, plan/approval/branch/metric catalog/metric, task/assignment/result/verification, `FileAsset`/`TaskResultEvidence`, `CustomerImportBatch`/`CustomerImportRow`, `AuditEvent`.
 - **Enum:** 19 enum, gồm `CustomerVerificationStatus`, `DuplicateReviewStatus`, `LoanProductStatus`, `PlanApprovalDecision`, `FileScanStatus`, `CustomerImportBatchStatus`, `CustomerImportRowStatus`, `CustomerImportDuplicateDecision`, `ContractOtpChallengeStatus`.
 - **Permission:** 39 mục trong `apps/api/prisma/permission-catalog.json` (nhóm organization, identity, access-control, audit, customers, loans, loan-products, plans, tasks, kpi, reports).
@@ -58,18 +59,19 @@
 | `npm run typecheck` | Thành công cho API và web (các lượt P0-2/P0-3/P0-4 đã ghi nhận) |
 | `npm run build` | Thành công cho NestJS API và Next.js web (các lượt đã ghi nhận) |
 | P0-1 tests | 8 suite/49 test đạt (lượt P0-1) |
-| P0-2 focused tests | 4 suite/37 test rồi 10/10 customer/storage test đạt (lượt 2026-11-19) |
+| P0-2 focused tests | 4 suite/37 test (2026-11-21); 10/10 customer/storage test (2026-11-19) |
 | P0-3 integration | 19 assertion qua API/PostgreSQL trên DB test riêng |
 | P0-4 API suite | 17 suite/108 test đạt trên stack test cô lập (lượt 2026-11-20) |
 | `npm test --workspace @finance-crm/api` (host, lượt rà soát 2026-11-20) | 11/17 suite nạp được, 72 test đạt; 6 suite không nạp được do thiếu dependency trên host và Prisma Client cũ (xem ghi chú đầu báo cáo) |
-| `git diff --check` | Exit 0; workspace sạch ở lượt rà soát 2026-11-20 |
+| Kiểm tra cập nhật 2026-11-21 | `db:validate`, `db:generate`, typecheck API + web, 4 API suite/37 test đạt; full suite và integration migration chưa chạy |
+| `git diff --check` | Exit 0 sau cập nhật tài liệu 2026-11-21 |
 
 ## Audit phụ thuộc và giới hạn
 
 - Kiểm tra `npm audit --omit=dev` hiện báo **4 moderate** từ `shadcn@4.23.0 → ts-morph@26 → @ts-morph/common@0.27 → minimatch@10.2.6`. Npm chỉ đề xuất `shadcn@1.0.0` qua `npm audit fix --force` (breaking downgrade); không thực hiện và không đổi shadcn. Không có bản vá minimatch 10.x trong registry; nâng transitive lên minimatch 11 là major ngoài range khai báo của `@ts-morph/common`, nên chưa áp override chưa xác minh. Audit/install lượt này không xóa devDependencies và không tạo diff package-lock; manifest/lockfile được giữ nguyên.
 - `npm install @nestjs/jwt@^11.0.2 --workspace @finance-crm/api` thất bại `EACCES` khi truy cập registry; manifest/lockfile không đổi. P0-1 dùng Node crypto cho HS256 và giữ kiểm thử bảo mật token thành việc còn lại.
-- `node_modules` trên host hiện không khớp lockfile: thiếu `exceljs`, `unzipper`, `@aws-sdk/client-s3` (P0-4/P0-2 dùng), nên 6 suite API không nạp được khi chạy ngoài container. Các lượt kiểm chứng trước chạy trong toolbox/Compose nơi dependency được cài theo lockfile.
-- Prisma Client generated trong `apps/api/src/generated/prisma` đang cũ (thiếu `LoanProductStatus`) và chưa sinh lại được trên host ở lượt 2026-11-20 do bị từ chối ghi/xoá thư mục generated; cần chạy `npm run db:generate` trong môi trường cho phép ghi.
+- Lượt kiểm tra 2026-11-20 ghi nhận `node_modules` trên host thiếu `exceljs`, `unzipper`, `@aws-sdk/client-s3` và Prisma Client cũ. Tới 2026-11-21, `npm run db:generate`, typecheck API + web và 4 suite tập trung/37 test đã đạt trên host; full API suite chưa được chạy lại trong lượt này.
+- Kết quả audit dependency được ghi nhận 2026-11-20; chưa chạy lại audit trong cập nhật trạng thái 2026-11-21.
 - Upload contract document đã có local storage dev/test và MinIO/S3 tương thích tuỳ chọn; production upload bị fail-closed ở storage boundary khi chưa có scanner. Đây chỉ là chặn an toàn tạm thời, không thay thế scanner/quarantine.
 - npm cảnh báo install scripts chưa được phê duyệt (gồm `@parcel/watcher`, `@scarf/scarf`, Prisma engines và tùy chọn native); Prisma client generation/typecheck/build vẫn chạy thành công trong môi trường toolbox.
 - PostgreSQL backup/restore scripts dùng AES-256-GCM và đường dẫn `<repoRoot>/backup/`; crypto tests chỉ dùng payload tổng hợp trong memory. Chưa tạo backup thật, chưa restore DB và chưa xác minh recovery. RPO/RTO, retention/legal hold và restore verification chưa được chốt/triển khai.
@@ -77,7 +79,7 @@
 ## Chưa triển khai / còn chặn
 
 - **P0-5 chat realtime:** chưa có mã nguồn nào (không socket gateway, không model conversation/message, không UI).
-- **P0-4 bản mở rộng partial-row:** đã có schema/migration/parser/worker/API/UI nhưng migration `20261120121200_p0_4_partial_import_failures` và `20261120161000_p0_4_partial_import_finalization` chưa được áp dụng, chưa có integration mixed-row; readiness trả `BLOCKED` với `IMPORT_SCHEMA_NOT_READY` khi cột `failureDetailsExpiresAt` chưa tồn tại.
+- **P0-4 bản mở rộng partial-row và hồ sơ khách hàng:** đã có schema/migration/parser/worker/API/UI nhưng hai migration partial-row và migration `20261121170000_customer_optional_profile_fields` chưa được áp dụng; chưa có integration mixed-row sau thay đổi. Readiness trả `BLOCKED` với `IMPORT_SCHEMA_NOT_READY` khi cột `failureDetailsExpiresAt` chưa tồn tại.
 - **P0-6:** dashboard tổng quan, chat UI, CUSTOMER PWA/PWA shell, kiểm thử UI end-to-end đầy đủ chưa có. Sidebar hiển thị theo effective permissions nhưng không phải kiểm soát bảo mật.
 - **Task evidence binary:** chưa có endpoint upload/download/xoá; `FileAsset` chỉ được liên kết metadata và hiện không có chỗ nào tạo bản ghi `FileAsset` trong code.
 - **Production:** xác nhận/cấu hình ma trận role permission và cây chi nhánh trên PostgreSQL production; môi trường production chưa được migrate/seed trong bất kỳ lượt nào.
@@ -88,4 +90,4 @@
 
 ## Kết luận trạng thái
 
-P0-0, P0-1, P0-2 và P0-3 có code, migration, test và UI lát cắt đã được ghi nhận; P0-4 có pipeline import hoàn chỉnh đã nghiệm thu trên stack test cô lập nhưng bản mở rộng partial-row chưa được kiểm chứng. P0-5 chưa bắt đầu, P0-6 mới có staff web. Chưa triển khai scanner/quarantine, retention/legal hold, RPO/RTO hoặc restore verification; chưa có migration/seed production và chưa có diễn tập backup/restore thật. Demo fixtures/grants không được xem là phê duyệt production; financial policy đợi tài liệu nguồn. **Hệ thống chưa production-ready.**
+P0-0, P0-1, P0-2 và P0-3 có code cùng các mức kiểm chứng đã ghi nhận; phần mở rộng hồ sơ P0-2 mới qua validate/generate/typecheck và focused tests, chưa áp migration. P0-4 có pipeline nền đã nghiệm thu trên stack test cô lập, nhưng partial-row và migration hồ sơ mới chưa được kiểm chứng trên DB; P0-5 chưa bắt đầu, P0-6 mới có staff web. Chưa triển khai scanner/quarantine, retention/legal hold, RPO/RTO hoặc restore verification; chưa có migration/seed production và chưa có diễn tập backup/restore thật. Demo fixtures/grants không được xem là phê duyệt production; financial policy đợi tài liệu nguồn. **Hệ thống chưa production-ready.**

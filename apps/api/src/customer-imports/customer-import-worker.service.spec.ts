@@ -55,7 +55,11 @@ describe('CustomerImportWorkerService', () => {
   }
 
   it('scans, imports clean data atomically, records counts, and deletes the temporary file', async () => {
-    const { target, batch } = await createUpload();
+    const { target, batch } = await createUpload(Buffer.from(
+      'Họ tên,Số điện thoại,CCCD,Địa chỉ,Quê quán,Giới tính,Nơi cấp\n' +
+      'Nguyễn Thị Lan Anh,0912345678,001234567890,12 Nguyễn Trãi,Hà Nam,Nữ,Cục Cảnh sát\n',
+      'utf8',
+    ));
     let updateManyCalls = 0;
     let fileDeletedBeforeCompletion = false;
     const transaction = {
@@ -118,6 +122,11 @@ describe('CustomerImportWorkerService', () => {
       data: [expect.objectContaining({
         fullName: 'Nguyễn Thị Lan Anh',
         phoneNormalized: '0912345678',
+        cccd: '001234567890',
+        address: '12 Nguyễn Trãi',
+        placeOfOrigin: 'Hà Nam',
+        sex: 'Nữ',
+        placeOfIssue: 'Cục Cảnh sát',
         provenance: 'IMPORT',
         branchId: batch.branchId,
         createdById: batch.createdById,
@@ -255,7 +264,12 @@ describe('CustomerImportWorkerService', () => {
       },
       customer: {
         findMany: asyncMock<[query: { where: Record<string, unknown> }], unknown[]>(async (query) => {
-          if ('phoneNormalized' in query.where) return [{ phoneNormalized: '0912345678' }];
+          if ('phoneNormalized' in query.where) {
+            return [{
+              normalizedName: 'nguyen thi lan anh',
+              phoneNormalized: '0912345678',
+            }];
+          }
           return [];
         }),
         createMany: jest.fn(),
@@ -287,6 +301,71 @@ describe('CustomerImportWorkerService', () => {
       where: { id: batch.id, status: CustomerImportBatchStatus.COMMITTING },
       data: expect.objectContaining({
         status: CustomerImportBatchStatus.COMPLETED,
+      }),
+    });
+    await expect(readFile(target.path)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('skips repeated name and phone pairs in a batch but allows the same phone for another name', async () => {
+    const data = Buffer.from(
+      'Họ tên,Số điện thoại\n' +
+      'Nguyễn Thị Lan Anh,0912345678\n' +
+      'Trần Quốc Bảo,0912345678\n' +
+      ' Nguyen   Thi Lan Anh ,0912345678\n',
+    );
+    const { target, batch } = await createUpload(data);
+    const transaction = {
+      customerImportBatch: {
+        findUnique: asyncMock<[], unknown>().mockResolvedValue({
+          ...batch,
+          status: CustomerImportBatchStatus.COMMITTING,
+          importedRows: 2,
+          duplicateRows: 1,
+          failedInsertRows: 0,
+        }),
+        updateMany: asyncMock<[input: unknown], unknown>().mockResolvedValue({ count: 1 }),
+        update: asyncMock<[input: unknown], unknown>().mockResolvedValue({}),
+      },
+      customerImportRow: {
+        deleteMany: asyncMock<[], unknown>().mockResolvedValue({ count: 0 }),
+        createMany: asyncMock<[], unknown>().mockResolvedValue({ count: 0 }),
+      },
+      customer: {
+        findMany: asyncMock<[], unknown[]>().mockResolvedValue([]),
+        createMany: asyncMock<[input: { data: { fullName: string }[] }], unknown>()
+          .mockResolvedValue({ count: 2 }),
+      },
+    };
+    const prisma = {
+      customerImportBatch: {
+        findUnique: asyncMock<[], unknown>().mockResolvedValue(batch),
+        update: asyncMock<[input: unknown], unknown>().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+      ),
+    };
+    const worker = new CustomerImportWorkerService(
+      prisma as never,
+      { write: asyncMock<unknown[], unknown>().mockResolvedValue({}) } as never,
+      { scanFile: asyncMock<[path: string], string>().mockResolvedValue('CLEAN') } as never,
+      storage,
+    );
+
+    await expect(worker.process(batch.id, 'csv')).resolves.toEqual({
+      status: CustomerImportBatchStatus.COMPLETED,
+    });
+    expect(transaction.customer.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ fullName: 'Nguyễn Thị Lan Anh' }),
+        expect.objectContaining({ fullName: 'Trần Quốc Bảo' }),
+      ],
+    });
+    expect(transaction.customerImportBatch.update).toHaveBeenCalledWith({
+      where: { id: batch.id },
+      data: expect.objectContaining({
+        importedRows: 2,
+        duplicateRows: 1,
       }),
     });
     await expect(readFile(target.path)).rejects.toMatchObject({ code: 'ENOENT' });

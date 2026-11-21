@@ -1,7 +1,7 @@
 # Finance CRM — Kế hoạch triển khai P0
 
-**Trạng thái (cập nhật 2026-11-20, đối chiếu code):** P0-0/P0-1 có nền code và đã chạy trong Compose dev/test. Backend P0-2 đã triển khai trên dev, gồm catalog sản phẩm, công thức bất biến, snapshot, bulk assignment, maker-checker và tài liệu hợp đồng. P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/plans`, `/plans/catalog`, `/tasks`; responsive đã probe 375px/1440px. P0-4 có pipeline import hoàn chỉnh (upload → ClamAV → worker → import atomic → xóa tệp) đã nghiệm thu trên stack test cô lập, còn bản mở rộng partial-row chưa áp migration/kiểm chứng. P0-5 chưa có code. P0-6 mới có 13 route staff. Trạng thái chi tiết: [implementation-status.md](implementation-status.md).
-**Cập nhật:** 2026-11-20
+**Trạng thái (cập nhật 2026-11-21, đối chiếu code):** P0-0/P0-1 có nền code và đã chạy trong Compose dev/test. Backend P0-2 đã triển khai trên dev; phần mở rộng hồ sơ thêm CCCD, địa chỉ, quê quán, giới tính, nơi cấp (nullable) và định dạng DOB `dd/MM/yyyy` đã qua validate/generate/typecheck/focused tests, nhưng migration chưa áp dụng trên DB. P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/plans`, `/plans/catalog`, `/tasks`; responsive đã probe 375px/1440px. P0-4 có pipeline import hoàn chỉnh đã nghiệm thu trên stack test cô lập, còn partial-row và schema mới chưa qua integration DB. P0-5 chưa có code. P0-6 mới có 13 route staff. Trạng thái chi tiết: [implementation-status.md](implementation-status.md).
+**Cập nhật:** 2026-11-21
 **Phạm vi căn cứ:** `AGENT.md`, `mvp-scope.md`, `decision-log.md` và scaffold hiện tại.
 
 **Kế hoạch theo từng file:** [Mục lục các giai đoạn P0](p0/README.md).

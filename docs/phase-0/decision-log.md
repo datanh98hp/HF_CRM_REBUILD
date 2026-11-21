@@ -1,14 +1,14 @@
 # Finance CRM — Sổ quyết định Giai đoạn 0
 
-**Trạng thái:** Các phương án mặc định được chấp thuận ngày 2026-11-05; các lựa chọn bổ sung được chốt ngày 2026-11-05. Một số giá trị cấu hình/vận hành vẫn cần cung cấp trước khi bật tính năng.
-**Ngày lập:** 2026-11-04; cập nhật 2026-11-07
+**Trạng thái:** Các phương án mặc định được chấp thuận ngày 2026-11-05; các lựa chọn bổ sung được chốt đến ngày 2026-11-21. Một số giá trị cấu hình/vận hành vẫn cần cung cấp trước khi bật tính năng.
+**Ngày lập:** 2026-11-04; cập nhật 2026-11-21
 
 | ID | Quyết định cần chốt | Đề xuất ban đầu | Tác động nếu chưa chốt | Chủ sở hữu đề xuất | Trạng thái |
 |---|---|---|---|---|---|
 | D0-01 | Đối tượng và kênh MVP | Nhân viên qua web; CUSTOMER dùng mobile web/PWA trước, native sau; API giả lập CUSTOMER chỉ dùng dev/test | Ảnh hưởng auth, UX, API và phạm vi dữ liệu | Chủ sản phẩm | Đã chấp thuận; endpoint giả lập phải fail-closed và không bật ở production |
 | D0-02 | Quy trình và trạng thái khách hàng | Các trạng thái NEW, CONTACTED, QUALIFIED, IN_PROGRESS, CONVERTED, CLOSED; chuyển đổi linh hoạt nhưng yêu cầu lý do và audit; CONVERTED gắn với hợp đồng vay đã tạo/liên kết trong hệ thống | Ảnh hưởng dữ liệu, dashboard, workflow | Chủ nghiệp vụ CRM | Quy tắc chuyển linh hoạt đã chấp thuận; cần bảo đảm trạng thái CONVERTED có liên kết hợp đồng |
 | D0-03 | Phân công tư vấn và quản lý chi nhánh | Mỗi chi nhánh có đúng một MANAGE chịu trách nhiệm vận hành chi nhánh; quản lý tư vấn viên thuộc quyền và phân công khách hàng cho họ; một tư vấn viên chính/khách hàng tại một thời điểm, lưu lịch sử | Ảnh hưởng quyền, SLA, requeue, báo cáo | Trưởng vận hành tư vấn | Mô hình người chịu trách nhiệm đã chốt; cần làm rõ quyền ghi của quản lý chi nhánh cha trên chi nhánh con |
-| D0-04 | Định nghĩa dữ liệu khách hàng | Tập tối thiểu: họ tên + số điện thoại bắt buộc; email và ngày sinh tùy chọn; không bổ sung PII khác ở đề xuất này | Ảnh hưởng schema, quyền riêng tư, form và import | Chủ dữ liệu/Compliance | Đã xác nhận; áp dụng chuẩn số điện thoại Việt Nam theo ghi chú cập nhật 2026-11-07 |
+| D0-04 | Định nghĩa dữ liệu khách hàng | Họ tên + số điện thoại bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn | Ảnh hưởng schema, quyền riêng tư, form và import | Chủ dữ liệu/Compliance | Đã chấp thuận; số điện thoại theo chuẩn Việt Nam; các trường tùy chọn bổ sung được duyệt 2026-11-21 |
 | D0-05 | Phát hiện trùng lặp | Trùng số điện thoại/email đã chuẩn hóa hoặc họ tên + ngày sinh nếu có đủ dữ liệu → hàng đợi review và xác nhận thủ công; không auto-merge. Chuẩn hóa khoảng trắng/Unicode, email chữ thường, phone theo quốc gia cấu hình | Ảnh hưởng chất lượng dữ liệu và quy trình xử lý | Chủ nghiệp vụ CRM | Quy tắc trùng đã chấp thuận; chuẩn hóa phone Việt Nam được đặc tả, không kiểm tra thuê bao đang hoạt động |
 | D0-06 | Kênh chăm sóc và nội dung lưu | Lưu kênh, kết quả và nội dung tối thiểu cần thiết; giới hạn quyền đọc theo scope và retention dữ liệu khách hàng | Ảnh hưởng audit, retention và quyền truy cập | Trưởng vận hành + Compliance | Nguyên tắc đã chấp thuận; danh mục kênh/trường và thời hạn cần cấu hình |
 | D0-07 | Tác vụ và SLA | OPEN, IN_PROGRESS, COMPLETED, CANCELLED; loại gọi, nhắn tin, bổ sung hồ sơ, khác; quá hạn theo due date; reminder cấu hình trước/quá hạn, chống gửi trùng | Ảnh hưởng thông báo, dashboard, vận hành | Trưởng vận hành tư vấn | Cách làm đã chấp thuận; khoảng nhắc và SLA theo task cần cấu hình |
@@ -33,8 +33,14 @@
 - **Nhận hợp đồng ngoài:** ghi nhận hệ thống nguồn và mã hợp đồng nguồn; tạo hoặc tìm customer theo dữ liệu đã chuẩn hóa trước khi gán hợp đồng; dùng idempotency; API danh sách trả tối đa 20 bản ghi mỗi trang.
 - **Allowlist đề xuất, chờ chủ nghiệp vụ duyệt:** CUSTOMER xem mã hợp đồng (có thể che một phần), trạng thái và mốc thời gian cần thiết; tên/mã/phiên bản gói vay, loại và kỳ hạn. Số tiền, lãi suất, dư nợ và lịch trả chỉ đưa vào khi có nguồn nghiệp vụ chuẩn, định nghĩa chính thức và được phê duyệt. Không trả về ghi chú duyệt nội bộ, khóa/mã nguồn ngoài, idempotency key, payload nguồn hoặc thông tin nhân viên.
 
+### Bổ sung yêu cầu — 2026-11-21
+
+- **Hồ sơ khách hàng:** thêm CCCD, địa chỉ, quê quán, giới tính và nơi cấp; tất cả tùy chọn/nullable. CCCD phải giữ số 0 đầu; giới tính nhận `Nam`, `Nữ`, `Khác`.
+- **Ngày sinh:** hiển thị `dd/MM/yyyy` trên giao diện; API giữ định dạng ISO.
+- **Import:** cho phép nhập các trường mới khi có cột tương ứng; ô trống được lưu `NULL`.
+
 - **Đã xác nhận:** CRM lõi; nhân viên dùng web; hồ sơ vay chỉ intake/tracking; tích hợp ngoài và báo cáo tùy biến để sau; chat realtime được đưa vào MVP cho ADVISING ↔ CUSTOMER; một tư vấn viên chính/khách hàng và lưu assignment history; trạng thái khách hàng/task; loại task ban đầu; backend permission + resource-scope enforcement.
-- **Customer data:** số điện thoại bắt buộc; email và ngày sinh tùy chọn; ngày sinh + họ tên dùng cảnh báo trùng khi có đủ dữ liệu. Không bổ sung trường PII khác trong quyết định này.
+- **Customer data:** số điện thoại và họ tên bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn. Họ tên + ngày sinh dùng cảnh báo trùng khi có đủ dữ liệu. Không bổ sung trường PII nào khác ngoài các trường đã chấp thuận.
 - **CUSTOMER access:** mobile web/PWA trước, app native sau; OTP số điện thoại là phương án xác thực production mặc định. API giả lập chỉ dùng dev/test. CUSTOMER đọc hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn dữ liệu có, và gói vay; OTP provider, nguồn dữ liệu và allowlist chi tiết cần cấu hình.
 - **Loan request/contract source:** CUSTOMER có thể gửi yêu cầu vay; nếu khách yêu cầu qua tư vấn viên, ADVISING ghi nhận yêu cầu. Yêu cầu là nguồn hồ sơ intake/tracking; hợp đồng chỉ được tạo/liên kết khi hợp đồng thực sự phát sinh, không tự động phê duyệt từ yêu cầu.
 - **Import (đã thay đổi 2026-11-18, xem “Cập nhật quyết định — import nền”):** ánh xạ họ tên, ngày sinh, số điện thoại; kiểm tra từng dòng và phát hiện trùng chạy trong tác vụ nền. Quyết định ban đầu yêu cầu preview/mapping và xác nhận toàn batch; quyết định hiện hành là auto-import (không preview/xác nhận), ghi các dòng hợp lệ trong một transaction atomic, bỏ qua và đếm riêng dòng trùng/dòng lỗi. Chuẩn hóa theo cấu hình quốc gia.

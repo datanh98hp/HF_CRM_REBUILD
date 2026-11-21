@@ -112,6 +112,11 @@ function failureMessage(code: string): string {
     case 'INVALID_PHONE': return 'Số điện thoại không hợp lệ';
     case 'INVALID_EMAIL': return 'Email không hợp lệ';
     case 'INVALID_DATE_OF_BIRTH': return 'Ngày sinh không hợp lệ hoặc ở tương lai';
+    case 'INVALID_CCCD': return 'CCCD vượt quá 32 ký tự';
+    case 'INVALID_ADDRESS': return 'Địa chỉ vượt quá 500 ký tự';
+    case 'INVALID_PLACE_OF_ORIGIN': return 'Quê quán vượt quá 160 ký tự';
+    case 'INVALID_SEX': return 'Giới tính phải là Nam, Nữ hoặc Khác';
+    case 'INVALID_PLACE_OF_ISSUE': return 'Nơi cấp vượt quá 160 ký tự';
     case 'DATABASE_INSERT_FAILED': return 'Lỗi ghi dữ liệu; giao dịch đã hoàn tác';
     default: return 'Dữ liệu không hợp lệ';
   }
@@ -384,7 +389,7 @@ export function CustomerImportPage() {
 
                     <div className="space-y-5 text-sm">
                       <section className="space-y-2" aria-labelledby="import-file-fields">
-                        <h3 id="import-file-fields" className="font-semibold">Các cột cần có</h3>
+                        <h3 id="import-file-fields" className="font-semibold">Cột bắt buộc và tùy chọn</h3>
                         <dl className="divide-y divide-border rounded-xl border border-border">
                           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
                             <dt className="font-medium">Họ tên · bắt buộc</dt>
@@ -400,20 +405,41 @@ export function CustomerImportPage() {
                           </div>
                           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
                             <dt>Ngày sinh · tùy chọn</dt>
-                            <dd className="break-words text-muted-foreground">1992-03-14</dd>
+                            <dd className="break-words text-muted-foreground">14/03/1992</dd>
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
+                            <dt>CCCD · tùy chọn</dt>
+                            <dd className="break-words text-muted-foreground">001234567890</dd>
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
+                            <dt>Địa chỉ · tùy chọn</dt>
+                            <dd className="break-words text-muted-foreground">12 Nguyễn Trãi, Thanh Xuân, Hà Nội</dd>
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
+                            <dt>Quê quán · tùy chọn</dt>
+                            <dd className="break-words text-muted-foreground">Hà Nam</dd>
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
+                            <dt>Giới tính · tùy chọn</dt>
+                            <dd className="break-words text-muted-foreground">Nam / Nữ / Khác</dd>
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3 p-3">
+                            <dt>Nơi cấp · tùy chọn</dt>
+                            <dd className="break-words text-muted-foreground">Cục Cảnh sát QLHC về TTXH</dd>
                           </div>
                         </dl>
                         <p className="text-xs text-muted-foreground">
-                          Mỗi dòng là một khách hàng. Có thể dùng tên cột tiếng Việt hoặc các tên phổ biến như Full name, Phone, Email, Date of birth. Chọn chi nhánh cho cả lô.
+                          Mỗi dòng là một khách hàng. Các cột mới không bắt buộc. Có thể dùng tiêu đề tiếng Việt hoặc CCCD, address, place_of_origin, sex, place_of_issue; ví dụ các tên phổ biến khác là Full name, Phone, Email và Date of birth. Chọn chi nhánh cho cả lô.
                         </p>
+                        <p className="text-xs text-muted-foreground">Trong XLSX, đặt cột CCCD dạng Văn bản hoặc định dạng số có đủ số 0 đầu.</p>
                       </section>
 
                       <section className="space-y-2" aria-labelledby="import-file-example">
                         <h3 id="import-file-example" className="font-semibold">Ví dụ CSV</h3>
                         <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-5 text-foreground">
-{`Họ tên,Số điện thoại,Email,Ngày sinh
-Nguyễn Thị Lan Anh,0912345678,lananh@example.com,1992-03-14
-Trần Quốc Bảo,0987654321,,`}
+{`Họ tên,Số điện thoại,Email,Ngày sinh,CCCD,Địa chỉ,Quê quán,Giới tính,Nơi cấp
+Nguyễn Thị Lan Anh,0912345678,lananh@example.com,14/03/1992,001234567890,"12 Nguyễn Trãi, Thanh Xuân, Hà Nội",Hà Nam,Nữ,Cục Cảnh sát QLHC về TTXH
+Trần Quốc Bảo,0987654321,,,,,,,`}
                         </pre>
                       </section>
 
@@ -424,7 +450,8 @@ Trần Quốc Bảo,0987654321,,`}
                           <li>Tối đa 20 MB, 10.000 dòng dữ liệu và 10 sheet.</li>
                           <li>XLSX không được có macro, liên kết ngoài hoặc ô công thức; không nhận XLS/XLSM.</li>
                           <li>Workbook tối đa 100 MB sau giải nén và 1.000 mục ZIP.</li>
-                          <li>Ngày sinh phải hợp lệ và không ở tương lai; không thêm dữ liệu ngoài các trường khách hàng được liệt kê.</li>
+                          <li>Ngày sinh chấp nhận dd/MM/yyyy (ví dụ 28/10/2006) hoặc yyyy-MM-dd; ngày phải hợp lệ và không ở tương lai.</li>
+                          <li>Không thêm dữ liệu ngoài các trường khách hàng được liệt kê.</li>
                         </ul>
                       </section>
                       <p className="rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
@@ -453,6 +480,10 @@ Trần Quốc Bảo,0987654321,,`}
                 <label htmlFor="customer-import-branch" className="w-fit text-sm font-medium">Chi nhánh</label>
                 <Select
                   value={branchId}
+                  items={branches.map((branch) => ({
+                    value: branch.id,
+                    label: `${branch.code} · ${branch.name}`,
+                  }))}
                   onValueChange={(value) => {
                     if (typeof value !== 'string') return;
                     setBranchId(value);

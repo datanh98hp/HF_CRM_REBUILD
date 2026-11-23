@@ -4,7 +4,7 @@ import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { CrmSessionProvider } from '@/components/crm-session';
 
-const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
+const geist = Geist({ subsets: ['latin', 'latin-ext'], variable: '--font-geist' });
 
 export const metadata: Metadata = {
   title: 'Finance CRM',

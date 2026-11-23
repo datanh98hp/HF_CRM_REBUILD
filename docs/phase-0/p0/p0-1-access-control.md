@@ -1,6 +1,6 @@
 # P0-1 — Tổ chức, auth, RBAC và audit
 
-**Trạng thái (cập nhật 2026-11-20):** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần. Role editor đã chuẩn hóa dữ liệu quyền trả về trước khi gửi lại, và DTO chấp nhận đầy đủ ma trận permission/scope; API tests (8 suites/49 tests) và web typecheck đạt. Repo chưa có suite integration/security riêng cho P0-1 (chỉ có script integration P0-2/P0-3); quyền chi nhánh được kiểm chứng gián tiếp qua integration P0-2. Còn cổng kiểm thử security/production và xác nhận cấu hình môi trường thật.
+**Trạng thái (cập nhật 2026-11-23):** Luồng backend và giao diện quản trị truy cập đã được triển khai từng phần. Role editor đã chuẩn hóa dữ liệu quyền trả về trước khi gửi lại, DTO chấp nhận đầy đủ ma trận permission/scope, và tài khoản có thể được xóa mềm bởi người có quyền quản lý người dùng toàn hệ thống. Xóa mềm giữ nguyên bản ghi, vô hiệu hóa đăng nhập, thu hồi session và ghi audit; tài khoản bị xóa không còn trong danh sách và không thể kích hoạt lại qua API trạng thái. API tests và web typecheck đạt; repo chưa có suite integration/security riêng cho P0-1. Quyền chi nhánh được kiểm chứng gián tiếp qua integration P0-2. Còn cổng kiểm thử security/production và xác nhận cấu hình môi trường thật.
 
 ## Mục tiêu
 
@@ -18,6 +18,7 @@ Tạo identity và quyền backend trước khi mở bất kỳ API nghiệp v�
 - Login nhân viên bằng username/password; password hash scrypt, lockout sau 5 lần sai, access token ngắn hạn, refresh token opaque được hash/lưu DB, xoay vòng và phát hiện reuse; refresh token chỉ gửi qua HttpOnly cookie.
 - Provisioning operator lần đầu qua seed command; catalogue quyền cố định trong repository, không nhận định nghĩa quyền từ client.
 - API quản trị có scope cho branch, user, role/grant và audit; mọi mutation ghi audit event cùng transaction.
+- `DELETE /api/v1/access/users/:userId` cho phép người có `users.manage` scope `ALL` xóa mềm tài khoản khác. Tài khoản được đánh dấu `deletedAt`, chuyển sang `DISABLED`, ẩn khỏi danh sách, mất hiệu lực mọi session; nếu đang quản lý chi nhánh thì liên kết quản lý bị gỡ và nhánh ACTIVE cùng hậu duệ chuyển INACTIVE. Bản ghi người dùng và role grants được giữ để bảo toàn lịch sử; username vẫn được giữ duy nhất.
 
 ## Tiêu chí hoàn tất
 

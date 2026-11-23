@@ -23,6 +23,7 @@ import {
   CreateRoleDto,
   CreateRoleGrantDto,
   CreateUserDto,
+  DeleteUserDto,
   DisableUserDto,
   RevokeRoleGrantDto,
   SetRolePermissionsDto,
@@ -142,6 +143,17 @@ export class AccessAdminController {
     @Req() request: ActorRequest,
   ) {
     return this.access.setUserStatus(actor, userId, true, dto.reason, request);
+  }
+
+  @RequirePermission('users.manage', AccessScope.ALL)
+  @Delete('users/:userId')
+  deleteUser(
+    @CurrentActor() actor: ActorContext,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: DeleteUserDto,
+    @Req() request: ActorRequest,
+  ) {
+    return this.access.softDeleteUser(actor, userId, dto.reason, request);
   }
 
   @RequirePermission('roles.manage')

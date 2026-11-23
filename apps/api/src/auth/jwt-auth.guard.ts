@@ -47,7 +47,7 @@ export class JwtAuthGuard implements CanActivate {
         userId: payload.sub,
         revokedAt: null,
         expiresAt: { gt: new Date() },
-        user: { status: 'ACTIVE' },
+        user: { status: 'ACTIVE', deletedAt: null },
       },
       select: { id: true, userId: true, user: { select: { mustChangePassword: true } } },
     });

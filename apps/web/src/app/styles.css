@@ -301,6 +301,39 @@
   .grant-revoke {
     @apply w-[20px] h-[20px] shrink-0 border-0 rounded-full bg-[#f5e8e7] text-[#a44c48] text-[13px] leading-[1];
   }
+  .user-actions {
+    @apply relative w-max;
+  }
+  .user-actions>summary {
+    @apply grid size-8 cursor-pointer list-none place-items-center rounded-lg text-crm-muted;
+  }
+  .user-actions>summary::-webkit-details-marker {
+    @apply hidden;
+  }
+  .user-actions[open]>summary {
+    @apply bg-ink/5 text-ink;
+  }
+  .user-actions-menu {
+    @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-lg border border-line bg-white p-1 shadow-lg;
+  }
+  .user-actions-menu button {
+    @apply w-full rounded-md bg-transparent px-3 py-2 text-left text-sm text-ink;
+  }
+  .user-actions-menu button:hover:not(:disabled) {
+    @apply bg-[#f4f8f7];
+  }
+  .user-actions-menu button.is-danger {
+    @apply text-rose-700;
+  }
+  .user-actions-menu button.is-danger:hover:not(:disabled) {
+    @apply bg-rose-500/10;
+  }
+  .user-actions-menu button:disabled {
+    @apply cursor-wait opacity-50;
+  }
+  .user-actions-divider {
+    @apply my-1 border-t border-line;
+  }
   .access-content {
     @apply max-w-[1040px];
   }
@@ -955,6 +988,7 @@
 }
 /*---break---*/
 @theme inline {
+  --font-sans: var(--font-geist);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

@@ -127,6 +127,12 @@ export class DisableUserDto {
   reason!: string;
 }
 
+export class DeleteUserDto {
+  @IsString()
+  @Length(3, 1000)
+  reason!: string;
+}
+
 export class RevokeRoleGrantDto {
   @IsString()
   @Length(3, 1000)

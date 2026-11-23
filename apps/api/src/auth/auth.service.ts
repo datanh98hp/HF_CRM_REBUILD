@@ -59,7 +59,7 @@ export class AuthService {
       : await this.passwords.verify(password, this.invalidPasswordHash());
 
     if (
-      !user || user.status !== 'ACTIVE' ||
+      !user || user.status !== 'ACTIVE' || user.deletedAt ||
       (user.lockedUntil && user.lockedUntil > now) || !passwordMatches
     ) {
       this.loginRateLimit.recordFailure(clientIp);
@@ -114,10 +114,10 @@ export class AuthService {
     const result = await this.prisma.$transaction(async (tx) => {
       const session = await tx.authSession.findUnique({
         where: { id: sessionId },
-        include: { user: { select: { id: true, status: true, mustChangePassword: true } } },
+        include: { user: { select: { id: true, status: true, deletedAt: true, mustChangePassword: true } } },
       });
       const now = new Date();
-      if (!session || session.revokedAt || session.expiresAt <= now || session.user.status !== 'ACTIVE') {
+      if (!session || session.revokedAt || session.expiresAt <= now || session.user.status !== 'ACTIVE' || session.user.deletedAt) {
         return { error: 'invalid' as const };
       }
 
@@ -183,7 +183,7 @@ export class AuthService {
       throw new BadRequestException({ code: 'NEW_PASSWORD_MUST_DIFFER' });
     }
     const user = await this.prisma.user.findUnique({ where: { id: actor.id } });
-    if (!user || user.status !== 'ACTIVE' || !(await this.passwords.verify(currentPassword, user.passwordHash))) {
+    if (!user || user.status !== 'ACTIVE' || user.deletedAt || !(await this.passwords.verify(currentPassword, user.passwordHash))) {
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: genericLoginError });
     }
     const nextPasswordHash = await this.passwords.hash(newPassword);
@@ -254,10 +254,10 @@ export class AuthService {
       return { id: actor.id, type: actor.type, roles: ['CUSTOMER'], permissions: [], isMock: actor.isMock ?? false };
     }
     const user = await this.prisma.user.findUnique({
-      where: { id: actor.id },
+      where: { id: actor.id, status: 'ACTIVE', deletedAt: null },
       select: { id: true, username: true, displayName: true, status: true, mustChangePassword: true },
     });
-    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException();
+    if (!user) throw new UnauthorizedException();
     const access = await this.accessControl.effectivePermissions(user.id);
     return { ...user, type: actor.type, ...access };
   }

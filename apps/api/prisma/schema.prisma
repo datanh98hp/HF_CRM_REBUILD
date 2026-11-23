@@ -173,6 +173,7 @@ model User {
   displayName        String          @db.VarChar(160)
   passwordHash       String          @db.VarChar(255)
   status             UserStatus      @default(ACTIVE)
+  deletedAt          DateTime?       @db.Timestamptz(3)
   mustChangePassword Boolean         @default(false)
   failedLoginCount   Int             @default(0)
   lockedUntil        DateTime?       @db.Timestamptz(3)
@@ -211,6 +212,7 @@ model User {
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
 
   @@index([status, username])
+  @@index([deletedAt])
 }
 
 model Role {

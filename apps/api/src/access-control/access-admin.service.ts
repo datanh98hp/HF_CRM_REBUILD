@@ -294,7 +294,8 @@ export class AccessAdminService {
       adviserBranchIds = [...assignableBranches];
     }
     return this.prisma.user.findMany({
-      where: branchIds === null ? undefined : {
+      where: branchIds === null ? { deletedAt: null } : {
+        deletedAt: null,
         OR: [
           { roleGrants: { some: { branchId: { in: branchIds } } } },
           {
@@ -398,7 +399,7 @@ export class AccessAdminService {
         include: { permissions: true },
       }),
     ]);
-    if (!target || target.status !== 'ACTIVE') throw new NotFoundException({ code: 'ACTIVE_USER_NOT_FOUND' });
+    if (!target || target.status !== 'ACTIVE' || target.deletedAt) throw new NotFoundException({ code: 'ACTIVE_USER_NOT_FOUND' });
     if (!role) throw new NotFoundException({ code: 'ROLE_NOT_FOUND' });
     if (role.key === 'CUSTOMER') throw new ForbiddenException({ code: 'CUSTOMER_IS_NOT_A_STAFF_ACCOUNT' });
     if (role.key === 'MANAGE') throw new ForbiddenException({ code: 'MANAGE_ASSIGNMENT_REQUIRES_BRANCH_MANAGER_ENDPOINT' });
@@ -531,7 +532,7 @@ export class AccessAdminService {
       where: { id: userId },
       include: { roleGrants: { select: { branchId: true, role: { select: { key: true } } } } },
     });
-    if (!target) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
+    if (!target || target.deletedAt) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
     const managedBranches = await this.prisma.branch.findMany({ where: { managerUserId: actor.id }, select: { id: true } });
     if (managedBranches.length && !(await this.access.hasPermission(actor.id, 'users.manage', AccessScope.ALL))) {
       const canManageTarget = target.roleGrants.some((grant) => grant.role.key === 'ADVISING' && grant.branchId !== null && managedBranches.some(({ id }) => id === grant.branchId));
@@ -544,7 +545,7 @@ export class AccessAdminService {
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
-        where: { id: userId },
+        where: { id: userId, deletedAt: null },
         data: { status: enabled ? 'ACTIVE' : 'DISABLED' },
         select: { id: true, username: true, displayName: true, status: true },
       });
@@ -588,6 +589,70 @@ export class AccessAdminService {
         });
       }
       return updated;
+    });
+  }
+
+  async softDeleteUser(
+    actor: ActorContext,
+    userId: string,
+    reason: string,
+    request?: ActorRequest,
+  ) {
+    if (actor.id === userId) throw new ForbiddenException({ code: 'SELF_ACCOUNT_CHANGE_DENIED' });
+    await this.access.assertPermission(actor.id, 'users.manage', AccessScope.ALL);
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { roleGrants: { select: { branchId: true, role: { select: { key: true } } } } },
+    });
+    if (!target || target.deletedAt) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
+
+    return this.prisma.$transaction(async (tx) => {
+      const deletedAt = new Date();
+      const deleted = await tx.user.updateMany({
+        where: { id: userId, deletedAt: null },
+        data: { status: 'DISABLED', deletedAt },
+      });
+      if (deleted.count !== 1) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
+
+      await tx.authSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: deletedAt },
+      });
+      const managedBranches = await tx.branch.findMany({
+        where: { managerUserId: userId },
+        orderBy: { id: 'asc' },
+        select: { id: true },
+      });
+      for (const branch of managedBranches) {
+        await this.unassignManagerAndDeactivateBranchTree(
+          tx,
+          actor,
+          branch.id,
+          userId,
+          reason,
+          request,
+        );
+      }
+
+      const targetBranchIds = [...new Set(target.roleGrants.map((grant) => grant.branchId))];
+      const auditBranchIds: Array<string | null> = targetBranchIds.includes(null)
+        ? [null]
+        : targetBranchIds.filter((branchId): branchId is string => branchId !== null);
+      if (auditBranchIds.length === 0) auditBranchIds.push(null);
+      for (const branchId of auditBranchIds) {
+        await this.audit.write(tx, {
+          actor,
+          action: 'identity.user.soft_deleted',
+          targetType: 'user',
+          targetId: userId,
+          branchId,
+          reason,
+          beforeState: { status: target.status },
+          afterState: { status: 'DISABLED', deletedAt: deletedAt.toISOString() },
+          requestId: getRequestId(request),
+        });
+      }
+      return { id: userId, deletedAt };
     });
   }
 

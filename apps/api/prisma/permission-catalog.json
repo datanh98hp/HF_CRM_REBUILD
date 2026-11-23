@@ -3,7 +3,7 @@
   { "key": "branches.read", "groupKey": "organization", "description": "Read branches within granted scope | Xem chi nhánh trong phạm vi được cấp." },
   { "key": "branches.manage", "groupKey": "organization", "description": "Create and manage branches within granted scope | Tạo và quản lý chi nhánh trong phạm vi được cấp." },
   { "key": "users.read", "groupKey": "identity", "description": "Read users within granted scope | Xem người dùng trong phạm vi được cấp." },
-  { "key": "users.manage", "groupKey": "identity", "description": "Create, disable and manage users within granted scope | Tạo, vô hiệu hóa và quản lý người dùng trong phạm vi được cấp." },
+  { "key": "users.manage", "groupKey": "identity", "description": "Create, disable, soft-delete and manage users within granted scope | Tạo, vô hiệu hóa, xóa mềm và quản lý người dùng trong phạm vi được cấp." },
   { "key": "roles.read", "groupKey": "access-control", "description": "Read roles and permission catalog | Xem vai trò và danh mục quyền." },
   { "key": "roles.manage", "groupKey": "access-control", "description": "Create custom roles and grant roles within delegated authority | Tạo vai trò tùy chỉnh và cấp vai trò trong giới hạn được ủy quyền." },
   { "key": "permissions.read", "groupKey": "access-control", "description": "Read the stable permission catalog | Xem danh mục quyền chức năng của hệ thống." },

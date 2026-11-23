@@ -345,6 +345,7 @@ describe('AccessAdminService manager account disabling', () => {
 
       expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: {
+          deletedAt: null,
           OR: [
             { roleGrants: { some: { branchId: { in: [branchId] } } } },
             {

@@ -1,19 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { BranchOption, displayRoleName, ManagedUser, RoleOption } from '@/lib/crm-access';
@@ -21,7 +24,7 @@ import { request } from '@/lib/crm-api';
 
 export function StaffPage() {
   const router = useRouter();
-  const { session, can, busy, setBusy, error, setError, notice, setNotice } = useCrmSession();
+  const { session, staff, can, busy, setBusy, error, setError, notice, setNotice } = useCrmSession();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -32,10 +35,18 @@ export function StaffPage() {
   const [newRole, setNewRole] = useState('ADVISING');
   const [newBranch, setNewBranch] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const focusListAfterDelete = useRef(false);
+  const userListTitleRef = useRef<HTMLDivElement>(null);
   const canReadRoles = can('roles.read');
   const canReadBranches = can('branches.read');
   const canManageUsers = can('users.manage');
   const canManageRoles = can('roles.manage');
+  const canDeleteUsers = Boolean(
+    staff?.permissions.some(({ key, scopes }) => key === 'users.manage' && scopes.includes('ALL'))
+    && staff.roles.some(({ scope }) => scope.global),
+  );
 
   const loadUsers = useCallback(async (token: string) => {
     setUsers(await request<ManagedUser[]>('/access/users', {}, token));
@@ -123,6 +134,40 @@ export function StaffPage() {
     }
   }
 
+  async function deleteUser() {
+    if (!session || !deleteTarget || deleteReason.trim().length < 3) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await request(`/access/users/${deleteTarget.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason: deleteReason.trim() }),
+      }, session.accessToken);
+      const deletedUserId = deleteTarget.id;
+      setDeleteTarget(null);
+      focusListAfterDelete.current = true;
+      setUsers((currentUsers) => currentUsers.filter(({ id }) => id !== deletedUserId));
+      try {
+        await loadUsers(session.accessToken);
+      } catch {
+        setError('Tài khoản đã được xóa mềm, nhưng không thể tải lại danh sách. Vui lòng làm mới trang.');
+        return;
+      }
+      setNotice('Đã xóa mềm tài khoản. Dữ liệu và lịch sử liên quan vẫn được giữ lại.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Không thể xóa mềm tài khoản.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!focusListAfterDelete.current) return;
+    focusListAfterDelete.current = false;
+    userListTitleRef.current?.focus();
+  }, [users]);
+
   async function assignRole(event: FormEvent<HTMLFormElement>, userId: string) {
     event.preventDefault();
     if (!session) return;
@@ -196,7 +241,7 @@ export function StaffPage() {
           {notice && <div className="alert alert-success" role="status">{notice}</div>}
               <Card className="users-table-card">
                 <CardHeader className="flex flex-row items-center justify-between gap-3">
-                  <CardTitle>Danh sách nhân viên <span className="muted-value">{loading ? 'Đang tải…' : `${users.length} tài khoản`}</span></CardTitle>
+                  <CardTitle ref={userListTitleRef} tabIndex={-1}>Danh sách nhân viên <span className="muted-value">{loading ? 'Đang tải…' : `${users.length} tài khoản`}</span></CardTitle>
                   {canManageUsers && canManageRoles && (
                     <Dialog
                       open={createDialogOpen}
@@ -289,7 +334,27 @@ export function StaffPage() {
                           )}
                         </td>
                         <td><span className={`user-status ${user.status === 'ACTIVE' ? 'is-active' : 'is-disabled'}`}>{user.status === 'ACTIVE' ? 'Hoạt động' : 'Vô hiệu hóa'}</span></td>
-                        {canManageUsers && <td><Button variant="outline" size="sm" type="button" disabled={busy} onClick={() => void toggleUser(user)}>{user.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'}</Button></td>}
+                        {canManageUsers && <td>
+                          <details className="user-actions">
+                            <summary aria-label={`Thao tác với tài khoản ${user.displayName}`}><MoreHorizontal aria-hidden /></summary>
+                            <div className="user-actions-menu">
+                              <button type="button" disabled={busy} onClick={(event) => {
+                                event.currentTarget.closest('details')?.removeAttribute('open');
+                                void toggleUser(user);
+                              }}>{user.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'}</button>
+                              {canDeleteUsers && <>
+                                <div className="user-actions-divider" />
+                                <button className="is-danger" type="button" disabled={busy} onClick={(event) => {
+                                  event.currentTarget.closest('details')?.removeAttribute('open');
+                                  setError('');
+                                  setNotice('');
+                                  setDeleteTarget(user);
+                                  setDeleteReason('');
+                                }}>Xóa tài khoản</button>
+                              </>}
+                            </div>
+                          </details>
+                        </td>}
                       </tr>
                     ))}</tbody>
                   </table>
@@ -297,9 +362,55 @@ export function StaffPage() {
               ) : <p className="empty-state">{loading ? 'Đang tải danh sách…' : 'Không tìm thấy tài khoản trong phạm vi quyền được cấp.'}</p>}
             </CardContent>
           </Card>
-          <p className="account-caption">Mọi thao tác tạo, kích hoạt hoặc vô hiệu hóa tài khoản đều được ghi nhận audit ở backend.</p>
+          <p className="account-caption">Mọi thao tác tạo, kích hoạt, vô hiệu hóa hoặc xóa mềm tài khoản đều được ghi nhận audit ở backend.</p>
         </section>
       </main>
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md" closeLabel="Đóng">
+          <DialogHeader className="pr-10">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-500/10 text-rose-700">
+                <Trash2 className="size-5" aria-hidden />
+              </span>
+              <DialogTitle className="pt-2 text-lg font-semibold">Xóa tài khoản này?</DialogTitle>
+            </div>
+            <DialogDescription className="mt-2 text-sm/6">
+              <strong className="font-medium text-foreground">{deleteTarget?.displayName}</strong>
+              {' '}sẽ không thể đăng nhập và sẽ bị ẩn khỏi danh sách. Dữ liệu nghiệp vụ và lịch sử liên quan vẫn được giữ lại.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <label htmlFor="delete-user-reason" className="text-sm font-medium">Lý do xóa</label>
+            <Textarea
+              id="delete-user-reason"
+              className="min-h-20 bg-background text-sm"
+              value={deleteReason}
+              onChange={(event) => setDeleteReason(event.target.value)}
+              minLength={3}
+              maxLength={1000}
+              required
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="secondary" disabled={busy}>Hủy</Button>} />
+            <Button
+              type="button"
+              variant="ghost"
+              className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 hover:text-rose-700"
+              disabled={busy || deleteReason.trim().length < 3}
+              onClick={() => void deleteUser()}
+            >{busy ? 'Đang xóa…' : 'Xóa tài khoản'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkspaceLayout>
   );
 }

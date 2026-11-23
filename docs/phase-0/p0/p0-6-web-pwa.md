@@ -1,6 +1,6 @@
 # P0-6 — Web nội bộ và mobile web/PWA
 
-**Trạng thái (cập nhật 2026-11-20):** Đang triển khai; đã có 13 route staff: `/login`, `/change-password`, `/profile`, `/customers`, `/customers/import`, `/loan-products`, `/loan-contracts`, `/plans`, `/plans/catalog`, `/tasks`, `/staff`, `/branches`, `/roles`. Chưa có dashboard tổng quan, chat UI, CUSTOMER PWA (`apps/web` không có manifest/service worker) và các luồng P0-6 còn lại.
+**Trạng thái (cập nhật 2026-11-23):** Đang triển khai; đã có 13 route staff: `/login`, `/change-password`, `/profile`, `/customers`, `/customers/import`, `/loan-products`, `/loan-contracts`, `/plans`, `/plans/catalog`, `/tasks`, `/staff`, `/branches`, `/roles`. Chưa có dashboard tổng quan, CUSTOMER PWA (`apps/web` không có manifest/service worker) và các luồng P0-6 còn lại. P0-5 chat realtime đã bị bỏ khỏi phạm vi.
 
 ## Mục tiêu
 
@@ -23,7 +23,7 @@ Giao diện quản trị truy cập hiện có các route riêng cho nhân viên
 - Import UI hiển thị trạng thái job, counts thành công/trùng/lỗi, lỗi theo dòng trong thời hạn lưu, và trạng thái blocked/loading/cleanup; không có preview hay bước xác nhận vì pipeline là auto-import.
 - KPI chỉ hiển thị kết quả verified; filter và aggregates cùng scope với record gốc.
 - API mock CUSTOMER chỉ hoạt động dev/test; production yêu cầu session OTP thật.
-- Trang khởi tạo phản ánh đúng phạm vi: chat thuộc MVP, CRM ngoài để sau.
+- Trang khởi tạo phản ánh đúng phạm vi: P0-5 chat realtime không thuộc MVP hiện tại, CRM ngoài để sau.
 
 ## Hướng dẫn triển khai Next.js
 

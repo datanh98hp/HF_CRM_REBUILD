@@ -71,6 +71,10 @@ function apiBaseUrl() {
     && ['localhost', '127.0.0.1'].includes(window.location.hostname)
   ) {
     configured.hostname = window.location.hostname;
+    if (window.location.protocol === 'https:') {
+      configured.protocol = 'https:';
+      configured.port = window.location.port;
+    }
   }
   return configured.origin + configured.pathname.replace(/\/$/, '');
 }

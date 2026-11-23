@@ -39,7 +39,7 @@
 - **Ngày sinh:** hiển thị `dd/MM/yyyy` trên giao diện; API giữ định dạng ISO.
 - **Import:** cho phép nhập các trường mới khi có cột tương ứng; ô trống được lưu `NULL`.
 
-- **Đã xác nhận:** CRM lõi; nhân viên dùng web; hồ sơ vay chỉ intake/tracking; tích hợp ngoài và báo cáo tùy biến để sau; chat realtime được đưa vào MVP cho ADVISING ↔ CUSTOMER; một tư vấn viên chính/khách hàng và lưu assignment history; trạng thái khách hàng/task; loại task ban đầu; backend permission + resource-scope enforcement.
+- **Đã xác nhận:** CRM lõi; nhân viên dùng web; hồ sơ vay chỉ intake/tracking; tích hợp ngoài và báo cáo tùy biến để sau; P0-5 chat realtime đã bỏ khỏi MVP; một tư vấn viên chính/khách hàng và lưu assignment history; trạng thái khách hàng/task; loại task ban đầu; backend permission + resource-scope enforcement.
 - **Customer data:** số điện thoại và họ tên bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn. Họ tên + ngày sinh dùng cảnh báo trùng khi có đủ dữ liệu. Không bổ sung trường PII nào khác ngoài các trường đã chấp thuận.
 - **CUSTOMER access:** mobile web/PWA trước, app native sau; OTP số điện thoại là phương án xác thực production mặc định. API giả lập chỉ dùng dev/test. CUSTOMER đọc hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn dữ liệu có, và gói vay; OTP provider, nguồn dữ liệu và allowlist chi tiết cần cấu hình.
 - **Loan request/contract source:** CUSTOMER có thể gửi yêu cầu vay; nếu khách yêu cầu qua tư vấn viên, ADVISING ghi nhận yêu cầu. Yêu cầu là nguồn hồ sơ intake/tracking; hợp đồng chỉ được tạo/liên kết khi hợp đồng thực sự phát sinh, không tự động phê duyệt từ yêu cầu.
@@ -54,7 +54,7 @@
 - **Duplicate review:** cảnh báo + xác nhận thủ công khi trùng số điện thoại/email đã chuẩn hóa hoặc họ tên + ngày sinh; không tự động gộp.
 - **Roles/scope:** OPERATOR, ADMIN, MANAGE, ADVISING cho nhân viên; CUSTOMER chat và read-only dữ liệu được phép. MANAGE xem chi nhánh được gán và kế thừa chi nhánh con theo cây chi nhánh tổng → chi nhánh con; cần nạp cây tổ chức và role grants thực tế.
 - **RBAC:** phân quyền theo nhóm chức năng, scope `OWN`, `ASSIGNED`, `BRANCH`, `ALL` và node tổ chức; hỗ trợ role tùy chỉnh từ permission catalog trong giới hạn grantable. Cần cấu hình role grants theo cây chi nhánh.
-- **Chat storage:** đã chốt mỗi message là một record riêng với metadata được lưu riêng và compact JSON string làm payload; transcript dựng theo cursor.
+- **P0-5 chat realtime (bỏ qua 2026-11-23):** không nằm trong kế hoạch triển khai hiện tại. Tài liệu P0-5 chỉ là hồ sơ tương lai; không thêm migration, Socket.IO, gateway, model hoặc UI.
 - **Files:** local private folder trên server qua ObjectStorageService; task PDF/JPG/JPEG/PNG ≤10 MB; import CSV/XLSX ≤20 MB; S3 adapter là tùy chọn tương lai. Quarantine, validate và malware scan trước khi sử dụng đã chốt; scanner, retention values, quyền xóa/legal hold và lịch dọn cần cấu hình.
 - **Còn cần cấu hình/đặc tả giá trị cụ thể:** cây chi nhánh tổng/con và role grants; OTP provider và allowlist trường hợp đồng/gói vay; quốc gia chuẩn hóa số điện thoại; danh mục hạng mục/đơn vị dùng cho kế hoạch (chỉ tiêu đặt trên từng plan); kỳ và ngưỡng reminder; scanner, retention/legal hold/xóa; retention audit, topology/RPO/RTO/incident owner; nơi lưu/xử lý dữ liệu và chuẩn tuân thủ; quy trình sửa KPI sau xác minh. CRM ngoài và quy tắc tính khoản vay chính thức nằm ngoài MVP.
 

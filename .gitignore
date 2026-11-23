@@ -9,6 +9,7 @@ coverage/
 !.env.dev.example
 !.env.test.example
 !.env.prod.example
+!.env.prod.local.example
 npm-debug.log*
 *.tsbuildinfo
 chrome_debug

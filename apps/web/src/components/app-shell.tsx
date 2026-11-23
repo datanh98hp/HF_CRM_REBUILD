@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   PackageSearch,
@@ -118,7 +117,6 @@ export function AppShell({
       items: [
         ...(canReadCustomers ? [{ key: 'customers', label: 'Khách hàng', icon: UsersRound, section: 'customers' as const }] : []),
         ...(canImportCustomers ? [{ key: 'customer-import', label: 'Nhập khách hàng', icon: FileSpreadsheet, section: 'customer-import' as const }] : []),
-        { key: 'chat', label: 'Hội thoại', icon: MessageSquare, disabled: true },
       ],
     },
     {

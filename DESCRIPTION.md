@@ -4,7 +4,7 @@
 
 Finance CRM là monorepo quản lý khách hàng, tư vấn tài chính, yêu cầu vay, hợp đồng, kế hoạch công việc và KPI cho hệ thống HFinance/VietP2P. Tên mã nguồn và sản phẩm là `finance-crm`, tập trung vào quy trình nội bộ dành cho nhân viên, quản lý chi nhánh và quản trị viên; khách hàng là persona tương lai/đang được mở dần với mobile web/PWA và API mock có giới hạn môi trường.
 
-> **Trạng thái tài liệu:** nội dung mô tả kiến trúc/luồng đã đối chiếu với mã nguồn ngày 2026-11-21. Trạng thái triển khai theo giai đoạn, bằng chứng kiểm thử và các cổng còn chặn nằm ở [implementation-status.md](docs/phase-0/implementation-status.md) — tài liệu đó là nguồn sự thật khi có khác biệt.
+> **Trạng thái tài liệu:** nội dung mô tả kiến trúc/luồng đã đối chiếu với mã nguồn và PostgreSQL test ngày 2026-11-23. Trạng thái triển khai theo giai đoạn, bằng chứng kiểm thử và các cổng còn chặn nằm ở [implementation-status.md](docs/phase-0/implementation-status.md) — tài liệu đó là nguồn sự thật khi có khác biệt.
 
 Dự án được xây theo kiến trúc modular monolith, không chia thành các dịch vụ backend độc lập trong MVP:
 
@@ -82,7 +82,7 @@ Schema và migration được lưu trong `apps/api/prisma`. Dữ liệu seed ch�
 
 Redis cung cấp transport cho BullMQ, không thay thế PostgreSQL làm source of truth. API có thể enqueue job; worker riêng chạy xử lý nền.
 
-Worker hiện xử lý hai loại job: `system.healthcheck` và `customer-import.process` (pipeline import P0-4: quét ClamAV, parse, dò trùng, ghi atomic và dọn tệp). Chat realtime (P0-5) không có processor/socket trong code ở thời điểm này.
+Worker hiện xử lý hai loại job: `system.healthcheck` và `customer-import.process` (pipeline import P0-4: quét ClamAV, parse, dò trùng, ghi atomic và dọn tệp). P0-5 realtime chat đã bị bỏ khỏi kế hoạch hiện tại và không có processor/socket trong code.
 
 ### 3.4. Web Next.js
 
@@ -235,7 +235,7 @@ Scanner/quarantine, retention/legal hold, quyền xoá và cấu hình volume d�
 
 ### 7.3. Chat
 
-P0-5 hiện chỉ có đặc tả kiến trúc: chat realtime ADVISING ↔ CUSTOMER qua Socket.IO hoặc cơ chế tương đương, message lưu trong PostgreSQL, cursor pagination và authorization cho join/send/read. Chưa có socket gateway, model conversation/message, route hay component chat trong code; chat UI/server event chưa được coi là đã hoàn tất và P0-6 customer PWA cũng chưa đóng.
+P0-5 realtime chat đã bị bỏ khỏi kế hoạch hiện tại. Tài liệu P0-5 chỉ giữ đặc tả tương lai; không có socket gateway, model conversation/message, route hay component chat trong code.
 
 ## 8. Docker và cấu hình môi trường
 
@@ -302,14 +302,14 @@ Mức hiện tại cần được đọc theo source/tree và kết quả kiểm
 
 - API, web và Prisma foundation đã có cấu trúc build/typecheck.
 - P0-1 có schema auth/RBAC/audit, auth session và API quản trị.
-- P0-2 có customer/loan/contract code, migration và tests trong môi trường cô lập; hồ sơ khách hàng có thêm các trường tùy chọn CCCD, địa chỉ, quê quán, giới tính và nơi cấp. Migration mới có trong code nhưng chưa được áp dụng/kiểm chứng trên DB.
+- P0-2 có customer/loan/contract code, migration và tests trong môi trường cô lập; hồ sơ khách hàng có thêm các trường tùy chọn CCCD, địa chỉ, quê quán, giới tính và nơi cấp. Migration hồ sơ đã được áp dụng và xác minh trên PostgreSQL test.
 - P0-3 có plan/task/result/verification/KPI API, migration và UI `/plans`, `/plans/catalog`, `/tasks`.
 - P0-4 có API import (readiness/upload/history/detail), parser CSV/XLSX, ClamAV `INSTREAM`, worker `customer-import.process`, import atomic, migration batch/row và UI `/customers/import`.
 - Có script integration P0-2/P0-3 sử dụng PostgreSQL Docker cô lập.
 - Có unit test backup crypto với synthetic payload.
 - Có các route staff đã được probe theo kích thước desktop và 375px trong các lượt kiểm tra ghi nhận.
 
-Đối chiếu và kiểm tra 2026-11-21: `npm run db:validate`, `npm run db:generate`, typecheck API + web và 4 API suite tập trung/37 test đạt trên host. Full API suite và integration DB cho các migration mới chưa chạy; các dependency/migration còn lại cần được xác minh trong môi trường DB test cô lập.
+Đối chiếu và kiểm tra 2026-11-23: cả migration partial-row P0-4 và migration hồ sơ khách hàng đã áp dụng trên PostgreSQL test cô lập. 5 cột hồ sơ mới và cột retention/terminal constraint đã xác minh. Integration mixed-row đạt: 1 dòng hợp lệ, 1 dòng trùng, 1 dòng sai. 4 API suite tập trung/37 test đạt. Production chưa được migrate hoặc kiểm chứng với dữ liệu thật.
 
 Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 
@@ -320,7 +320,6 @@ Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 - scanner/quarantine;
 - retention/legal hold;
 - CUSTOMER OTP/provider thật;
-- chat realtime;
 - áp dụng migration partial-row và integration mixed-row cho import;
 - dashboard/report đầy đủ;
 - CI/CD pipeline;
@@ -333,9 +332,9 @@ Các chức năng/kiểm tra còn cần runtime evidence độc lập:
 - P0-1: auth, RBAC, organization, branch, grant và audit foundation đã có.
 - P0-2: backend và UI customer/loan/contract đang triển khai ở mức lát cắt baseline; một số chính sách tài chính và grant production vẫn mở.
 - P0-3: kế hoạch/task/kết quả/xác minh/KPI và UI liên quan đã có code/migration trong phạm vi code hiện tại.
-- P0-4: pipeline import nền đã có code và đã nghiệm thu trên stack test cô lập; bản mở rộng partial-row chưa áp dụng/kiểm chứng migration, readiness vẫn fail-closed cho tới khi schema đích có cột retention.
-- P0-5: chat realtime chưa triển khai — không có socket gateway, model conversation/message hay UI.
-- P0-6: web staff một phần đã có (13 route, gồm `/customers/import`); dashboard, chat UI, CUSTOMER PWA và các route còn lại chưa hoàn tất.
+- P0-4: pipeline import nền và partial-row đã nghiệm thu trên stack test cô lập; migration partial-row/hồ sơ đã áp dụng trên DB test, readiness `READY` khi schema đích có cột retention.
+- P0-5: chat realtime đã bị bỏ khỏi kế hoạch hiện tại — không triển khai socket gateway, model, route hay UI.
+- P0-6: web staff một phần đã có (13 route, gồm `/customers/import`); dashboard, CUSTOMER PWA và các route còn lại chưa hoàn tất.
 
 Chi tiết và tiến độ chuẩn ghi trong:
 

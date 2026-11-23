@@ -1,10 +1,48 @@
 services:
+  caddy:
+    image: caddy:2.9-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:-crm.example.com}
+      API_DOMAIN: ${API_DOMAIN:-api.crm.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
   postgres:
     ports: !reset []
   redis:
     ports: !reset []
   api:
     ports: !reset []
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+  worker:
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
   web:
     ports: !reset []
   toolbox:
@@ -14,6 +52,8 @@ services:
       NODE_ENV: production
 
 volumes:
+  caddy_data:
+  caddy_config:
   postgres_data:
     name: hf_crm_prod_postgres_data
   redis_data:

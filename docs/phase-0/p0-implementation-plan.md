@@ -1,7 +1,7 @@
 # Finance CRM — Kế hoạch triển khai P0
 
-**Trạng thái (cập nhật 2026-11-21, đối chiếu code):** P0-0/P0-1 có nền code và đã chạy trong Compose dev/test. Backend P0-2 đã triển khai trên dev; phần mở rộng hồ sơ thêm CCCD, địa chỉ, quê quán, giới tính, nơi cấp (nullable) và định dạng DOB `dd/MM/yyyy` đã qua validate/generate/typecheck/focused tests, nhưng migration chưa áp dụng trên DB. P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/plans`, `/plans/catalog`, `/tasks`; responsive đã probe 375px/1440px. P0-4 có pipeline import hoàn chỉnh đã nghiệm thu trên stack test cô lập, còn partial-row và schema mới chưa qua integration DB. P0-5 chưa có code. P0-6 mới có 13 route staff. Trạng thái chi tiết: [implementation-status.md](implementation-status.md).
-**Cập nhật:** 2026-11-21
+**Trạng thái (cập nhật 2026-11-23, đối chiếu code và DB test):** P0-0/P0-1 có nền code và đã chạy trong Compose dev/test. Backend P0-2 đã triển khai trên dev; phần mở rộng hồ sơ thêm CCCD, địa chỉ, quê quán, giới tính, nơi cấp (nullable) và định dạng DOB `dd/MM/yyyy` đã qua migration DB test và integration. P0-3 có API kế hoạch/task/kết quả/xác minh/KPI, UI `/plans`, `/plans/catalog`, `/tasks`; responsive đã probe 375px/1440px. P0-4 có pipeline import hoàn chỉnh và partial-row đã nghiệm thu trên stack test cô lập. P0-5 đã bị bỏ khỏi kế hoạch. P0-6 mới có 13 route staff. Trạng thái chi tiết: [implementation-status.md](implementation-status.md).
+**Cập nhật:** 2026-11-23
 **Phạm vi căn cứ:** `AGENT.md`, `mvp-scope.md`, `decision-log.md` và scaffold hiện tại.
 
 **Kế hoạch theo từng file:** [Mục lục các giai đoạn P0](p0/README.md).
@@ -14,7 +14,7 @@ Backend đã có nền PostgreSQL/Redis, auth/RBAC/audit và P0-2 customer/loan.
 
 P0-3 có API nền cho kế hoạch, task, phiên bản kết quả, xác minh, KPI và quan hệ metadata evidence; migration task/result/KPI cùng evidence đã áp dụng trên PostgreSQL test riêng. Kiểm thử API/PostgreSQL P0-3 đạt 19 assertion: plan mới ở DRAFT, chỉ chuyển chờ duyệt sau khi gửi; Admin được duyệt thủ công plan do mình tạo, còn MANAGE không thể tự duyệt và Admin khác có thể duyệt. Luồng tiếp tục tới task, kết quả và KPI sau xác minh. API typecheck và unit tests của hai suite plans/tasks đạt. UI `/plans`, `/plans/catalog` và `/tasks` đã dựng; responsive đã probe ở 375px/1440px. Migration evidence cùng các FK/CHECK constraints đã xác nhận. Còn mở: kiểm thử UI end-to-end và upload/download binary cho evidence (không có endpoint nào tạo `FileAsset` trong code). Theo yêu cầu hiện tại, CI pipeline nằm ngoài phạm vi tiếp tục triển khai.
 
-P0-4 đã có code đầy đủ cho import nền: schema batch/row, RBAC `customers.import`, local temp storage, ClamAV `INSTREAM`, API readiness/upload/history/detail, parser CSV/XLSX có resource cap, worker `customer-import.process`, import atomic kèm dò trùng, audit counts-only và UI `/customers/import`; pipeline đã được nghiệm thu trên stack test cô lập. Bản mở rộng partial-row (chi tiết lỗi theo dòng, retention 30 ngày, finalization) có 2 migration chưa áp dụng/kiểm chứng trên DB test, nên readiness vẫn fail-closed ở môi trường chưa migrate. P0-5 chat realtime chưa có mã nguồn.
+P0-4 đã có code đầy đủ cho import nền: schema batch/row, RBAC `customers.import`, local temp storage, ClamAV `INSTREAM`, API readiness/upload/history/detail, parser CSV/XLSX có resource cap, worker `customer-import.process`, import atomic kèm dò trùng, audit counts-only và UI `/customers/import`; pipeline đã được nghiệm thu trên stack test cô lập. Bản mở rộng partial-row (chi tiết lỗi theo dòng, retention 30 ngày, finalization) cùng migration hồ sơ đã áp dụng và mixed-row đã nghiệm thu trên DB test cô lập. P0-5 bị bỏ qua theo quyết định 2026-11-23; tài liệu P0-5 chỉ giữ làm hồ sơ tương lai.
 
 ## 2. Phạm vi P0 đề xuất
 
@@ -26,7 +26,6 @@ P0-4 đã có code đầy đủ cho import nền: schema batch/row, RBAC `custom
 - Customer, duplicate review, assignment history, loan request do CUSTOMER gửi hoặc ADVISING ghi nhận, và bản ghi/liên kết hợp đồng riêng khi hợp đồng thực sự phát sinh.
 - Kế hoạch có hạng mục, đơn vị, chỉ tiêu, thời gian; task chọn một kế hoạch phù hợp; kết quả thực đạt, chứng từ và luồng xác minh/audit; KPI chỉ tổng hợp số liệu `VERIFIED` và so với chỉ tiêu kế hoạch.
 - Import CSV/XLSX tối đa đã chốt, chạy nền qua queue/worker: kiểm tra tệp và quét ClamAV, validation từng dòng, duplicate checks và import atomic; kết quả có thể tra cứu theo batch, lỗi theo dòng chỉ giữ số dòng + mã lỗi. Không có preview/xác nhận thủ công (xem [P0-4](p0/p0-4-background-import.md)).
-- Chat realtime ADVISING ↔ CUSTOMER; mỗi message là record riêng trong PostgreSQL với metadata cột riêng và compact JSON payload; authorize kết nối, join, send, read.
 - API và giao diện nội bộ tối thiểu để thực hiện luồng trên; API nghiệp vụ theo `/api/v1`, OpenAPI, phân trang và lỗi nhất quán.
 
 ### Không thuộc lát cắt P0 đầu tiên
@@ -45,7 +44,6 @@ P0-4 đã có code đầy đủ cho import nền: schema batch/row, RBAC `custom
 | P0-2 | Customer, yêu cầu vay, hợp đồng, phân công | [Chi tiết](p0/p0-2-customer-loan-workflow.md) |
 | P0-3 | Kế hoạch, task, kết quả và KPI | [Chi tiết](p0/p0-3-plans-tasks-kpi.md) |
 | P0-4 | Import nền (atomic theo lô dòng hợp lệ) | [Chi tiết](p0/p0-4-background-import.md) |
-| P0-5 | Chat realtime | [Chi tiết](p0/p0-5-realtime-chat.md) |
 | P0-6 | UI staff và mobile web/PWA | [Chi tiết](p0/p0-6-web-pwa.md) |
 
 Thứ tự này cho phép chốt hợp đồng API/schema theo từng module, nhưng không bỏ qua backend permission/scope trước khi mở endpoint nghiệp vụ.

@@ -44,10 +44,9 @@ MVP chưa tự động quyết định khả năng phê duyệt khoản vay. N�
 - Cảnh báo trùng lặp có quy trình rà soát; không tự động gộp dữ liệu.
 - Phân công khách hàng và lịch sử thay đổi người phụ trách.
 - Lịch sử chăm sóc và tác vụ follow-up với hạn, trạng thái, người phụ trách.
-- Chat realtime giữa ADVISING và CUSTOMER; chỉ cho phép tham gia hội thoại được liên kết với khách hàng/tư vấn viên đó. Lưu tin nhắn bền vững trong PostgreSQL, phân trang cursor và kiểm tra quyền cho kết nối, tham gia phòng, gửi/đọc tin nhắn.
 - CUSTOMER dùng mobile web/PWA trước, native app sau. OTP số điện thoại là mặc định production; API giả lập chỉ dùng dev/test và không bật ở production.
-- CUSTOMER có quyền read-only với hồ sơ cá nhân và hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn hỗ trợ, cùng thông tin gói vay; không đọc hồ sơ khách hàng khác và không sửa dữ liệu nghiệp vụ. Read-only không áp dụng cho gửi tin nhắn trong hội thoại được phép.
-- Các yêu cầu tra cứu từ chat phải dùng customer ID lấy từ phiên đã xác thực và lọc trạng thái gói vay public ở backend; không tin customer ID do client hoặc nội dung chat tự cung cấp.
+- CUSTOMER có quyền read-only với hồ sơ cá nhân và hợp đồng thuộc mình, gồm thông tin chi tiết như lịch trả nợ/dư nợ nếu nguồn hỗ trợ, cùng thông tin gói vay; không đọc hồ sơ khách hàng khác và không sửa dữ liệu nghiệp vụ.
+- Các yêu cầu tra cứu CUSTOMER phải dùng customer ID lấy từ phiên đã xác thực và lọc trạng thái gói vay public ở backend; không tin customer ID do client cung cấp.
 - Lưu tệp theo nhóm nghiệp vụ, tối thiểu gồm tệp nộp cho task và tệp import dữ liệu khách hàng; kiểm tra hợp lệ trước khi lưu.
 - Import khách hàng chạy bằng tác vụ nền: quét tệp, kiểm tra từng dòng, phát hiện trùng và nhập đều xử lý bất đồng bộ; người dùng theo dõi trạng thái/kết quả và lỗi theo dòng. Thiết kế đã chốt (xem [P0-4](p0/p0-4-background-import.md)) là **auto-import, không có bước preview/xác nhận thủ công**: dòng hợp lệ được ghi trong một transaction atomic, dòng trùng và dòng lỗi bị bỏ qua và đếm riêng, lỗi tệp/scanner dừng toàn batch.
 - Cấu hình thời hạn lưu và dọn tệp hết hạn/không còn cần thiết theo chính sách được duyệt.
@@ -134,7 +133,7 @@ Ngày 2026-11-04 và 2026-11-05, chủ yêu cầu xác nhận/cập nhật các 
 - CRM cho nhân viên dùng web; CUSTOMER dùng mobile web/PWA trước, native app để sau; không có cổng self-service tổng quát. API giả lập CUSTOMER chỉ dùng dev/test.
 - CRM lõi ưu tiên khách hàng, phân công tư vấn, lịch sử chăm sóc và tác vụ follow-up.
 - Hồ sơ vay ban đầu chỉ tiếp nhận/theo dõi; không tự động đánh giá hoặc phê duyệt.
-- Chat realtime giữa ADVISING và CUSTOMER thuộc MVP; tích hợp CRM ngoài và báo cáo tùy biến để giai đoạn sau.
+- P0-5 chat realtime giữa ADVISING và CUSTOMER đã bị bỏ khỏi kế hoạch triển khai hiện tại; tích hợp CRM ngoài và báo cáo tùy biến để giai đoạn sau.
 - CUSTOMER được tra cứu read-only thông tin cá nhân, hợp đồng thuộc mình (có thể gồm lịch trả nợ/dư nợ nếu nguồn hỗ trợ) và thông tin chi tiết gói vay; không có quyền sửa hoặc đọc hồ sơ người khác.
 - Một tư vấn viên phụ trách chính tại một thời điểm; lưu lịch sử phân công.
 - Trạng thái khách hàng, trạng thái task và quy tắc trùng lặp như mục 6.
@@ -145,7 +144,7 @@ Ngày 2026-11-04 và 2026-11-05, chủ yêu cầu xác nhận/cập nhật các 
 - RBAC cho phép role tùy chỉnh chỉ từ permission catalog và trong tập quyền được ủy quyền.
 - Dashboard có biểu đồ theo ngày/tháng và nhân viên, lọc theo hạng mục.
 - Số điện thoại bắt buộc; email, ngày sinh, CCCD, địa chỉ, quê quán, giới tính và nơi cấp tùy chọn. Họ tên + ngày sinh cảnh báo trùng khi cả hai trường có dữ liệu, xác nhận thủ công.
-- Vai trò nhân viên gồm `OPERATOR`, `ADMIN`, `MANAGE`, `ADVISING`; `CUSTOMER` chat và chỉ đọc dữ liệu được phép như mục 2/4.
+- Vai trò nhân viên gồm `OPERATOR`, `ADMIN`, `MANAGE`, `ADVISING`; `CUSTOMER` chỉ đọc dữ liệu được phép như mục 2/4.
 - RBAC cấu hình quyền theo nhóm chức năng, cấp độ dữ liệu (`OWN`, `ASSIGNED`, `BRANCH`, `ALL`) và node trong cây chi nhánh tổng → chi nhánh con; cho phép role tùy chỉnh từ permission catalog trong phạm vi được ủy quyền. Backend thực thi permission + scope; không cho tự nâng quyền; thay đổi nhạy cảm được audit.
 - File task: PDF/JPG/JPEG/PNG tối đa 10 MB; file import: CSV/XLSX tối đa 20 MB. Lưu local trên server qua abstraction để có thể chuyển sang S3 sau; kiểm tra trước khi sử dụng và hỗ trợ retention/dọn file.
 

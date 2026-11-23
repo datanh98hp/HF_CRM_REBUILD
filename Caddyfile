@@ -1,0 +1,40 @@
+localhost {
+	tls internal
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle /health {
+		reverse_proxy api:3001
+	}
+
+	handle /ready {
+		reverse_proxy api:3001
+	}
+
+	handle /api/docs* {
+		reverse_proxy api:3001
+	}
+
+	reverse_proxy web:3000
+}
+
+
+
+{$WEB_DOMAIN:crm.example.com} {
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN:api.crm.example.com} {
+	reverse_proxy api:3001 {
+		lb_policy round_robin
+		lb_try_duration 10s
+		lb_try_interval 250ms
+		health_uri /ready
+		health_interval 10s
+		health_timeout 3s
+		fail_duration 30s
+	}
+}
+

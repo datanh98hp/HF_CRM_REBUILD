@@ -25,6 +25,7 @@ import {
   AssignCustomerDto,
   BulkAssignCustomersDto,
   ConfirmContractOtpDto,
+  CreateLoanContractDisbursementDto,
   ContractListQueryDto,
   ContractStatusReasonDto,
   ChangeCustomerStatusDto,
@@ -67,6 +68,16 @@ export class CustomersController {
   @Get('customers/:customerId')
   customerDetail(@CurrentActor() actor: ActorContext, @Param('customerId', ParseUUIDPipe) customerId: string) {
     return this.customers.detail(actor, customerId);
+  }
+
+  @RequirePermission('customers.read')
+  @Get('customers/:customerId/status-history')
+  customerStatusHistory(
+    @CurrentActor() actor: ActorContext,
+    @Param('customerId', ParseUUIDPipe) customerId: string,
+    @Query('cursor', new ParseUUIDPipe({ optional: true })) cursor?: string,
+  ) {
+    return this.customers.customerStatusHistory(actor, customerId, cursor);
   }
 
   @RequirePermission('customers.manage')
@@ -295,5 +306,17 @@ export class CustomersController {
   @Post('loan-contracts/:contractId/confirm-completion')
   confirmCompletion(@CurrentActor() actor: ActorContext, @Param('contractId', ParseUUIDPipe) contractId: string, @Body() dto: ConfirmContractOtpDto, @Req() request: ActorRequest) {
     return this.customers.confirmCompletion(actor, contractId, dto.code, request);
+  }
+
+  @RequirePermission('loan-contracts.status.manage')
+  @Post('loan-contracts/:contractId/disbursements')
+  recordLoanContractDisbursement(
+    @CurrentActor() actor: ActorContext,
+    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Body() dto: CreateLoanContractDisbursementDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: ActorRequest,
+  ) {
+    return this.customers.recordLoanContractDisbursement(actor, contractId, dto, idempotencyKey, request);
   }
 }

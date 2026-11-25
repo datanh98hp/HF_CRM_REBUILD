@@ -137,6 +137,7 @@ describe('TasksService', () => {
         findFirst: jest.fn(async () => assignment()),
       },
       taskResult: { findUnique: jest.fn(async () => null) },
+      userRoleGrant: { findFirst: jest.fn(async () => null) },
       fileAsset: { findMany: jest.fn(async () => []) },
       user: {
         findFirst: jest.fn(async () => ({ id: actor.id })),
@@ -424,6 +425,44 @@ describe('TasksService', () => {
       where: { id: assignmentId },
       data: { status: TaskStatus.IN_PROGRESS },
     });
+  });
+
+  it('allows an ADMIN to verify their own submitted revision', async () => {
+    prisma.taskResult.findUnique.mockResolvedValue({
+      id: resultId,
+      taskId,
+      assignmentId,
+      submittedById: actor.id,
+      assignment: { assigneeId: actor.id, results: [{ id: resultId }] },
+      task: { id: taskId, branchId, plan: { deletedAt: null } },
+      verification: null,
+    });
+    prisma.userRoleGrant.findFirst.mockResolvedValue({ id: 'admin-grant' });
+
+    await expect(service.verifyResult(actor, resultId, {
+      status: TaskVerificationStatus.VERIFIED,
+    })).resolves.toMatchObject({ status: TaskVerificationStatus.VERIFIED });
+    expect(prisma.userRoleGrant.findFirst).toHaveBeenCalledWith({
+      where: { userId: actor.id, branchId: null, role: { key: { in: ['ADMIN', 'OPERATOR'] } } },
+      select: { id: true },
+    });
+  });
+
+  it('allows a global OPERATOR to verify their own submitted revision', async () => {
+    prisma.taskResult.findUnique.mockResolvedValue({
+      id: resultId,
+      taskId,
+      assignmentId,
+      submittedById: actor.id,
+      assignment: { assigneeId: actor.id, results: [{ id: resultId }] },
+      task: { id: taskId, branchId, plan: { deletedAt: null } },
+      verification: null,
+    });
+    prisma.userRoleGrant.findFirst.mockResolvedValue({ id: 'operator-grant' });
+
+    await expect(service.verifyResult(actor, resultId, {
+      status: TaskVerificationStatus.VERIFIED,
+    })).resolves.toMatchObject({ status: TaskVerificationStatus.VERIFIED });
   });
 
   it('completes only the verified recipient assignment while peers remain open', async () => {

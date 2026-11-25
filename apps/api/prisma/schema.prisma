@@ -194,6 +194,7 @@ model User {
   createdLoanContracts LoanContract[] @relation("LoanContractCreator")
   approvedLoanContracts LoanContract[] @relation("LoanContractApprover")
   loanContractStatusChanges LoanContractStatusHistory[] @relation("LoanContractStatusActor")
+  recordedLoanDisbursements LoanContractDisbursement[] @relation("LoanContractDisbursementRecorder")
   contractDocuments LoanContractDocument[] @relation("LoanContractDocumentUploader")
   contractChanges LoanContractChangeHistory[] @relation("LoanContractChangeActor")
   createdPlans Plan[] @relation("PlanCreator")
@@ -511,6 +512,7 @@ model LoanContract {
   createdBy          User?                       @relation("LoanContractCreator", fields: [createdById], references: [id], onDelete: SetNull)
   approvedBy         User?                       @relation("LoanContractApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   statusHistory      LoanContractStatusHistory[]
+  disbursements      LoanContractDisbursement[]
   documents          LoanContractDocument[]
   changeHistory      LoanContractChangeHistory[]
   otpChallenges      ContractOtpChallenge[]
@@ -521,6 +523,22 @@ model LoanContract {
   @@index([customerId, createdAt])
   @@index([branchId, status, createdAt])
   @@index([sourceSystem, receivedAt])
+}
+
+model LoanContractDisbursement {
+  id                 String       @id @default(uuid()) @db.Uuid
+  contractId         String       @db.Uuid
+  amount             Decimal      @db.Decimal(18, 2)
+  disbursedAt        DateTime     @db.Timestamptz(3)
+  recordedById       String       @db.Uuid
+  idempotencyKeyHash String       @unique @db.Char(64)
+  requestPayloadHash String       @db.Char(64)
+  contract           LoanContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  recordedBy         User         @relation("LoanContractDisbursementRecorder", fields: [recordedById], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([contractId, disbursedAt])
+  @@index([recordedById, createdAt])
 }
 
 model LoanContractStatusHistory {

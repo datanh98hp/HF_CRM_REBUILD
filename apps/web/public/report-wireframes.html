@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wireframe báo cáo · Finance CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style type="text/tailwindcss">
+    @theme inline {
+      --font-sans: var(--app-font);
+      --color-background: var(--background);
+      --color-foreground: var(--foreground);
+      --color-card: var(--card);
+      --color-card-foreground: var(--card-foreground);
+      --color-popover: var(--popover);
+      --color-popover-foreground: var(--popover-foreground);
+      --color-primary: var(--primary);
+      --color-primary-foreground: var(--primary-foreground);
+      --color-secondary: var(--secondary);
+      --color-secondary-foreground: var(--secondary-foreground);
+      --color-muted: var(--muted);
+      --color-muted-foreground: var(--muted-foreground);
+      --color-accent: var(--accent);
+      --color-accent-foreground: var(--accent-foreground);
+      --color-border: var(--border);
+      --color-input: var(--input);
+      --color-ring: var(--ring);
+      --color-sidebar: var(--sidebar);
+      --color-sidebar-foreground: var(--sidebar-foreground);
+      --color-sidebar-primary: var(--sidebar-primary);
+      --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+      --color-sidebar-accent: var(--sidebar-accent);
+      --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+      --color-chart-1: var(--chart-1);
+      --color-chart-2: var(--chart-2);
+      --color-chart-3: var(--chart-3);
+      --color-chart-4: var(--chart-4);
+      --color-chart-5: var(--chart-5);
+      --radius-lg: var(--radius);
+      --radius-xl: calc(var(--radius) * 1.4);
+      --radius-2xl: calc(var(--radius) * 1.8);
+    }
+
+    :root {
+      color-scheme: light;
+      --app-font: "Geist", ui-sans-serif, system-ui, sans-serif;
+      --background: oklch(0.982 0.004 180);
+      --foreground: oklch(0.22 0.018 190);
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.22 0.018 190);
+      --popover: oklch(1 0 0);
+      --popover-foreground: oklch(0.22 0.018 190);
+      --primary: oklch(0.49 0.09 178);
+      --primary-foreground: oklch(0.99 0.004 180);
+      --secondary: oklch(0.955 0.008 180);
+      --secondary-foreground: oklch(0.29 0.024 185);
+      --muted: oklch(0.955 0.006 180);
+      --muted-foreground: oklch(0.52 0.018 190);
+      --accent: oklch(0.94 0.025 178);
+      --accent-foreground: oklch(0.32 0.06 178);
+      --destructive: oklch(0.56 0.22 25);
+      --border: oklch(0.94 0.008 180);
+      --input: oklch(0.89 0.015 180);
+      --ring: oklch(0.55 0.1 178);
+      --chart-1: oklch(0.56 0.12 178);
+      --chart-2: oklch(0.63 0.1 155);
+      --chart-3: oklch(0.71 0.13 82);
+      --chart-4: oklch(0.59 0.12 225);
+      --chart-5: oklch(0.57 0.16 28);
+      --radius: 0.625rem;
+      --sidebar: oklch(0.255 0.035 185);
+      --sidebar-foreground: oklch(0.96 0.008 180);
+      --sidebar-primary: oklch(0.66 0.12 175);
+      --sidebar-primary-foreground: oklch(0.2 0.025 185);
+      --sidebar-accent: oklch(0.34 0.045 185);
+      --sidebar-accent-foreground: oklch(0.98 0.004 180);
+      --sidebar-border: oklch(0.38 0.03 185);
+      --chart-fill: var(--primary);
+      --surface-shadow: 0 1px 2px rgb(23 45 54 / .05);
+    }
+
+    :root[data-mau="xam"] {
+      --primary: #34454b;
+      --sidebar-primary: #b7c3c4;
+      --chart-fill: #34454b;
+    }
+    :root[data-mau="mau"] {
+      --primary: #16786d;
+      --primary-foreground: #fff;
+      --chart-fill: var(--primary);
+    }
+    :root[data-kieu="clean"] { --sidebar: #fff; --sidebar-foreground: #26363b; --sidebar-accent: #f0f3f3; --sidebar-accent-foreground: #172d36; --sidebar-border: #e3e9e8; }
+    :root[data-kieu="dark-sidebar"] { --sidebar: #173a3b; --sidebar-foreground: #edf7f4; --sidebar-accent: #244b4a; --sidebar-accent-foreground: #fff; --sidebar-border: #315553; }
+    :root[data-kieu="soft"] { --border: transparent; --surface-shadow: 0 8px 24px rgb(23 45 54 / .08); --app-font: "Be Vietnam Pro", ui-sans-serif, sans-serif; }
+    :root[data-kieu="midnight"] { color-scheme: dark; --background: #10191d; --foreground: #e8eff0; --card: #19262b; --card-foreground: #e8eff0; --popover: #19262b; --popover-foreground: #e8eff0; --muted: #233238; --muted-foreground: #a9b7bb; --border: rgb(210 230 230 / .12); --input: rgb(210 230 230 / .2); --sidebar: #11191d; --sidebar-foreground: #e8eff0; --sidebar-accent: #26383c; --sidebar-accent-foreground: #fff; --sidebar-border: rgb(210 230 230 / .14); --chart-fill: color-mix(in srgb, var(--primary) 70%, transparent); --app-font: "IBM Plex Sans", ui-sans-serif, sans-serif; }
+    :root[data-kieu="inset"] .wf-sidebar { background: transparent; border: 0; }
+    :root[data-kieu="inset"] .wf-content { margin: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+    :root[data-kieu="paper"] { --background: var(--card); --sidebar: var(--card); --sidebar-foreground: var(--foreground); --sidebar-accent: var(--muted); --sidebar-accent-foreground: var(--foreground); --sidebar-border: var(--input); }
+    :root[data-kieu="float"] .wf-sidebar { margin: 8px; height: calc(100dvh - 16px); border: 1px solid var(--border); border-radius: 12px; }
+    :root[data-kieu="rail"] .wf-sidebar { width: 76px; }
+    :root[data-kieu="rail"] .nav-group-label, :root[data-kieu="rail"] .nav-label, :root[data-kieu="rail"] .brand-name, :root[data-kieu="rail"] .user-copy { display: none; }
+    :root[data-kieu="topbar"] .wf-sidebar { display: none; }
+    :root[data-kieu="editorial"] { --border: transparent; }
+    :root[data-kieu="editorial"] .report-card { border: 0; border-top: 2px solid var(--foreground); border-radius: 0; background: transparent; box-shadow: none; }
+    :root[data-kieu="editorial"] .metric-value { font-size: 2rem; }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--background); color: var(--foreground); font-family: var(--app-font); font-size: 14px; }
+    button, a { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+    .wf-bar { position: relative; z-index: 60; display: flex; align-items: center; gap: 18px; height: 56px; padding: 0 12px; overflow-x: auto; white-space: nowrap; background: #fff; border-bottom: 1px solid #e3e9e8; color: #647278; font: 13px/1 Geist, sans-serif; }
+    .wf-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .wf-label { color: #737d81; }
+    .wf-set { display: flex; align-items: center; gap: 3px; flex-shrink: 0; padding: 3px; border-radius: 9px; background: #f0f2f2; }
+    .wf-set a, .wf-set button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 30px; padding: 0 9px; border: 0; border-radius: 7px; color: #65747b; background: transparent; text-decoration: none; }
+    .wf-set a:hover, .wf-set button:hover { color: #172d36; }
+    .wf-set a[aria-current="page"], .wf-set button[aria-pressed="true"] { background: #fff; color: #172d36; font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04); }
+    [data-wf-param="v"] a { min-width: 28px; padding: 0 8px; }
+    [data-wf-param="v"] a[data-recommended]::after { content: ""; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: #16786d; }
+    .wf-flags a { padding: 0 8px; }
+    .wf-flags a::before { content: ""; width: 12px; height: 12px; border: 1.5px solid #a3abad; border-radius: 3px; }
+    .wf-flags a[aria-pressed="true"]::before { border-color: #172d36; background: #172d36; }
+    .wf-switch { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; color: #647278; }
+    .wf-switch i { position: relative; width: 34px; height: 20px; border-radius: 10px; background: #d7ddde; }
+    .wf-switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .18); transition: translate .15s; }
+    .wf-switch[aria-checked="true"] i { background: #16786d; }
+    .wf-switch[aria-checked="true"] i::after { translate: 14px 0; }
+    .wf-menu { position: relative; flex-shrink: 0; }
+    .wf-menu summary { display: flex; align-items: center; gap: 5px; height: 34px; padding: 0 8px; border-radius: 8px; cursor: pointer; list-style: none; }
+    .wf-menu summary::-webkit-details-marker { display: none; }
+    .wf-menu summary:hover, .wf-menu[open] summary { background: #f0f2f2; }
+    .wf-menu summary b { color: #172d36; font-weight: 600; }
+    .wf-popover { position: fixed; z-index: 70; display: grid; gap: 4px; min-width: 190px; max-height: 70vh; overflow-y: auto; padding: 5px; border: 1px solid #dfe5e5; border-radius: 10px; background: #fff; color: #26373c; box-shadow: 0 10px 24px rgb(16 35 40 / .14); }
+    .wf-popover a { display: flex; align-items: center; min-height: 34px; padding: 0 9px; border-radius: 6px; }
+    .wf-popover a:hover, .wf-popover a[aria-current="page"] { background: #f0f4f3; }
+    .wf-popover a[aria-current="page"] { font-weight: 600; }
+    .wf-popover small { margin-left: auto; color: #16786d; font-size: 10px; }
+    .wf-reason { border-bottom: 1px solid #e3e9e8; background: #fbfcfc; color: #3e4c50; font: 12px/1.45 Geist, sans-serif; }
+    .wf-reason summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 40px; padding: 6px 12px; cursor: pointer; list-style: none; }
+    .wf-reason summary::-webkit-details-marker { display: none; }
+    .wf-reason-name { color: #172d36; font-weight: 600; }
+    .wf-reason-tag { flex-shrink: 0; padding: 2px 7px; border-radius: 10px; background: #eaf3f1; color: #24685f; font-size: 11px; }
+    .wf-reason-why { flex: 1; min-width: 0; color: #4b5c60; }
+    .wf-reason-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: #26373c; }
+    .wf-reason-toggle svg { width: 14px; height: 14px; transition: rotate .15s; }
+    .wf-reason[open] .wf-reason-toggle svg { rotate: 180deg; }
+    .wf-reason-body { display: grid; gap: 14px; padding: 6px 12px 14px; }
+    .wf-reason-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 28px; max-width: 1100px; }
+    .wf-reason h3 { margin: 0 0 4px; color: #26373c; font-size: 11px; font-weight: 600; }
+    .wf-reason ul { display: grid; gap: 3px; margin: 0; padding-left: 16px; }
+    .wf-reason li, .wf-reason p { margin: 0; }
+    .wf-reason-tips { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-top: 10px; border-top: 1px solid #e4e9e8; }
+    .wf-reason-tips h3 { margin: 0 4px 0 0; }
+    .wf-reason-tips button { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 1px solid #dfe5e5; border-radius: 8px; background: #fff; color: #26373c; font: inherit; white-space: nowrap; }
+    .wf-reason-tips button svg { width: 13px; height: 13px; }
+    .wf-reason-tips [data-icon="copied"], .wf-reason-tips button[data-copied] [data-icon="copy"] { display: none; }
+    .wf-reason-tips button[data-copied] [data-icon="copied"] { display: block; color: #16835d; }
+    body[data-gon="1"] [data-wf-gon], body[data-bolap="1"] [data-wf-lap] { display: none !important; }
+    body[data-frame] .wf-bar, body[data-frame] .wf-reason { display: none; }
+    body:not([data-kho="mobile"]) [data-wf-param="nav"] { display: none; }
+    [data-wf-block] { position: relative; }
+    [data-wf-block]::before { content: attr(data-wf-block); position: absolute; top: 4px; left: 4px; z-index: 5; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 9px; background: #26373c; color: #fff; font-size: 10px; }
+    [data-wf-block][data-wf-block-out]::before { top: auto; bottom: 100%; }
+
+    .wf-design { min-height: calc(100vh - 96px); }
+    .wf-app { display: flex; min-height: calc(100vh - 96px); }
+    .wf-sidebar { position: sticky; top: 0; display: flex; flex: 0 0 252px; flex-direction: column; width: 252px; height: 100vh; overflow-y: auto; border-right: 1px solid var(--sidebar-border); background: var(--sidebar); color: var(--sidebar-foreground); }
+    .brand { display: flex; align-items: center; gap: 9px; min-height: 64px; padding: 0 18px; border-bottom: 1px solid var(--sidebar-border); }
+    .brand-mark { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-weight: 700; }
+    .brand-name { font-size: 15px; font-weight: 600; }
+    .wf-nav { display: grid; gap: 15px; padding: 16px 10px; }
+    .nav-group { display: grid; gap: 3px; }
+    .nav-group-label { padding: 0 9px; color: color-mix(in srgb, var(--sidebar-foreground) 62%, transparent); font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+    .nav-link { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 8px; color: color-mix(in srgb, var(--sidebar-foreground) 83%, transparent); font-size: 12px; white-space: nowrap; }
+    .nav-link svg { width: 15px; height: 15px; flex: 0 0 auto; }
+    .nav-link[aria-current="page"] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); font-weight: 600; }
+    .nav-link.is-disabled { opacity: .5; }
+    .sidebar-user { display: flex; align-items: center; gap: 9px; margin-top: auto; padding: 13px 15px; border-top: 1px solid var(--sidebar-border); }
+    .avatar { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #d9e8e4; color: #285d56; font-weight: 600; }
+    .user-copy { display: grid; min-width: 0; gap: 2px; font-size: 11px; }
+    .user-copy small { color: color-mix(in srgb, var(--sidebar-foreground) 65%, transparent); }
+    .wf-main { min-width: 0; flex: 1; }
+    .wf-topnav { display: none; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; min-height: 56px; gap: 12px; padding: 0 22px; border-bottom: 1px solid var(--border); background: var(--card); }
+    .topbar-crumb { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; }
+    .topbar-crumb strong { overflow: hidden; color: var(--foreground); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar-user { display: flex; align-items: center; gap: 8px; color: var(--foreground); font-size: 12px; white-space: nowrap; }
+    .mobile-menu { display: none; }
+    .wf-page { max-width: 1440px; margin: 0 auto; padding: 22px 24px 32px; }
+    .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .page-heading h1 { margin: 0; font-size: 21px; line-height: 1.25; font-weight: 600; letter-spacing: -.02em; }
+    .page-heading p { margin: 5px 0 0; color: var(--muted-foreground); font-size: 12px; }
+    .sample-tag { flex: 0 0 auto; border-radius: 7px; padding: 4px 8px; background: var(--muted); color: var(--muted-foreground); font-size: 10px; }
+    .filter-panel { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+    .periods { display: flex; align-items: center; gap: 3px; padding: 3px; border-radius: 9px; background: var(--muted); }
+    .periods button { min-width: 48px; height: 30px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); font-size: 11px; }
+    .periods button[aria-pressed="true"] { background: var(--card); color: var(--foreground); font-weight: 600; box-shadow: var(--surface-shadow); }
+    .period-right { display: flex; align-items: center; gap: 7px; }
+    .date-range { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid var(--input); border-radius: 8px; background: var(--card); color: var(--foreground); font-size: 11px; white-space: nowrap; }
+    .date-range svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+    .range-nav { display: flex; gap: 2px; }
+    .range-nav button { display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); }
+    .range-nav svg { width: 15px; height: 15px; }
+    .metric-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+    .metric { min-width: 0; padding: 14px 16px; }
+    .metric + .metric { border-left: 1px solid var(--border); }
+    .metric-label { display: block; margin-bottom: 7px; color: var(--muted-foreground); font-size: 11px; }
+    .metric-value { display: block; color: var(--foreground); font-size: 21px; line-height: 1.1; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .metric-note { display: block; margin-top: 5px; color: var(--muted-foreground); font-size: 10px; line-height: 1.35; }
+    .report-card { min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: var(--surface-shadow); }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 15px 16px 8px; }
+    .card-head h2 { margin: 0; font-size: 14px; line-height: 1.35; font-weight: 600; }
+    .card-head p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 10px; }
+    .card-body { padding: 8px 16px 16px; }
+    .story-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(220px, .85fr); gap: 14px; margin-bottom: 14px; align-items: start; }
+    .chart-area { display: flex; height: 204px; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 4px 4px 0; border-bottom: 1px solid var(--border); }
+    .bar-item { display: flex; height: 100%; min-width: 0; flex: 1; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; }
+    .bar-value { color: var(--muted-foreground); font-size: 9px; font-variant-numeric: tabular-nums; }
+    .bar { width: min(100%, 28px); min-height: 4px; border-radius: 5px 5px 0 0; background: var(--chart-fill); }
+    .bar.is-current { opacity: .38; }
+    .bar-label { margin-top: 7px; color: var(--muted-foreground); font-size: 9px; white-space: nowrap; }
+    .chart-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--muted-foreground); font-size: 10px; }
+    .chart-foot strong { color: var(--foreground); font-weight: 500; }
+    .status-list { display: grid; gap: 0; }
+    .status-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 38px; border-bottom: 1px solid var(--border); font-size: 11px; }
+    .status-row:last-child { border-bottom: 0; }
+    .status-count { color: var(--foreground); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .status-note { grid-column: 1 / -1; margin-top: -6px; padding-bottom: 7px; color: var(--muted-foreground); font-size: 9px; }
+    .badge { display: inline-flex; align-items: center; min-height: 20px; border-radius: 6px; padding: 1px 7px; background: #ecfdf5; color: #007a55; font-size: 10px; font-weight: 500; white-space: nowrap; }
+    .badge.neutral { background: #f4f4f5; color: #52525c; }
+    .badge.warning { background: #fffbeb; color: #bb4d00; }
+    .detail-table-wrap { overflow-x: auto; }
+    .detail-table { width: 100%; min-width: 690px; border-collapse: collapse; font-size: 10px; text-align: left; }
+    .detail-table th { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 9px; font-weight: 500; white-space: nowrap; }
+    .detail-table td { height: 39px; padding: 5px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .detail-table tbody tr:last-child td { border-bottom: 0; }
+    .detail-table tbody tr:hover { background: color-mix(in srgb, var(--foreground) 3%, transparent); }
+    .detail-table td:first-child, .detail-table th:first-child { position: sticky; left: 0; background: var(--card); }
+    .detail-table td:first-child { max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .detail-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .long-name { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
+    .empty-state, .error-state { padding: 46px 16px; text-align: center; color: var(--muted-foreground); font-size: 12px; }
+    .error-state strong { display: block; margin-bottom: 4px; color: #b42318; font-size: 12px; }
+    .loading-state { padding: 16px; }
+    .skeleton { height: 12px; margin: 10px 0; border-radius: 6px; background: color-mix(in srgb, var(--foreground) 8%, transparent); }
+    .skeleton.tall { height: 170px; }
+    .topnav-links { display: none; }
+    .drawer-backdrop { display: none; }
+    .drawer { display: none; }
+    .data-source { margin-top: 8px; color: var(--muted-foreground); font-size: 9px; }
+    @media (max-width: 900px) {
+      .wf-sidebar { flex-basis: 210px; width: 210px; }
+      .wf-page { padding: 18px 16px 28px; }
+      .metric { padding: 12px; }
+      .metric-value { font-size: 19px; }
+    }
+    @media (max-width: 760px) {
+      .wf-app { min-height: 100dvh; }
+      .wf-sidebar { display: none; }
+      .wf-main { width: 100%; }
+      .topbar { min-height: 50px; padding: 0 12px; }
+      .mobile-menu { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); }
+      .topbar { justify-content: flex-start; }
+      .topbar-crumb { flex: 1; }
+      .topbar-user { display: none; }
+      .wf-page { padding: 16px 12px 24px; }
+      .page-heading { margin-bottom: 14px; }
+      .page-heading h1 { font-size: 18px; }
+      .page-heading p { max-width: 270px; line-height: 1.45; }
+      .filter-panel { align-items: flex-start; flex-direction: column; gap: 9px; padding: 9px; }
+      .period-scroller { width: 100%; overflow-x: auto; }
+      .periods { width: max-content; }
+      .periods button { min-width: 48px; }
+      .period-right { width: 100%; justify-content: space-between; }
+      .metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric { min-height: 84px; padding: 12px; }
+      .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--border); }
+      .metric:nth-child(4) { border-top: 1px solid var(--border); }
+      .metric-value { font-size: 18px; }
+      .story-grid { grid-template-columns: minmax(0, 1fr); }
+      .chart-area { height: 180px; }
+      .card-head { padding: 13px 12px 8px; }
+      .card-body { padding: 7px 12px 13px; }
+      .wf-reason-cols { grid-template-columns: minmax(0, 1fr); }
+      .wf-reason-why { order: 1; flex-basis: 100%; }
+      .wf-reason-toggle { margin-left: auto; }
+      .wf-reason-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      .wf-reason-tips h3 { flex-basis: 100%; }
+      .drawer-backdrop { position: fixed; inset: 0; z-index: 40; display: none; border: 0; background: rgb(0 0 0 / .42); }
+      .drawer { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; width: 280px; max-width: calc(100vw - 44px); height: 100dvh; translate: -100% 0; transition: translate .35s; }
+      body[data-menu-open] .drawer-backdrop { display: block; }
+      body[data-menu-open] .drawer { translate: 0 0; }
+    }
+    @media (max-width: 420px) {
+      .sample-tag { font-size: 9px; }
+      .date-range { max-width: calc(100vw - 130px); overflow: hidden; text-overflow: ellipsis; }
+      .metric-label { min-height: 28px; line-height: 1.35; }
+      .detail-table { min-width: 700px; }
+    }
+    @media (min-width: 761px) {
+      :root[data-kieu="topbar"] .wf-sidebar { display: none; }
+      :root[data-kieu="topbar"] .topnav-links { display: flex; align-items: center; gap: 18px; }
+      :root[data-kieu="topbar"] .wf-app { display: block; }
+      :root[data-kieu="topbar"] .wf-page { max-width: 1152px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="wf-bar" aria-label="Điều khiển wireframe">
+    <div class="wf-group">
+      <span class="wf-label">Màn</span>
+      <details class="wf-menu">
+        <summary><b data-wf-current="man">Hợp đồng vay</b><i data-lucide="chevron-down"></i></summary>
+        <div class="wf-popover" data-wf-param="man">
+          <a data-value="khachhang">Khách hàng</a>
+          <a data-value="kehoach">Kế hoạch</a>
+          <a data-value="tonghop">Tổng hợp</a>
+          <a data-value="vay">Hợp đồng vay & sản phẩm</a>
+        </div>
+      </details>
+    </div>
+    <div class="wf-group">
+      <span class="wf-label">Phương án</span>
+      <span class="wf-set" data-wf-param="v">
+        <a data-value="a" data-recommended title="A · Kể bằng số (khuyên dùng)">A</a>
+        <a data-value="b" title="B · Biểu đồ trước">B</a>
+        <a data-value="c" title="C · Bảng trước">C</a>
+      </span>
+    </div>
+    <span class="wf-set wf-flags">
+      <a href="#" data-wf-toggle="gon" data-on="1" data-off="0" aria-pressed="false">Gọn chữ</a>
+      <a href="#" data-wf-toggle="bolap" data-on="1" data-off="0" aria-pressed="false">Bỏ lặp</a>
+    </span>
+    <a class="wf-switch" href="#" data-wf-toggle="mau" data-on="mau" data-off="xam" role="switch" aria-checked="false">Màu <i></i></a>
+    <div class="wf-group">
+      <span class="wf-label">Kiểu</span>
+      <details class="wf-menu">
+        <summary><b data-wf-current="kieu">Dark Sidebar</b><i data-lucide="chevron-down"></i></summary>
+        <div class="wf-popover" data-wf-param="kieu">
+          <a data-value="clean">Clean</a>
+          <a data-value="dark-sidebar">Dark Sidebar <small>khuyên dùng</small></a>
+          <a data-value="soft">Soft</a>
+          <a data-value="midnight">Midnight</a>
+          <a data-value="inset">Inset</a>
+          <a data-value="paper">Paper</a>
+          <a data-value="float">Float</a>
+          <a data-value="rail">Rail</a>
+          <a data-value="topbar">Topbar</a>
+          <a data-value="editorial">Editorial</a>
+        </div>
+      </details>
+    </div>
+    <span class="wf-set" data-wf-param="kho">
+      <a data-value="desktop" aria-label="Desktop"><i data-lucide="monitor"></i>Desktop</a>
+      <a data-value="mobile" aria-label="Mobile"><i data-lucide="smartphone"></i>Mobile</a>
+    </span>
+    <div class="wf-group">
+      <span class="wf-label">Trạng thái</span>
+      <details class="wf-menu">
+        <summary><b data-wf-current="tt">Có dữ liệu</b><i data-lucide="chevron-down"></i></summary>
+        <div class="wf-popover" data-wf-param="tt">
+          <a data-value="du-lieu">Có dữ liệu</a>
+          <a data-value="dang-tai">Đang tải</a>
+          <a data-value="rong">Rỗng</a>
+          <a data-value="loi">Lỗi</a>
+        </div>
+      </details>
+    </div>
+  </nav>
+  <details class="wf-reason" data-wf-reason>
+    <summary>
+      <span class="wf-reason-name" data-reason-name>A · Kể bằng số</span>
+      <span class="wf-reason-tag">Khuyên dùng</span>
+      <span class="wf-reason-why" data-reason-why>Lãnh đạo và nhân viên nhìn chỉ số chính trước, rồi lần theo xu hướng và sản phẩm có hồ sơ vay.</span>
+      <span class="wf-reason-toggle"><span>Ưu, nhược</span><i data-lucide="chevron-down"></i></span>
+    </summary>
+    <div class="wf-reason-body">
+      <div class="wf-reason-cols">
+        <section><h3>Ưu</h3><ul data-reason-pros><li>Số chính, xu hướng và bảng sản phẩm đọc theo một mạch.</li><li>Liên kết số liệu sản phẩm với số hồ sơ ngay trong trang.</li></ul></section>
+        <section><h3>Nhược</h3><ul data-reason-cons><li>Bảng chi tiết nằm dưới biểu đồ, cần cuộn để đối so từng sản phẩm.</li></ul></section>
+        <section><h3>Hợp khi</h3><p data-reason-best>Muốn nắm nhanh kết quả kỳ báo cáo và sau đó kiểm tra sản phẩm/hồ sơ cụ thể.</p></section>
+      </div>
+      <div class="wf-reason-tips">
+        <h3>Gợi ý góp ý</h3>
+        <button type="button" data-copy="Đưa bảng sản phẩm lên trước biểu đồ"><span>Đưa bảng sản phẩm lên trước biểu đồ</span><i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+        <button type="button" data-copy="Hiện riêng hồ sơ chờ duyệt"><span>Hiện riêng hồ sơ chờ duyệt</span><i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+        <button type="button" data-copy="Gọn phần bộ lọc thời gian"><span>Gọn phần bộ lọc thời gian</span><i data-lucide="copy" data-icon="copy"></i><i data-lucide="check" data-icon="copied"></i></button>
+      </div>
+    </div>
+  </details>
+  <main id="wf-design" class="wf-design"></main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const defaults = { man: "vay", v: "a", gon: "0", bolap: "0", mau: "xam", kieu: "dark-sidebar", kho: "desktop", tt: "du-lieu", ky: "month", off: "0", uu: "0" };
+    const state = { ...defaults };
+    for (const key of Object.keys(state)) state[key] = params.get(key) || defaults[key];
+    Object.assign(document.body.dataset, state);
+    if (params.has("frame")) document.body.dataset.frame = "1";
+    Object.assign(document.documentElement.dataset, { mau: state.mau, kieu: state.kieu });
+
+    const reportNames = {
+      khachhang: "Khách hàng",
+      kehoach: "Kế hoạch",
+      tonghop: "Báo cáo tổng hợp",
+      vay: "Hợp đồng vay & sản phẩm vay",
+    };
+    const rangeNames = {
+      day: "25/11/2026",
+      week: "23–29/11/2026",
+      month: "01–25/11/2026",
+      quarter: "01/10–25/11/2026",
+      year: "01/01–25/11/2026",
+    };
+    const rangeLabels = { day: "Ngày", week: "Tuần", month: "Tháng", quarter: "Quý", year: "Năm" };
+    const reasonData = {
+      a: {
+        name: "A · Kể bằng số",
+        why: "Lãnh đạo và nhân viên nhìn chỉ số chính trước, rồi lần theo xu hướng và sản phẩm có hồ sơ vay.",
+        pros: ["Số chính, xu hướng và bảng sản phẩm đọc theo một mạch.", "Liên kết số liệu sản phẩm với số hồ sơ ngay trong trang."],
+        cons: ["Bảng chi tiết nằm dưới biểu đồ, cần cuộn để đối so từng sản phẩm."],
+        best: "Muốn nắm nhanh kết quả kỳ báo cáo và sau đó kiểm tra sản phẩm/hồ sơ cụ thể.",
+      },
+      b: {
+        name: "B · Biểu đồ trước",
+        why: "Đặt biến động theo thời gian lên trước để phát hiện kỳ tăng/giảm rồi mới đọc số cụ thể.",
+        pros: ["Xu hướng theo kỳ là phần nổi bật nhất.", "Hợp khi so sánh ngày, tuần, tháng, quý hoặc năm."],
+        cons: ["Các chỉ số chính và bảng sản phẩm bị đẩy xuống dưới biểu đồ."],
+        best: "Người xem cần tìm xu hướng trước, ít đối chiếu từng hồ sơ.",
+      },
+      c: {
+        name: "C · Bảng trước",
+        why: "Đưa danh sách sản phẩm/hồ sơ lên ngay sau bộ lọc để đối chiếu từng dòng.",
+        pros: ["So sánh từng sản phẩm và trạng thái hồ sơ nhanh.", "Ít phải cuộn khi cần kiểm tra tên và số liệu."],
+        cons: ["Xu hướng tổng thể lùi xuống sau bảng, kém nổi bật hơn."],
+        best: "Nhân viên thường dò sản phẩm, trạng thái hoặc hồ sơ cụ thể.",
+      },
+    };
+
+    const products = [
+      { name: "Gói hỗ trợ ngắn hạn", apps: 214, approved: 128, pending: 34, rejected: 52, disbursed: 74, amount: "2,4 tỷ", rate: "75,0%" },
+      { name: "Gói sản phẩm trung, dài hạn", apps: 286, approved: 172, pending: 48, rejected: 66, disbursed: 129, amount: "15,0 tỷ", rate: "75,0%" },
+      { name: "Gói hỗ trợ mua sắm tiêu dùng", apps: 154, approved: 102, pending: 25, rejected: 27, disbursed: 80, amount: "4,1 tỷ", rate: "68,3%" },
+      { name: "Gói hỗ trợ thế chấp bất động sản", apps: 112, approved: 69, pending: 19, rejected: 24, disbursed: 45, amount: "36,0 tỷ", rate: "72,0%" },
+      { name: "Vay thế chấp mua xe ô tô gia đình 7 chỗ", apps: 76, approved: 44, pending: 13, rejected: 19, disbursed: 32, amount: "7,2 tỷ", rate: "72,0%" },
+    ];
+    const chartData = [
+      { label: "T1", value: 42, amount: "8,4" }, { label: "T2", value: 56, amount: "11,2" },
+      { label: "T3", value: 48, amount: "9,6" }, { label: "T4", value: 68, amount: "13,6" },
+      { label: "T5", value: 62, amount: "12,4" }, { label: "T6", value: 83, amount: "16,6" },
+      { label: "T7", value: 73, amount: "14,6" }, { label: "T8", value: 91, amount: "18,2" },
+      { label: "T9", value: 78, amount: "15,6" }, { label: "T10", value: 95, amount: "19,0" },
+      { label: "T11", value: 70, amount: "14,0", current: true },
+    ];
+
+    function bars(type = "amount") {
+      return chartData.map((item) => `<div class="bar-item"><span class="bar-value">${type === "amount" ? item.amount : item.value}</span><div class="bar${item.current ? " is-current" : ""}" style="height:${item.value}%"></div><span class="bar-label">${item.label}</span></div>`).join("");
+    }
+    function tableRows(report) {
+      if (report === "vay" || report === "tonghop") {
+        return products.map((item) => `<tr><td class="long-name" title="${item.name}">${item.name}</td><td class="num">${item.apps.toLocaleString("vi-VN")}</td><td class="num">${item.approved.toLocaleString("vi-VN")}</td><td class="num">${item.pending}</td><td class="num">${item.disbursed}</td><td class="num">${item.amount}</td><td class="num">${item.rate}</td></tr>`).join("");
+      }
+      if (report === "khachhang") {
+        return [
+          ["Nguyễn Thị Phương Thảo", "HN-01 · Hà Nội", "Đang chăm sóc", "25/11/2026", "18"],
+          ["Trần Minh Khánh", "HCM-02 · TP. Hồ Chí Minh", "Mới", "24/11/2026", "0"],
+          ["Công ty Cổ phần Thương mại và Dịch vụ Phương Đông", "DN-01 · Đà Nẵng", "Đang hoạt động", "22/11/2026", "36"],
+          ["Lê Hoàng Bảo Ngọc", "CT-01 · Cần Thơ", "Chờ liên hệ", "20/11/2026", "4"],
+        ].map((row, i) => `<tr><td class="long-name" title="${row[0]}">${row[0]}</td><td>${row[1]}</td><td><span class="badge${i === 3 ? " warning" : i === 1 ? " neutral" : ""}">${row[2]}</span></td><td>${row[3]}</td><td class="num">${row[4]}</td></tr>`).join("");
+      }
+      if (report === "kehoach") {
+        return [
+          ["Kế hoạch tăng trưởng khách hàng khu vực miền Bắc", "01/11–31/12/2026", "Đang thực hiện", "1.284", "76%"],
+          ["Kế hoạch giải ngân quý IV · Chi nhánh Hà Nội", "01/10–31/12/2026", "Chờ duyệt", "842", "—"],
+          ["Kế hoạch chăm sóc khách hàng mới", "01/11–30/11/2026", "Hoàn thành", "426", "100%"],
+          ["Kế hoạch mở rộng kênh giới thiệu", "01/11–31/12/2026", "Trễ hạn", "0", "42%"],
+        ].map((row, i) => `<tr><td class="long-name" title="${row[0]}">${row[0]}</td><td>${row[1]}</td><td><span class="badge${i === 1 ? " neutral" : i === 3 ? " warning" : ""}">${row[2]}</span></td><td class="num">${row[3]}</td><td class="num">${row[4]}</td></tr>`).join("");
+      }
+      return "";
+    }
+    function tableMarkup(report) {
+      const loan = report === "vay" || report === "tonghop";
+      const headers = loan
+        ? `<th>Sản phẩm vay</th><th class="num">Hồ sơ</th><th class="num">Được duyệt</th><th class="num">Chờ duyệt</th><th class="num">Đã giải ngân</th><th class="num">Số tiền giải ngân</th><th class="num">Tỷ lệ</th>`
+        : report === "khachhang"
+          ? `<th>Khách hàng</th><th>Chi nhánh</th><th>Trạng thái</th><th>Ngày tạo</th><th class="num">Hồ sơ vay</th>`
+          : `<th>Kế hoạch</th><th>Thời gian</th><th>Trạng thái</th><th class="num">Hồ sơ vay</th><th class="num">Tiến độ</th>`;
+      return `<div class="detail-table-wrap"><table class="detail-table"><thead><tr>${headers}</tr></thead><tbody>${tableRows(report)}</tbody></table></div>`;
+    }
+    function metricStrip(items) {
+      return `<section class="metric-strip" data-wf-block="3">${items.map((item) => `<div class="metric"><span class="metric-label">${item.label}</span><strong class="metric-value">${item.value}</strong><span class="metric-note">${item.note}</span></div>`).join("")}</section>`;
+    }
+    function chartCard(report) {
+      const chartTitle = report === "vay" ? "Số tiền giải ngân theo tháng" : report === "kehoach" ? "Kế hoạch theo tháng" : report === "khachhang" ? "Khách hàng mới theo tháng" : "Hồ sơ vay và giải ngân theo tháng";
+      const unit = report === "vay" ? "Tỷ đồng" : "Hồ sơ";
+      return `<section class="report-card" data-wf-block="4"><div class="card-head"><div><h2>${chartTitle}</h2><p>${unit} · Kỳ hiện tại chưa kết thúc</p></div><span class="badge neutral">Theo kỳ</span></div><div class="card-body"><div class="chart-area">${bars(report === "vay" ? "amount" : "count")}</div><div class="chart-foot"><span>Tháng 01–10</span><strong>Tháng 11 đang diễn ra</strong></div></div></section>`;
+    }
+    function breakdownCard(report) {
+      if (report === "khachhang") {
+        return `<section class="report-card" data-wf-block="5"><div class="card-head"><div><h2>Khách hàng theo trạng thái</h2><p>Trong kỳ đã chọn</p></div></div><div class="card-body"><div class="status-list"><div class="status-row"><span>Đang chăm sóc</span><span class="status-count">684</span></div><div class="status-row"><span>Đang hoạt động</span><span class="status-count">412</span></div><div class="status-row"><span>Mới</span><span class="status-count">146</span></div><div class="status-row"><span>Chờ liên hệ</span><span class="status-count">42</span></div></div></div></section>`;
+      }
+      if (report === "kehoach") {
+        return `<section class="report-card" data-wf-block="5"><div class="card-head"><div><h2>Kế hoạch theo trạng thái</h2><p>Trong kỳ đã chọn</p></div></div><div class="card-body"><div class="status-list"><div class="status-row"><span>Đang thực hiện</span><span class="status-count">18</span></div><div class="status-row"><span>Chờ duyệt</span><span class="status-count">6</span></div><div class="status-row"><span>Hoàn thành</span><span class="status-count">24</span></div><div class="status-row"><span>Trễ hạn</span><span class="status-count">3</span></div></div></div></section>`;
+      }
+      return `<section class="report-card" data-wf-block="5"><div class="card-head"><div><h2>Hồ sơ vay theo trạng thái</h2><p>842 hồ sơ trong kỳ</p></div></div><div class="card-body"><div class="status-list"><div class="status-row"><span>Được duyệt</span><span class="status-count">515 · 61,2%</span></div><div class="status-row"><span>Chờ duyệt</span><span class="status-count">139 · 16,5%</span></div><div class="status-row"><span>Không được duyệt</span><span class="status-count">188 · 22,3%</span></div></div></div></section>`;
+    }
+    function loadingMarkup() {
+      return `<section class="report-card loading-state" data-wf-block="3"><div class="skeleton" style="width:28%"></div><div class="skeleton" style="width:42%"></div><div class="skeleton tall"></div><div class="skeleton" style="width:86%"></div><div class="skeleton" style="width:70%"></div></section>`;
+    }
+    function statusMarkup() {
+      if (state.tt === "dang-tai") return loadingMarkup();
+      if (state.tt === "rong") return `<section class="report-card empty-state" data-wf-block="3">Không có hồ sơ nào trong kỳ này. Hãy chọn khoảng thời gian rộng hơn.</section>`;
+      if (state.tt === "loi") return `<section class="report-card error-state" role="alert" data-wf-block="3"><strong>Không tải được báo cáo</strong>Không thể kết nối với máy chủ.<br /><button class="date-range" type="button" style="margin-top:12px">Thử lại</button></section>`;
+      return "";
+    }
+    function reportBody(report) {
+      const contentState = statusMarkup();
+      if (contentState) return contentState;
+      const isLoan = report === "vay";
+      const metrics = report === "khachhang"
+        ? [{ label: "Khách hàng mới", value: "1.284", note: "Khách hàng tạo trong kỳ" }, { label: "Đang chăm sóc", value: "684", note: "53,3% khách mới" }, { label: "Đã có hồ sơ vay", value: "842", note: "Có hồ sơ liên kết" }, { label: "Chưa liên hệ", value: "42", note: "Cần được phân công" }]
+        : report === "kehoach"
+          ? [{ label: "Kế hoạch", value: "51", note: "Trong khoảng thời gian" }, { label: "Đang thực hiện", value: "18", note: "35,3% kế hoạch" }, { label: "Chờ duyệt", value: "6", note: "Cần xử lý" }, { label: "Hoàn thành", value: "24", note: "47,1% kế hoạch" }]
+          : report === "tonghop"
+            ? [{ label: "Khách hàng mới", value: "1.284", note: "Tạo trong kỳ" }, { label: "Kế hoạch", value: "51", note: "18 đang thực hiện" }, { label: "Hồ sơ vay", value: "842", note: "515 được duyệt" }, { label: "Đã giải ngân", value: "64,7 tỷ", note: "72,5% tiền được duyệt" }]
+            : [{ label: "Tỷ lệ giải ngân", value: "72,5%", note: "64,7 / 89,2 tỷ đồng" }, { label: "Hồ sơ được duyệt", value: "61,2%", note: "515 / 842 hồ sơ" }, { label: "Hồ sơ chờ duyệt", value: "16,5%", note: "139 / 842 hồ sơ" }, { label: "Tổng hồ sơ vay", value: "842", note: "Trong kỳ đã chọn" }];
+      const trend = chartCard(report);
+      const breakdown = breakdownCard(report);
+      const tableTitle = report === "khachhang" ? "Khách hàng trong kỳ" : report === "kehoach" ? "Kế hoạch trong kỳ" : isLoan ? "Sản phẩm vay · đối chiếu hồ sơ" : "Hồ sơ vay theo sản phẩm";
+      const description = isLoan ? "Số lượng hồ sơ và kết quả giải ngân theo từng sản phẩm" : "Bản ghi tiêu biểu trong kỳ · dữ liệu minh họa";
+      const table = `<section class="report-card" data-wf-block="6"><div class="card-head"><div><h2>${tableTitle}</h2><p>${description}</p></div><a href="#" style="color:var(--primary);font-size:10px">Xem danh sách</a></div><div class="card-body">${tableMarkup(report)}<p class="data-source">Hiển thị 5 dòng minh họa · Toàn bộ số liệu trong wireframe là giả.</p></div></section>`;
+      if (state.v === "b") return `${trend}${metricStrip(metrics)}<div class="story-grid">${breakdown}${table}</div>`;
+      if (state.v === "c") return `${metricStrip(metrics)}${table}<div class="story-grid">${trend}${breakdown}</div>`;
+      return `${metricStrip(metrics)}<div class="story-grid">${trend}${breakdown}</div>${table}`;
+    }
+    function reportMarkup(report) {
+      const title = reportNames[report];
+      const intro = report === "vay"
+        ? "Tỷ lệ giải ngân, kết quả xét duyệt và sản phẩm vay theo hồ sơ."
+        : report === "khachhang"
+          ? "Khách hàng mới, trạng thái chăm sóc và hồ sơ vay liên quan."
+          : report === "kehoach"
+            ? "Tình hình kế hoạch và tiến độ theo khoảng thời gian."
+            : "Tổng quan khách hàng, kế hoạch, hồ sơ vay và giải ngân.";
+      const periods = Object.entries(rangeLabels).map(([key, label]) => `<button type="button" data-period="${key}" aria-pressed="${state.ky === key}">${label}</button>`).join("");
+      return `<div class="wf-app">
+        <aside class="wf-sidebar">
+          <div class="brand"><span class="brand-mark">F</span><span class="brand-name">Finance CRM</span></div>
+          <nav class="wf-nav" aria-label="Điều hướng chính">
+            <section class="nav-group"><span class="nav-group-label">TỔNG QUAN</span><a class="nav-link is-disabled" href="#" aria-disabled="true"><i data-lucide="layout-dashboard"></i><span class="nav-label">Dashboard</span></a></section>
+            <section class="nav-group"><span class="nav-group-label">KHÁCH HÀNG & TƯ VẤN</span><a class="nav-link" href="#"><i data-lucide="users-round"></i><span class="nav-label">Khách hàng</span></a><a class="nav-link" href="#"><i data-lucide="file-spreadsheet"></i><span class="nav-label">Nhập khách hàng</span></a></section>
+            <section class="nav-group"><span class="nav-group-label">SẢN PHẨM & KHOẢN VAY</span><a class="nav-link" href="#"><i data-lucide="package-search"></i><span class="nav-label">Sản phẩm vay</span></a><a class="nav-link" href="#"><i data-lucide="file-check-2"></i><span class="nav-label">Quản lý Hợp đồng</span></a></section>
+            <section class="nav-group"><span class="nav-group-label">CÔNG VIỆC & KPI</span><a class="nav-link" href="#"><i data-lucide="check-square"></i><span class="nav-label">Công việc</span></a><a class="nav-link" href="#"><i data-lucide="chart-no-axes-column"></i><span class="nav-label">Kế hoạch</span></a><a class="nav-link" href="#"><i data-lucide="tags"></i><span class="nav-label">Danh mục KPI</span></a></section>
+            <section class="nav-group"><span class="nav-group-label">BÁO CÁO</span>
+              <a class="nav-link" data-report-link="khachhang"><i data-lucide="users-round"></i><span class="nav-label">Khách hàng</span></a>
+              <a class="nav-link" data-report-link="kehoach"><i data-lucide="chart-no-axes-column"></i><span class="nav-label">Kế hoạch</span></a>
+              <a class="nav-link" data-report-link="tonghop"><i data-lucide="chart-pie"></i><span class="nav-label">Báo cáo tổng hợp</span></a>
+              <a class="nav-link" data-report-link="vay"><i data-lucide="file-bar-chart"></i><span class="nav-label">Hợp đồng vay & sản phẩm vay</span></a>
+            </section>
+            <section class="nav-group"><span class="nav-group-label">QUẢN TRỊ HỆ THỐNG</span><a class="nav-link" href="#"><i data-lucide="users-round"></i><span class="nav-label">Nhân viên</span></a><a class="nav-link" href="#"><i data-lucide="building-2"></i><span class="nav-label">Chi nhánh</span></a><a class="nav-link" href="#"><i data-lucide="shield-check"></i><span class="nav-label">Vai trò & quyền</span></a></section>
+          </nav>
+          <div class="sidebar-user"><span class="avatar">A</span><span class="user-copy"><strong>Nguyễn Minh Anh</strong><small>@minhanh</small></span></div>
+        </aside>
+        <div class="drawer-backdrop" data-drawer-close></div><aside class="drawer wf-sidebar" aria-label="Điều hướng chính"></aside>
+        <section class="wf-main wf-content">
+          <header class="topbar">
+            <button type="button" class="mobile-menu" data-wf-menu aria-label="Mở menu"><i data-lucide="menu"></i></button>
+            <div class="topbar-crumb"><span class="topnav-links">Finance CRM · Khách hàng · Khoản vay · Kế hoạch · Báo cáo</span><span>Finance CRM</span><i data-lucide="chevron-right"></i><strong>${title}</strong></div>
+            <div class="topbar-user"><span class="avatar" style="width:26px;height:26px">A</span><span>Nguyễn Minh Anh</span></div>
+          </header>
+          <main class="wf-page">
+            <header class="page-heading" data-wf-block="1"><div><h1>${title}</h1><p>${intro}</p></div><span class="sample-tag">Số liệu minh họa</span></header>
+            <section class="filter-panel" data-wf-block="2">
+              <div class="period-scroller"><div class="periods" role="group" aria-label="Lọc theo thời gian">${periods}</div></div>
+              <div class="period-right">
+                <span class="date-range"><i data-lucide="calendar-days"></i><span>${rangeNames[state.ky]}</span></span>
+                <div class="range-nav"><button type="button" aria-label="Kỳ trước"><i data-lucide="chevron-left"></i></button><button type="button" aria-label="Kỳ tiếp theo"><i data-lucide="chevron-right"></i></button></div>
+              </div>
+            </section>
+            ${reportBody(report)}
+          </main>
+        </section>
+      </div>`;
+    }
+    function render() {
+      document.getElementById("wf-design").innerHTML = reportMarkup(state.man);
+      const drawer = document.querySelector(".drawer");
+      const sidebar = document.querySelector(".wf-sidebar:not(.drawer)");
+      if (drawer && sidebar) drawer.innerHTML = sidebar.innerHTML;
+      for (const link of document.querySelectorAll("[data-report-link]")) {
+        link.href = linkTo({ man: link.dataset.reportLink });
+        if (link.dataset.reportLink === state.man) link.setAttribute("aria-current", "page");
+      }
+      for (const button of document.querySelectorAll("[data-period]")) {
+        button.addEventListener("click", () => { location.href = linkTo({ ky: button.dataset.period }); });
+      }
+      for (const close of document.querySelectorAll("[data-drawer-close]")) close.addEventListener("click", () => document.body.removeAttribute("data-menu-open"));
+      for (const menu of document.querySelectorAll("[data-wf-menu]")) menu.addEventListener("click", () => document.body.toggleAttribute("data-menu-open"));
+      if (window.lucide) lucide.createIcons();
+      requestAnimationFrame(() => requestAnimationFrame(placeBlockNumbers));
+      if (state.kho === "mobile" && !params.has("frame")) {
+        const frameState = new URLSearchParams({ ...state, kho: "desktop", frame: "1" });
+        document.getElementById("wf-design").innerHTML = `<div style="display:grid;place-items:center;padding:18px"><iframe src="?${frameState}" title="Wireframe trên điện thoại" style="width:375px;max-width:100%;height:812px;border:1px solid #ccd5d5;border-radius:22px;background:#fff"></iframe></div>`;
+      }
+    }
+    function linkTo(changes) {
+      const next = new URLSearchParams({ ...state, ...changes });
+      if (state.uu === "1") next.set("uu", "1");
+      return `?${next}`;
+    }
+    function updateToolbar() {
+      for (const set of document.querySelectorAll("[data-wf-param]")) {
+        const key = set.dataset.wfParam;
+        for (const link of set.querySelectorAll("a")) {
+          link.href = linkTo({ [key]: link.dataset.value });
+          if (state[key] === link.dataset.value) {
+            link.setAttribute("aria-current", "page");
+            const current = document.querySelector(`[data-wf-current="${key}"]`);
+            if (current) current.textContent = link.textContent.trim();
+          }
+        }
+      }
+      for (const toggle of document.querySelectorAll("[data-wf-toggle]")) {
+        const key = toggle.dataset.wfToggle;
+        const isOn = state[key] === toggle.dataset.on;
+        toggle.setAttribute(toggle.getAttribute("role") === "switch" ? "aria-checked" : "aria-pressed", String(isOn));
+        toggle.href = linkTo({ [key]: isOn ? toggle.dataset.off : toggle.dataset.on });
+      }
+      for (const menu of document.querySelectorAll(".wf-menu")) {
+        menu.addEventListener("toggle", () => {
+          if (!menu.open) return;
+          const rect = menu.querySelector("summary").getBoundingClientRect();
+          Object.assign(menu.querySelector(".wf-popover").style, { top: `${rect.bottom + 5}px`, left: `${rect.left}px` });
+        });
+      }
+      document.addEventListener("click", (event) => {
+        for (const menu of document.querySelectorAll(".wf-menu")) if (!menu.contains(event.target)) menu.open = false;
+      });
+    }
+    function placeBlockNumbers() {
+      const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      for (const block of document.querySelectorAll("[data-wf-block]")) {
+        const rect = block.getBoundingClientRect();
+        const badge = { left: rect.left + 4, top: rect.top + 4, right: rect.left + 22, bottom: rect.top + 22 };
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        const content = [...block.querySelectorAll("svg")].map((node) => node.getBoundingClientRect());
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (!node.textContent.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          content.push(...range.getClientRects());
+        }
+        block.toggleAttribute("data-wf-block-out", content.some((item) => item.width > 0 && overlap(item, badge)));
+      }
+    }
+    const reason = document.querySelector("[data-wf-reason]");
+    reason.open = state.uu === "1";
+    reason.addEventListener("toggle", () => {
+      state.uu = reason.open ? "1" : "0";
+      history.replaceState(null, "", linkTo({}));
+      updateToolbar();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { document.body.removeAttribute("data-menu-open"); for (const menu of document.querySelectorAll(".wf-menu")) menu.open = false; }
+    });
+    document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(button.dataset.copy); button.setAttribute("data-copied", ""); setTimeout(() => button.removeAttribute("data-copied"), 1500); } catch { button.title = "Không thể sao chép trong trình duyệt này"; }
+    }));
+    const observer = new MutationObserver(() => { if (window.lucide && document.querySelector("i[data-lucide]")) lucide.createIcons(); });
+    observer.observe(document.body, { childList: true, subtree: true });
+    updateToolbar();
+    render();
+    addEventListener("resize", placeBlockNumbers);
+  </script>
+</body>
+</html>

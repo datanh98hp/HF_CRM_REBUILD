@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/select';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, History, X } from 'lucide-react';
 
 type Request = <T>(path: string, options?: RequestInit, accessToken?: string) => Promise<T>;
 
@@ -34,6 +34,15 @@ type Customer = {
   createdAt: string;
   updatedAt: string;
 };
+type CustomerStatusHistoryItem = {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  reason: string;
+  changedAt: string;
+  changedBy: string | null;
+};
+type CustomerStatusHistoryPage = { items: CustomerStatusHistoryItem[]; nextCursor: string | null };
 type LoanRequest = {
   id: string;
   customerId: string;
@@ -218,6 +227,17 @@ function formulaInputError(value: string, variable: FormulaInputDefinition) {
 
 function date(value: string | null) {
   return value ? new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(new Date(value)) : '—';
+}
+
+function dateTime(value: string) {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(new Date(value));
 }
 
 function formatDateOfBirth(value: string | null) {
@@ -423,6 +443,10 @@ export function CustomerWorkspace({
   const [requests, setRequests] = useState<LoanRequest[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [statusHistory, setStatusHistory] = useState<CustomerStatusHistoryItem[]>([]);
+  const [statusHistoryCursor, setStatusHistoryCursor] = useState<string | null>(null);
+  const [statusHistoryLoading, setStatusHistoryLoading] = useState(false);
+  const [statusHistoryError, setStatusHistoryError] = useState('');
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [advisers, setAdvisers] = useState<AdviserOption[]>([]);
@@ -598,6 +622,28 @@ export function CustomerWorkspace({
     void loadCustomers(customerPageCursors.current[previousPage], previousPage, version);
   }
 
+  async function loadCustomerStatusHistory(customerId: string, version: number, cursor?: string) {
+    setStatusHistoryLoading(true);
+    setStatusHistoryError('');
+    try {
+      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+      const page = await request<CustomerStatusHistoryPage>(
+        `/customers/${customerId}/status-history${query}`,
+        {},
+        accessToken,
+      );
+      if (version !== selectionVersion.current) return;
+      setStatusHistory((current) => cursor ? [...current, ...page.items] : page.items);
+      setStatusHistoryCursor(page.nextCursor);
+    } catch (err) {
+      if (version === selectionVersion.current) {
+        setStatusHistoryError(errorMessage(err, 'Không thể tải lịch sử trạng thái khách hàng.'));
+      }
+    } finally {
+      if (version === selectionVersion.current) setStatusHistoryLoading(false);
+    }
+  }
+
   async function selectCustomer(customer: Customer) {
     const version = ++selectionVersion.current;
     setSelected(customer);
@@ -605,6 +651,9 @@ export function CustomerWorkspace({
     setRequests([]);
     setContracts([]);
     setAssignments([]);
+    setStatusHistory([]);
+    setStatusHistoryCursor(null);
+    setStatusHistoryError('');
     setDuplicates([]);
     setLoadingDetail(true);
     setError('');
@@ -615,6 +664,7 @@ export function CustomerWorkspace({
     setDuplicateAction(null);
     setShowContractForm(false);
     setStatusDraft(customer.status);
+    void loadCustomerStatusHistory(customer.id, version);
 
     try {
       const [detail, loanRequests, loanContracts, customerAssignments, duplicateCandidates] = await Promise.all([
@@ -828,6 +878,7 @@ export function CustomerWorkspace({
   async function changeStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
+    const selectionVersionAtSubmit = selectionVersion.current;
     setError('');
     setNotice('');
     setSaving(true);
@@ -841,6 +892,7 @@ export function CustomerWorkspace({
       refreshCustomerPage();
       setShowStatusForm(false);
       setStatusReason('');
+      await loadCustomerStatusHistory(selected.id, selectionVersionAtSubmit);
       setNotice('Đã cập nhật trạng thái khách hàng.');
     } catch (err) {
       setError(errorMessage(err, 'Không thể cập nhật trạng thái.'));
@@ -1446,14 +1498,16 @@ export function CustomerWorkspace({
                       <div><dt className="text-slate-500">Tạo lúc</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.createdAt)}</dd></div>
                     </dl>}
 
-                  {canManageCustomers && <section className="border-t border-slate-200 py-4" aria-labelledby="customer-status-heading">
+                  <section className="border-t border-slate-200 py-4" aria-labelledby="customer-status-heading">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 id="customer-status-heading" className="font-semibold text-slate-950">Trạng thái khách hàng</h3>
-                      <button type="button" className="text-sm font-semibold text-teal-700 hover:underline" onClick={() => setShowStatusForm((value) => !value)}>
-                        {showStatusForm ? 'Đóng' : 'Cập nhật'}
-                      </button>
+                      {canManageCustomers && (
+                        <button type="button" className="text-sm font-semibold text-teal-700 hover:underline" onClick={() => setShowStatusForm((value) => !value)}>
+                          {showStatusForm ? 'Đóng' : 'Cập nhật'}
+                        </button>
+                      )}
                     </div>
-                    {showStatusForm && <form onSubmit={changeStatus} className="mt-3 grid gap-2">
+                    {canManageCustomers && showStatusForm && <form onSubmit={changeStatus} className="mt-3 grid gap-2">
                       <label className="grid gap-1 text-sm font-medium text-slate-800">Trạng thái mới
                         <select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value)} className={inputClass}>
                           {customerStatuses.map((status) => <option value={status} key={status}>{label(status)}</option>)}
@@ -1464,7 +1518,78 @@ export function CustomerWorkspace({
                       </label>
                       <button disabled={saving || statusDraft === selected.status} className={secondaryButtonClass}>Lưu trạng thái</button>
                     </form>}
-                  </section>}
+                    <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50/60 p-3" aria-labelledby="customer-status-history-heading">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 id="customer-status-history-heading" className="text-sm font-semibold text-slate-950">
+                          Lịch sử trạng thái và ghi chú
+                        </h4>
+                        {statusHistory.length > 0 && (
+                          <span className="text-xs tabular-nums text-slate-600">
+                            {statusHistory.length}{statusHistoryCursor ? '+' : ''} cập nhật
+                          </span>
+                        )}
+                      </div>
+                      {statusHistoryLoading && statusHistory.length === 0 ? (
+                        <p className="mt-3 text-sm text-slate-600" role="status">Đang tải lịch sử cập nhật…</p>
+                      ) : statusHistory.length > 0 ? (
+                        <ol className="mt-3 text-sm" aria-label="Các lần thay đổi trạng thái khách hàng">
+                          {statusHistory.map((entry, index) => (
+                            <li className="relative flex gap-3 pb-5 last:pb-0" key={entry.id}>
+                              {index < statusHistory.length - 1 && (
+                                <span className="absolute bottom-1 left-[15px] top-8 w-0.5 bg-slate-200" aria-hidden="true" />
+                              )}
+                              <span className="relative grid size-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600">
+                                <History className="size-4" aria-hidden="true" />
+                              </span>
+                              <div className="min-w-0 flex-1 pt-1.5">
+                                <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                                  <p className="font-medium text-slate-900">
+                                    {label(entry.fromStatus)} → {label(entry.toStatus)}
+                                  </p>
+                                  <time className="shrink-0 text-xs tabular-nums text-slate-500 sm:whitespace-nowrap" dateTime={entry.changedAt}>
+                                    {dateTime(entry.changedAt)}
+                                  </time>
+                                </div>
+                                <p className="mt-1 break-words text-pretty text-slate-700">Ghi chú: {entry.reason}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {entry.changedBy ?? 'Không xác định người cập nhật'}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-600">Chưa có lịch sử cập nhật trạng thái.</p>
+                      )}
+                      {statusHistoryError && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <p className="text-sm text-red-700" role="alert">{statusHistoryError}</p>
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-teal-700 hover:underline"
+                            disabled={statusHistoryLoading}
+                            onClick={() => void loadCustomerStatusHistory(
+                              selected.id,
+                              selectionVersion.current,
+                              statusHistoryCursor ?? undefined,
+                            )}
+                          >
+                            Thử lại
+                          </button>
+                        </div>
+                      )}
+                      {statusHistoryCursor && (
+                        <button
+                          type="button"
+                          className="ml-11 mt-2 text-sm font-medium text-teal-700 hover:underline disabled:cursor-wait disabled:opacity-60"
+                          disabled={statusHistoryLoading}
+                          onClick={() => void loadCustomerStatusHistory(selected.id, selectionVersion.current, statusHistoryCursor)}
+                        >
+                          {statusHistoryLoading ? 'Đang tải…' : 'Xem lịch sử cũ hơn'}
+                        </button>
+                      )}
+                    </div>
+                  </section>
 
                   <section className="border-t border-slate-200 py-4" aria-labelledby="assignment-heading">
                     <div className="flex flex-wrap items-center justify-between gap-2">

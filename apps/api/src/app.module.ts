@@ -10,6 +10,7 @@ import { CustomersModule } from './customers/customers.module.js';
 import { CapabilitiesController } from './capabilities/capabilities.controller.js';
 import { PlansModule } from './plans/plans.module.js';
 import { CustomerImportsModule } from './customer-imports/customer-imports.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CustomerImportsModule } from './customer-imports/customer-imports.modul
     CustomerImportsModule,
     CustomersModule,
     PlansModule,
+    ReportsModule,
     HealthModule,
   ],
   controllers: [CapabilitiesController],

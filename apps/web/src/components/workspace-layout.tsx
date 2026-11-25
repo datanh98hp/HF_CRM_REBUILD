@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { useCrmSession } from '@/components/crm-session';
 
-type Section = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type Section = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
 const sectionPaths: Record<Exclude<Section, null>, string> = {
   customers: '/customers',
   'customer-import': '/customers/import',
@@ -17,6 +17,10 @@ const sectionPaths: Record<Exclude<Section, null>, string> = {
   plans: '/plans',
   catalog: '/plans/catalog',
   tasks: '/tasks',
+  'report-customers': '/reports/customers',
+  'report-plans': '/reports/plans',
+  'report-summary': '/reports/summary',
+  'report-loans': '/reports/loans',
 };
 
 export function WorkspaceLayout({
@@ -65,6 +69,7 @@ export function WorkspaceLayout({
       canReadTasks={can('tasks.read')}
       canAccessProducts={can('loan-products.read') || can('loan-products.manage')}
       canAccessContracts={can('loan-contracts.read')}
+      canReadReports={can('reports.read')}
       busy={busy}
       onNavigate={(section) => {
         setError('');

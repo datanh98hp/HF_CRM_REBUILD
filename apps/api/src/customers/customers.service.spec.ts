@@ -27,7 +27,7 @@ describe('CustomersService contract approval', () => {
   let service: CustomersService;
 
   beforeEach(() => {
-    customer = { id: contract.customerId, branchId: contract.branchId, status: CustomerStatus.QUALIFIED };
+    customer = { id: contract.customerId, branchId: contract.branchId, status: CustomerStatus.QUALIFIED, assignments: [] };
     tx = {
       loanContractStatusHistory: { create: jest.fn(async () => undefined) },
       loanContract: {
@@ -42,6 +42,9 @@ describe('CustomersService contract approval', () => {
     prisma = {
       customer: {
         findUnique: jest.fn(async () => customer),
+      },
+      customerStatusHistory: {
+        findMany: jest.fn(async () => []),
       },
       loanProduct: {
         findMany: jest.fn(async () => []),
@@ -58,6 +61,7 @@ describe('CustomersService contract approval', () => {
       hasResourceAccess: jest.fn(async () => true),
       isBranchManager: jest.fn(async () => true),
       assertPermission: jest.fn(async () => undefined),
+      assertResourceAccess: jest.fn(async () => undefined),
     };
     audit = { write: jest.fn(async () => undefined) };
     documentStorage = {
@@ -67,6 +71,63 @@ describe('CustomersService contract approval', () => {
       read: jest.fn(),
     };
     service = new CustomersService(prisma, access, audit, documentStorage);
+  });
+
+  it('returns the latest customer status changes with their notes and actors', async () => {
+    const createdAt = new Date('2026-11-25T05:30:00.000Z');
+    prisma.customerStatusHistory.findMany.mockResolvedValue([{
+      id: 'history-id',
+      fromStatus: CustomerStatus.NEW,
+      toStatus: CustomerStatus.CONTACTED,
+      reason: 'Đã gọi và hẹn tư vấn',
+      createdAt,
+      changedBy: { displayName: 'Tư vấn viên' },
+      changedByCustomer: null,
+    }]);
+
+    await expect(service.customerStatusHistory(actor, customer.id)).resolves.toEqual({
+      items: [{
+        id: 'history-id',
+        fromStatus: CustomerStatus.NEW,
+        toStatus: CustomerStatus.CONTACTED,
+        reason: 'Đã gọi và hẹn tư vấn',
+        changedAt: createdAt,
+        changedBy: 'Tư vấn viên',
+      }],
+      nextCursor: null,
+    });
+  });
+
+  it('paginates customer status history without dropping older entries', async () => {
+    const entries = Array.from({ length: 11 }, (_, index) => ({
+      id: `history-${index + 1}`,
+      fromStatus: CustomerStatus.NEW,
+      toStatus: CustomerStatus.CONTACTED,
+      reason: `Ghi chú ${index + 1}`,
+      createdAt: new Date(`2026-11-${String(25 - index).padStart(2, '0')}T05:30:00.000Z`),
+      changedBy: null,
+      changedByCustomer: null,
+    }));
+    prisma.customerStatusHistory.findMany.mockResolvedValue(entries);
+
+    const result = await service.customerStatusHistory(actor, customer.id, 'older-cursor');
+
+    expect(result.items).toHaveLength(10);
+    expect(result.items[0].reason).toBe('Ghi chú 1');
+    expect(result.nextCursor).toBe('history-10');
+    expect(prisma.customerStatusHistory.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { customerId: customer.id },
+      cursor: { id: 'older-cursor' },
+      skip: 1,
+      take: 11,
+    }));
+  });
+
+  it('checks customer read access before returning status history', async () => {
+    access.assertResourceAccess.mockRejectedValue(new Error('forbidden'));
+
+    await expect(service.customerStatusHistory(actor, customer.id)).rejects.toThrow('forbidden');
+    expect(prisma.customerStatusHistory.findMany).not.toHaveBeenCalled();
   });
 
   it('converts the customer and records status history when a contract is approved', async () => {

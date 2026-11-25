@@ -29,6 +29,7 @@ import {
   ChangeCustomerStatusDto,
   CreateCustomerDto,
   CreateLoanContractDto,
+  CreateLoanContractDisbursementDto,
   CreateLoanProductDto,
   ContractListQueryDto,
   ExternalLoanContractDto,
@@ -169,6 +170,34 @@ export class CustomersService {
     const customer = await this.customerOrThrow(customerId);
     await this.assertCustomerRead(actor, customer);
     return this.serializeCustomer(customer, actor.type === 'CUSTOMER', actor.type !== 'CUSTOMER');
+  }
+
+  async customerStatusHistory(actor: ActorContext, customerId: string, cursor?: string) {
+    const customer = await this.customerOrThrow(customerId);
+    this.assertStaff(actor);
+    await this.assertCustomerAccess(actor, 'customers.read', customer);
+    const entries = await this.prisma.customerStatusHistory.findMany({
+      where: { customerId },
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: 11,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        changedBy: { select: { displayName: true } },
+        changedByCustomer: { select: { fullName: true } },
+      },
+    });
+    const hasMore = entries.length > 10;
+    return {
+      items: entries.slice(0, 10).map((entry) => ({
+        id: entry.id,
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        reason: entry.reason,
+        changedAt: entry.createdAt,
+        changedBy: entry.changedBy?.displayName ?? entry.changedByCustomer?.fullName ?? null,
+      })),
+      nextCursor: hasMore ? entries[9]?.id ?? null : null,
+    };
   }
 
   async update(actor: ActorContext, customerId: string, dto: UpdateCustomerDto, request?: ActorRequest) {
@@ -1380,6 +1409,141 @@ export class CustomersService {
       await this.audit.write(tx, { actor, action: 'loan_contract.completed', targetType: 'loan_contract', targetId: contractId, branchId: contract.branchId, requestId: requestId(request) });
       return this.serializeContract(updated, true);
     });
+  }
+
+  async recordLoanContractDisbursement(
+    actor: ActorContext,
+    contractId: string,
+    dto: CreateLoanContractDisbursementDto,
+    idempotencyKey: string | undefined,
+    request?: ActorRequest,
+  ) {
+    this.assertStaff(actor);
+    if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 200) {
+      throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    }
+
+    const contract = await this.contractForAction(actor, contractId);
+    const hasGlobalStatusPermission = await this.access.hasPermission(
+      actor.id,
+      'loan-contracts.status.manage',
+      AccessScope.ALL,
+    );
+    await this.assertBranchManagePermission(actor, 'loan-contracts.status.manage', contract.branchId);
+    if (!hasGlobalStatusPermission && !await this.access.isBranchManager(actor.id, contract.branchId)) {
+      throw new ForbiddenException({ code: 'DIRECT_BRANCH_MANAGER_REQUIRED' });
+    }
+    if (contract.status !== LoanContractStatus.COMPLETED || !contract.completedAt) {
+      throw new ConflictException({ code: 'CONTRACT_NOT_COMPLETED' });
+    }
+    const contractAmount = contract.loanAmount;
+    if (!contractAmount || contractAmount.lte(0)) {
+      throw new ConflictException({ code: 'CONTRACT_AMOUNT_REQUIRED' });
+    }
+
+    const amount = new Prisma.Decimal(dto.amount);
+    const disbursedAt = new Date(dto.disbursedAt);
+    const now = new Date();
+    if (disbursedAt > now) throw new BadRequestException({ code: 'DISBURSEMENT_DATE_IN_FUTURE' });
+    if (contract.approvedAt && disbursedAt < contract.approvedAt) {
+      throw new BadRequestException({ code: 'DISBURSEMENT_BEFORE_APPROVAL' });
+    }
+    if (disbursedAt < contract.completedAt) {
+      throw new BadRequestException({ code: 'DISBURSEMENT_BEFORE_CONTRACT_COMPLETION' });
+    }
+
+    const idempotencyKeyHash = createHash('sha256').update(idempotencyKey).digest('hex');
+    const requestPayloadHash = createHash('sha256')
+      .update(JSON.stringify({ contractId, amount: amount.toFixed(2), disbursedAt: disbursedAt.toISOString() }))
+      .digest('hex');
+    const existing = await this.prisma.loanContractDisbursement.findUnique({
+      where: { idempotencyKeyHash },
+    });
+    if (existing) {
+      if (existing.requestPayloadHash !== requestPayloadHash) {
+        throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
+      }
+      return this.serializeLoanContractDisbursement(existing);
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "LoanContract" WHERE "id" = ${contractId} FOR UPDATE`;
+        const alreadyRecorded = await tx.loanContractDisbursement.findUnique({
+          where: { idempotencyKeyHash },
+        });
+        if (alreadyRecorded) {
+          if (alreadyRecorded.requestPayloadHash !== requestPayloadHash) {
+            throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
+          }
+          return this.serializeLoanContractDisbursement(alreadyRecorded);
+        }
+
+        const existingTotal = await tx.loanContractDisbursement.aggregate({
+          where: { contractId },
+          _sum: { amount: true },
+        });
+        const total = (existingTotal._sum.amount ?? new Prisma.Decimal(0)).plus(amount);
+        if (total.gt(contractAmount)) {
+          throw new ConflictException({
+            code: 'DISBURSEMENT_EXCEEDS_CONTRACT_AMOUNT',
+            remainingAmount: contractAmount.minus(existingTotal._sum.amount ?? new Prisma.Decimal(0)).toFixed(2),
+          });
+        }
+
+        const disbursement = await tx.loanContractDisbursement.create({
+          data: {
+            contractId,
+            amount,
+            disbursedAt,
+            recordedById: actor.id,
+            idempotencyKeyHash,
+            requestPayloadHash,
+          },
+        });
+        await this.audit.write(tx, {
+          actor,
+          action: 'loan_contract.disbursement.recorded',
+          targetType: 'loan_contract_disbursement',
+          targetId: disbursement.id,
+          branchId: contract.branchId,
+          afterState: {
+            contractId,
+            amount: disbursement.amount.toFixed(2),
+            disbursedAt: disbursement.disbursedAt.toISOString(),
+          },
+          requestId: requestId(request),
+        });
+        return this.serializeLoanContractDisbursement(disbursement);
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const raced = await this.prisma.loanContractDisbursement.findUnique({
+          where: { idempotencyKeyHash },
+        });
+        if (raced?.requestPayloadHash === requestPayloadHash) {
+          return this.serializeLoanContractDisbursement(raced);
+        }
+        if (raced) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
+      }
+      throw error;
+    }
+  }
+
+  private serializeLoanContractDisbursement(row: {
+    id: string;
+    contractId: string;
+    amount: Prisma.Decimal;
+    disbursedAt: Date;
+    createdAt: Date;
+  }) {
+    return {
+      id: row.id,
+      contractId: row.contractId,
+      amount: row.amount.toFixed(2),
+      disbursedAt: row.disbursedAt,
+      createdAt: row.createdAt,
+    };
   }
 
   private isCustomerOtpTestMode(): boolean {

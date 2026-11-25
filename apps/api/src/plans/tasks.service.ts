@@ -489,7 +489,11 @@ export class TasksService {
       throw new ConflictException({ code: 'TASK_RESULT_ALREADY_REVIEWED' });
     }
     if (result.submittedById === actor.id) {
-      throw new ForbiddenException({ code: 'TASK_RESULT_SELF_VERIFICATION' });
+      const canSelfVerify = await this.prisma.userRoleGrant.findFirst({
+        where: { userId: actor.id, branchId: null, role: { key: { in: ['ADMIN', 'OPERATOR'] } } },
+        select: { id: true },
+      });
+      if (!canSelfVerify) throw new ForbiddenException({ code: 'TASK_RESULT_SELF_VERIFICATION' });
     }
     await this.access.assertResourceAccess(actor.id, 'tasks.verify', undefined, {
       assigneeId: result.assignment.assigneeId,

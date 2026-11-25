@@ -434,6 +434,9 @@ export function TasksPage() {
   const canManageTasks = can('tasks.manage');
   const canSubmitTasks = can('tasks.submit');
   const canVerifyTasks = can('tasks.verify');
+  const canSelfVerifyTasks = Boolean(staff?.roles.some(
+    ({ key, scope }) => ['ADMIN', 'OPERATOR'].includes(key) && scope.global,
+  ));
   const canReadKpi = can('kpi.read');
   const canReadUsers = can('users.read');
   const kpiScopes = staff?.permissions.find(({ key }) => key === 'kpi.read')?.scopes ?? [];
@@ -509,7 +512,7 @@ export function TasksPage() {
     canVerifyTasks
     && latestResult
     && pendingVerification
-    && latestResult.submittedBy.id !== staff?.id,
+    && (latestResult.submittedBy.id !== staff?.id || canSelfVerifyTasks),
   );
   const canSubmitSelected = Boolean(
     canSubmitTasks
@@ -852,7 +855,7 @@ export function TasksPage() {
               <Select value={selectedPlanId} onValueChange={(value) => setSelectedPlanId(value ?? '')}>
                 <SelectTrigger className="h-10 w-full bg-card sm:w-[260px]" aria-label="Chọn kế hoạch">
                   <CalendarDays aria-hidden="true" className="text-muted-foreground" />
-                  <SelectValue placeholder="Chọn kế hoạch" />
+                  <SelectValue placeholder="Chọn kế hoạch">{plans.find((plan) => plan.id === selectedPlanId)?.name}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {plans.map((plan) => (
@@ -1214,53 +1217,10 @@ export function TasksPage() {
                         )}
                       </section>
 
-                      <section>
-                        <h4 className="mb-3 text-sm font-semibold">Lịch sử kết quả</h4>
-                        {selectedTask.results.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">Lịch sử sẽ xuất hiện sau lần nộp kết quả đầu tiên.</p>
-                        ) : (
-                          <ol className="flex flex-col gap-3">
-                            {selectedTask.results.map((result) => (
-                              <li className="flex min-w-0 gap-3 border-l-2 border-border pl-3" key={result.id}>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                                    <p className="text-sm font-medium">
-                                      Revision {result.revision} · {verificationLabels[result.verification?.status ?? result.verificationStatus] ?? 'Chưa xác minh'}
-                                    </p>
-                                    <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                                      {formatDate(result.verification?.createdAt ?? result.createdAt)}
-                                    </time>
-                                  </div>
-                                  <p className="mt-1 text-sm text-pretty text-muted-foreground">
-                                    {formatNumber(result.reportedValue)} {result.reportedUnit} · nộp bởi {result.submittedBy.displayName}
-                                  </p>
-                                  {result.evidenceFiles.length > 0 && (
-                                    <ul className="mt-2 grid gap-2" aria-label={`Minh chứng revision ${result.revision}`}>
-                                      {result.evidenceFiles.map(({ id, file }) => (
-                                        <li className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs sm:grid-cols-[16px_minmax(0,1fr)_auto] sm:items-start" key={id}>
-                                          <FileCheck2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                          <span className="min-w-0 break-words font-medium">{file.originalName}</span>
-                                          <span className="col-start-2 text-muted-foreground sm:col-auto sm:shrink-0">
-                                            {evidenceStatusLabel(file)} · {formatFileSize(file.sizeBytes)}
-                                          </span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  )}
-                                  {result.verification?.reason && (
-                                    <p className="mt-1 text-sm text-pretty text-muted-foreground">{result.verification.reason}</p>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ol>
-                        )}
-                      </section>
-
                       {(canSubmitSelected || canVerifySelected || (pendingVerification && latestResult?.submittedBy.id === staff?.id && canVerifyTasks)) && (
                         <section className="border-t border-border pt-4">
                           {actionError && <p className="mb-3 text-sm text-red-700 dark:text-red-300" role="alert">{actionError}</p>}
-                          {pendingVerification && latestResult?.submittedBy.id === staff?.id && canVerifyTasks && (
+                          {pendingVerification && latestResult?.submittedBy.id === staff?.id && canVerifyTasks && !canSelfVerifyTasks && (
                             <p className="mb-3 text-sm text-muted-foreground" role="status">
                               Bạn không thể tự xác minh revision mình đã nộp.
                             </p>
@@ -1307,6 +1267,50 @@ export function TasksPage() {
                           )}
                         </section>
                       )}
+
+                      <section>
+                        <h4 className="mb-3 text-sm font-semibold">Lịch sử kết quả</h4>
+                        {selectedTask.results.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Lịch sử sẽ xuất hiện sau lần nộp kết quả đầu tiên.</p>
+                        ) : (
+                          <ol className="flex flex-col gap-3">
+                            {selectedTask.results.map((result) => (
+                              <li className="flex min-w-0 gap-3 border-l-2 border-border pl-3" key={result.id}>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                                    <p className="text-sm font-medium">
+                                      Revision {result.revision} · {verificationLabels[result.verification?.status ?? result.verificationStatus] ?? 'Chưa xác minh'}
+                                    </p>
+                                    <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                      {formatDate(result.verification?.createdAt ?? result.createdAt)}
+                                    </time>
+                                  </div>
+                                  <p className="mt-1 text-sm text-pretty text-muted-foreground">
+                                    {formatNumber(result.reportedValue)} {result.reportedUnit} · nộp bởi {result.submittedBy.displayName}
+                                  </p>
+                                  {result.evidenceFiles.length > 0 && (
+                                    <ul className="mt-2 grid gap-2" aria-label={`Minh chứng revision ${result.revision}`}>
+                                      {result.evidenceFiles.map(({ id, file }) => (
+                                        <li className="grid min-w-0 grid-cols-[16px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs sm:grid-cols-[16px_minmax(0,1fr)_auto] sm:items-start" key={id}>
+                                          <FileCheck2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                          <span className="min-w-0 break-words font-medium">{file.originalName}</span>
+                                          <span className="col-start-2 text-muted-foreground sm:col-auto sm:shrink-0">
+                                            {evidenceStatusLabel(file)} · {formatFileSize(file.sizeBytes)}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                  {result.verification?.reason && (
+                                    <p className="mt-1 text-sm text-pretty text-muted-foreground">{result.verification.reason}</p>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </section>
+
                     </div>
                   )}
                 </article>
@@ -1341,7 +1345,7 @@ export function TasksPage() {
                 <Label htmlFor="task-metric">Chỉ tiêu <span className="text-red-600">*</span></Label>
                 <Select value={taskDraft.metricId} onValueChange={(value) => setTaskDraft((current) => ({ ...current, metricId: value ?? '' }))}>
                   <SelectTrigger id="task-metric" className="h-11 w-full bg-card text-base md:h-10 md:text-sm">
-                    <SelectValue placeholder="Chọn chỉ tiêu" />
+                    <SelectValue placeholder="Chọn chỉ tiêu">{selectedMetric ? `${selectedMetric.name} · ${selectedMetric.unit}` : undefined}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {selectedPlan?.metrics.map((metric) => (
@@ -1358,7 +1362,7 @@ export function TasksPage() {
                   assigneeIds: [],
                 }))}>
                   <SelectTrigger id="task-branch" className="h-11 w-full bg-card text-base md:h-10 md:text-sm">
-                    <SelectValue placeholder="Chọn chi nhánh" />
+                    <SelectValue placeholder="Chọn chi nhánh">{selectedPlan?.branches.find((branch) => branch.id === taskDraft.branchId)?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {selectedPlan?.branches.map((branch) => (

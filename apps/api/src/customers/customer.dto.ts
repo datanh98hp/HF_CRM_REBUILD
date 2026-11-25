@@ -363,6 +363,14 @@ export class ConfirmContractOtpDto {
   code!: string;
 }
 
+export class CreateLoanContractDisbursementDto {
+  @IsString() @Matches(/^(?=.*[1-9])\d{1,16}(?:\.\d{1,2})?$/)
+  amount!: string;
+
+  @IsDateString()
+  disbursedAt!: string;
+}
+
 export class ContractListQueryDto {
   @IsOptional() @IsUUID()
   customerId?: string;

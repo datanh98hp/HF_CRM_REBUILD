@@ -54,22 +54,42 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   LOAN_CONTRACT_DOCUMENT_NOT_FOUND: 'Không tìm thấy tài liệu hợp đồng.',
   LOAN_CONTRACT_DOCUMENT_FILE_MISSING: 'Không tìm thấy tệp lưu trữ trên máy chủ.',
   LOAN_CONTRACT_DOCUMENT_STORAGE_KEY_INVALID: 'Thông tin lưu trữ tài liệu không hợp lệ.',
+  CONTRACT_NOT_COMPLETED: 'Chỉ hợp đồng đã hoàn tất mới được ghi nhận giải ngân.',
+  CONTRACT_AMOUNT_REQUIRED: 'Hợp đồng chưa có số tiền vay hợp lệ.',
+  DISBURSEMENT_DATE_IN_FUTURE: 'Ngày giải ngân không thể nằm trong tương lai.',
+  DISBURSEMENT_BEFORE_APPROVAL: 'Ngày giải ngân phải từ ngày hợp đồng được duyệt trở đi.',
+  DISBURSEMENT_BEFORE_CONTRACT_COMPLETION: 'Ngày giải ngân phải từ ngày hợp đồng hoàn tất trở đi.',
+  DISBURSEMENT_EXCEEDS_CONTRACT_AMOUNT: 'Tổng số tiền giải ngân vượt quá số tiền hợp đồng còn lại.',
   CUSTOMER_IMPORT_NOT_READY: 'Kho nhập dữ liệu, ClamAV hoặc worker chưa sẵn sàng.',
   IMPORT_FILE_REQUIRED: 'Hãy chọn một tệp cần nhập.',
   FILE_SIZE_LIMIT_EXCEEDED: 'Tệp vượt quá giới hạn 20 MB.',
-  IDEMPOTENCY_KEY_REQUIRED: 'Không thể tạo mã yêu cầu nhập; hãy chọn lại tệp.',
-  IDEMPOTENCY_KEY_REUSED: 'Mã yêu cầu này đã được dùng cho một chi nhánh khác.',
+  IDEMPOTENCY_KEY_REQUIRED: 'Mã yêu cầu không hợp lệ hoặc bị thiếu.',
+  IDEMPOTENCY_KEY_REUSED: 'Mã yêu cầu này đã được dùng với nội dung khác.',
   UNSUPPORTED_FILE_TYPE: 'Chỉ chấp nhận tệp CSV hoặc XLSX.',
   IMPORT_QUEUE_UNAVAILABLE: 'Không thể đưa tệp vào hàng đợi. Hãy thử lại sau.',
 };
 
+function isLocalHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (normalized === 'localhost' || normalized.endsWith('.localhost') || normalized === '::1') {
+    return true;
+  }
+
+  const octets = normalized.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+  const [first, second] = octets;
+  return first === 10
+    || first === 127
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168)
+    || (first === 169 && second === 254);
+}
+
 function apiBaseUrl() {
   const configured = new URL(API_BASE_URL);
-  if (
-    typeof window !== 'undefined'
-    && ['localhost', '127.0.0.1'].includes(configured.hostname)
-    && ['localhost', '127.0.0.1'].includes(window.location.hostname)
-  ) {
+  if (typeof window !== 'undefined' && isLocalHostname(configured.hostname) && isLocalHostname(window.location.hostname)) {
     configured.hostname = window.location.hostname;
     if (window.location.protocol === 'https:') {
       configured.protocol = 'https:';

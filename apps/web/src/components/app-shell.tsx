@@ -24,7 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | null;
+type AccessSection = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -41,6 +41,7 @@ type ShellProps = {
   canReadTasks: boolean;
   canAccessProducts: boolean;
   canAccessContracts: boolean;
+  canReadReports: boolean;
   busy: boolean;
   contractCompletionOtp?: CapabilityNotice;
   onNavigate: (section: AccessSection) => void;
@@ -76,6 +77,7 @@ export function AppShell({
   canReadTasks,
   canAccessProducts,
   canAccessContracts,
+  canReadReports,
   busy,
   onNavigate,
   onLogout,
@@ -135,6 +137,15 @@ export function AppShell({
       ],
     },
     {
+      label: 'Báo cáo',
+      items: canReadReports ? [
+        { key: 'report-customers', label: 'Khách hàng', icon: UsersRound, section: 'report-customers' },
+        { key: 'report-plans', label: 'Kế hoạch', icon: ChartNoAxesColumn, section: 'report-plans' },
+        { key: 'report-summary', label: 'Báo cáo tổng hợp', icon: ChartNoAxesColumn, section: 'report-summary' },
+        { key: 'report-loans', label: 'Hợp đồng vay & sản phẩm vay', icon: FileCheck2, section: 'report-loans' },
+      ] : [],
+    },
+    {
       label: 'Quản trị hệ thống',
       items: [
         ...(canReadUsers ? [{ key: 'users', label: 'Nhân viên', icon: UsersRound, section: 'users' as const }] : []),
@@ -165,6 +176,14 @@ export function AppShell({
             ? 'Danh mục KPI'
           : activeSection === 'tasks'
             ? 'Công việc'
+            : activeSection === 'report-customers'
+              ? 'Báo cáo · Khách hàng'
+              : activeSection === 'report-plans'
+                ? 'Báo cáo · Kế hoạch'
+                : activeSection === 'report-summary'
+                  ? 'Báo cáo tổng hợp'
+                  : activeSection === 'report-loans'
+                    ? 'Hợp đồng vay & sản phẩm vay'
           : 'Tài khoản của tôi';
 
   function renderSidebar(mobile = false) {

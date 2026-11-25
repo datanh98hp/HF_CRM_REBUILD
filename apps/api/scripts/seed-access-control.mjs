@@ -741,11 +741,13 @@ try {
       'loan-products.read', 'loan-products.manage', 'loan-products.publish',
       'plans.read', 'plans.manage', 'plans.approve',
       'tasks.read', 'tasks.manage', 'tasks.submit', 'tasks.verify', 'kpi.read',
+      'reports.read',
     ];
     const advisingPermissions = [
       'customers.read', 'customers.manage', 'loan-requests.read', 'loan-requests.manage', 'loan-contracts.read',
       'loan-contracts.manage', 'loan-products.read',
       'plans.read', 'plans.manage', 'tasks.read', 'tasks.submit', 'kpi.read',
+      'reports.read',
     ];
     const defaults = new Map([
       ['OPERATOR', permissionCatalog.map(({ key }) => [key, AccessScope.ALL])],

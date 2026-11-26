@@ -9,7 +9,7 @@ import { request } from '@/lib/crm-api';
 import { useCrmSession } from '@/components/crm-session';
 
 export function CustomersPage() {
-  const { session, can, capabilities } = useCrmSession();
+  const { session, staff, can, capabilities } = useCrmSession();
   if (!session) return <main className="loading-screen"><span className="spinner" aria-hidden="true" /><p>Đang tải dữ liệu khách hàng…</p></main>;
 
   return (
@@ -29,6 +29,7 @@ export function CustomersPage() {
         accessToken={session.accessToken}
         request={request}
         canManageCustomers={can('customers.manage')}
+        canChangeCustomerBranch={Boolean(staff?.permissions.some((item) => item.key === 'customers.manage' && item.scopes.includes('ALL')))}
         canAssignCustomers={can('customers.assign')}
         canReviewDuplicates={can('customers.duplicates.review')}
         canReadUsers={can('users.read')}

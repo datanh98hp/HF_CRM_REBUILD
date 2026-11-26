@@ -131,7 +131,19 @@ export class CustomersService {
       cursor = candidates[candidates.length - 1].id;
       if (candidates.length < pageSize) break;
     }
-    return result.map((customer) => this.serializeCustomer(customer));
+    const branchNames = result.length
+      ? await this.prisma.branch.findMany({
+          where: { id: { in: [...new Set(result.map((customer) => customer.branchId))] } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const branchNameById = new Map(branchNames.map((branch) => [branch.id, branch.name]));
+    return result.map((customer) => this.serializeCustomer(
+      customer,
+      false,
+      false,
+      branchNameById.get(customer.branchId),
+    ));
   }
 
   async create(actor: ActorContext, dto: CreateCustomerDto, request?: ActorRequest) {
@@ -169,7 +181,14 @@ export class CustomersService {
   async detail(actor: ActorContext, customerId: string) {
     const customer = await this.customerOrThrow(customerId);
     await this.assertCustomerRead(actor, customer);
-    return this.serializeCustomer(customer, actor.type === 'CUSTOMER', actor.type !== 'CUSTOMER');
+    if (actor.type === 'CUSTOMER') {
+      return this.serializeCustomer(customer, true, false);
+    }
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: customer.branchId },
+      select: { name: true },
+    });
+    return this.serializeCustomer(customer, false, true, branch?.name);
   }
 
   async customerStatusHistory(actor: ActorContext, customerId: string, cursor?: string) {
@@ -204,6 +223,13 @@ export class CustomersService {
     const customer = await this.customerOrThrow(customerId);
     this.assertStaff(actor);
     await this.assertCustomerAccess(actor, 'customers.manage', customer);
+    const nextBranchId = dto.branchId ?? customer.branchId;
+    if (nextBranchId !== customer.branchId) {
+      if (!(await this.access.hasPermission(actor.id, 'customers.manage', AccessScope.ALL))) {
+        throw new ForbiddenException({ code: 'GLOBAL_CUSTOMER_PERMISSION_REQUIRED' });
+      }
+      await this.assertBranchExists(nextBranchId);
+    }
     const nextFullName = dto.fullName?.trim() ?? customer.fullName;
     const nextPhone = dto.phone === undefined ? customer.phone : normalizeVietnamesePhone(dto.phone);
     const nextEmail = dto.email === undefined ? customer.email : dto.email;
@@ -214,6 +240,7 @@ export class CustomersService {
       const updated = await tx.customer.update({
         where: { id: customer.id },
         data: {
+          ...(nextBranchId !== customer.branchId ? { branchId: nextBranchId } : {}),
           fullName: nextFullName, normalizedName: normalizeCustomerName(nextFullName), phone: nextPhone,
           phoneNormalized: nextPhone, email, emailNormalized: email, dateOfBirth: nextDob,
           ...(dto.cccd !== undefined ? { cccd: dto.cccd?.trim() || null } : {}),
@@ -229,7 +256,8 @@ export class CustomersService {
       await this.syncDuplicateCandidates(tx, updated);
       await this.audit.write(tx, {
         actor, action: 'customer.updated', targetType: 'customer', targetId: updated.id, branchId: updated.branchId,
-        beforeState: this.customerAuditState(customer), afterState: this.customerAuditState(updated), requestId: requestId(request),
+        beforeState: { ...this.customerAuditState(customer), branchId: customer.branchId },
+        afterState: { ...this.customerAuditState(updated), branchId: updated.branchId }, requestId: requestId(request),
       });
       return this.serializeCustomer(updated, false, true);
     });
@@ -414,6 +442,7 @@ export class CustomersService {
     }
     const products = await this.prisma.loanProduct.findMany({
       where: {
+        deletedAt: null,
         ...(query.branchId ? { branchId: query.branchId } : {}),
         ...(query.status ? { status: query.status } : {}),
       },
@@ -560,6 +589,42 @@ export class CustomersService {
       return row;
     });
     return this.serializeLoanProduct(updated);
+  }
+
+  async deleteLoanProduct(actor: ActorContext, productId: string, request?: ActorRequest) {
+    this.assertStaff(actor);
+    const adminGrant = await this.prisma.userRoleGrant.findFirst({
+      where: {
+        userId: actor.id,
+        branchId: null,
+        role: { key: 'ADMIN' },
+      },
+      select: { id: true },
+    });
+    if (!adminGrant) throw new ForbiddenException({ code: 'LOAN_PRODUCT_DELETE_ADMIN_ONLY' });
+
+    const product = await this.loanProductOrThrow(productId);
+    await this.assertLoanProductAccess(actor, 'loan-products.manage', product, true);
+    const deletedAt = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.loanProduct.updateMany({
+        where: { id: product.id, deletedAt: null },
+        data: { deletedAt, status: LoanProductStatus.INACTIVE },
+      });
+      if (updated.count !== 1) throw new NotFoundException({ code: 'LOAN_PRODUCT_NOT_FOUND' });
+      await this.audit.write(tx, {
+        actor,
+        action: 'loan_product.deleted',
+        targetType: 'loan_product',
+        targetId: product.id,
+        branchId: product.branchId,
+        beforeState: { name: product.name, status: product.status },
+        afterState: { status: LoanProductStatus.INACTIVE, deletedAt: deletedAt.toISOString() },
+        requestId: requestId(request),
+      });
+      return updated;
+    });
+    return { id: productId, deletedAt, status: LoanProductStatus.INACTIVE };
   }
 
   async setLoanProductStatus(actor: ActorContext, productId: string, dto: SetLoanProductStatusDto, request?: ActorRequest) {
@@ -1611,7 +1676,7 @@ export class CustomersService {
       where: { id: productId },
       include: { branch: { select: { id: true, code: true, name: true } } },
     });
-    if (!product) throw new NotFoundException({ code: 'LOAN_PRODUCT_NOT_FOUND' });
+    if (!product || product.deletedAt) throw new NotFoundException({ code: 'LOAN_PRODUCT_NOT_FOUND' });
     return product;
   }
 
@@ -1823,7 +1888,7 @@ export class CustomersService {
     }
   }
 
-  private serializeCustomer(customer: CustomerRecord, customerView = false, includeProfileFields = false) {
+  private serializeCustomer(customer: CustomerRecord, customerView = false, includeProfileFields = false, branchName?: string) {
     if (customerView) {
       return {
         id: customer.id, fullName: customer.fullName, dateOfBirth: customer.dateOfBirth,
@@ -1833,6 +1898,7 @@ export class CustomersService {
     return {
       id: customer.id, fullName: customer.fullName, dateOfBirth: customer.dateOfBirth, phone: customer.phone, email: customer.email,
       provenance: customer.provenance, verificationStatus: customer.verificationStatus, status: customer.status, branchId: customer.branchId,
+      ...(branchName ? { branchName } : {}),
       ...(includeProfileFields ? {
         cccd: customer.cccd,
         address: customer.address,

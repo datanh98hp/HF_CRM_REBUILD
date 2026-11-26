@@ -60,15 +60,31 @@ export function WorkspaceLayout({
       displayName={staff.displayName}
       username={staff.username}
       canReadUsers={can('users.read') || can('users.manage')}
-      canReadBranches={can('branches.read')}
-      canReadRoles={can('roles.read')}
+      canReadBranches={can('branches.read') || can('branches.manage')}
+      canReadRoles={can('roles.read') || can('roles.manage')}
       canReadCustomers={can('customers.read')}
       canImportCustomers={can('customers.import')}
-      canAccessPlans={can('plans.read') || can('plans.manage')}
-      canReadPlanCatalog={can('plans.read')}
-      canReadTasks={can('tasks.read')}
-      canAccessProducts={can('loan-products.read') || can('loan-products.manage')}
-      canAccessContracts={can('loan-contracts.read')}
+      canAccessPlans={can('plans.read') || can('plans.manage') || can('plans.approve')}
+      canReadPlanCatalog={can('plans.catalog.manage')}
+      canReadTasks={
+        can('tasks.read')
+        || can('tasks.manage')
+        || can('tasks.submit')
+        || can('tasks.verify')
+      }
+      canAccessProducts={
+        can('loan-products.read')
+        || can('loan-products.manage')
+        || can('loan-products.publish')
+        || can('loan-products.formula.manage')
+      }
+      canAccessContracts={
+        can('loan-contracts.read')
+        || can('loan-contracts.manage')
+        || can('loan-contracts.review')
+        || can('loan-contracts.status.manage')
+        || can('loan-contracts.ingest')
+      }
       canReadReports={can('reports.read')}
       busy={busy}
       onNavigate={(section) => {

@@ -442,6 +442,7 @@ model LoanProduct {
   annualInterestRate    Decimal          @default(0) @db.Decimal(9, 4)
   status                LoanProductStatus @default(DRAFT)
   currentFormulaVersion Int               @default(0)
+  deletedAt             DateTime?        @db.Timestamptz(3)
   createdById           String?          @db.Uuid
   branch                Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
   createdBy             User?            @relation("LoanProductCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -452,6 +453,7 @@ model LoanProduct {
   updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
 
   @@index([branchId, status, name])
+  @@index([deletedAt, status, name])
 }
 
 model LoanProductFormulaVersion {

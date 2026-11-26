@@ -138,13 +138,22 @@ function serializeAssignment<T extends {
 
 const KPI_TIME_ZONE_OFFSET_MS = 7 * 60 * 60 * 1000;
 
+function planPeriodEndExclusive(periodEnd: Date): Date {
+  return new Date(Date.UTC(
+    periodEnd.getUTCFullYear(),
+    periodEnd.getUTCMonth(),
+    periodEnd.getUTCDate() + 1,
+  ));
+}
+
 function kpiPeriodBounds(
   query: KpiQueryDto,
   planStart: Date,
   planEnd: Date,
 ): { start: Date; end: Date } {
+  const planEndExclusive = planPeriodEndExclusive(planEnd);
   if (query.periodType === KpiPeriodType.PLAN) {
-    return { start: planStart, end: planEnd };
+    return { start: planStart, end: planEndExclusive };
   }
 
   const date = query.date ?? new Date(Date.now() + KPI_TIME_ZONE_OFFSET_MS).toISOString().slice(0, 10);
@@ -170,7 +179,7 @@ function kpiPeriodBounds(
   const end = new Date(Date.UTC(year, firstMonth - 1 + monthCount, 1) - KPI_TIME_ZONE_OFFSET_MS);
   return {
     start: start > planStart ? start : planStart,
-    end: end < planEnd ? end : planEnd,
+    end: end < planEndExclusive ? end : planEndExclusive,
   };
 }
 
@@ -258,7 +267,7 @@ export class TasksService {
       throw new BadRequestException({ code: 'TASK_ASSIGNEES_OUTSIDE_BRANCH' });
     }
     const dueAt = dto.dueAt ? new Date(dto.dueAt) : null;
-    if (dueAt && (dueAt < plan.periodStart || dueAt >= plan.periodEnd)) {
+    if (dueAt && (dueAt < plan.periodStart || dueAt >= planPeriodEndExclusive(plan.periodEnd))) {
       throw new BadRequestException({ code: 'TASK_DUE_DATE_OUTSIDE_PLAN_PERIOD' });
     }
 
@@ -353,7 +362,7 @@ export class TasksService {
       branchId: task.branchId,
     });
     const occurredAt = new Date(dto.occurredAt);
-    if (occurredAt < task.plan.periodStart || occurredAt >= task.plan.periodEnd) {
+    if (occurredAt < task.plan.periodStart || occurredAt >= planPeriodEndExclusive(task.plan.periodEnd)) {
       throw new BadRequestException({ code: 'TASK_RESULT_OUTSIDE_PLAN_PERIOD' });
     }
     if (dto.reportedUnit.trim() !== task.metric.unit) {

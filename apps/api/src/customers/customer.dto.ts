@@ -74,6 +74,9 @@ export class CreateCustomerDto {
 }
 
 export class UpdateCustomerDto {
+  @IsOptional() @IsUUID()
+  branchId?: string;
+
   @IsOptional() @IsString() @Length(2, 160)
   fullName?: string;
 

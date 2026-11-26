@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowDownToLine, Check, ChevronRight, CircleAlert, FlaskConical, History, Plus, Save, Tags } from 'lucide-react';
+import { ArrowDownToLine, Check, ChevronRight, CircleAlert, FlaskConical, History, Plus, Save, Tags, Trash2 } from 'lucide-react';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
@@ -125,12 +125,13 @@ function ProductField({ label, children }: { label: string; children: React.Reac
 }
 
 export function LoanProductsPage() {
-  const { session, can } = useCrmSession();
+  const { session, staff, can } = useCrmSession();
   if (!session) return <main className="loading-screen"><span className="spinner" aria-hidden="true" /><p>Đang tải danh mục sản phẩm…</p></main>;
 
   const canManage = can('loan-products.manage');
   const canPublish = can('loan-products.publish');
   const canManageFormula = can('loan-products.formula.manage');
+  const isAdmin = Boolean(staff?.roles.some((role) => role.key === 'ADMIN' && role.scope.global));
   return (
     <WorkspaceLayout activeSection="products" requiredPermission={['loan-products.read', 'loan-products.manage']}>
       <LoanProductsWorkspace
@@ -139,6 +140,7 @@ export function LoanProductsPage() {
         canManage={canManage}
         canPublish={canPublish}
         canManageFormula={canManageFormula}
+        isAdmin={isAdmin}
         canReadBranches={can('branches.read')}
       />
     </WorkspaceLayout>
@@ -151,6 +153,7 @@ function LoanProductsWorkspace({
   canManage,
   canPublish,
   canManageFormula,
+  isAdmin,
   canReadBranches,
 }: {
   accessToken: string;
@@ -158,6 +161,7 @@ function LoanProductsWorkspace({
   canManage: boolean;
   canPublish: boolean;
   canManageFormula: boolean;
+  isAdmin: boolean;
   canReadBranches: boolean;
 }) {
   const [products, setProducts] = useState<LoanProduct[]>([]);
@@ -180,6 +184,7 @@ function LoanProductsWorkspace({
   const [formulaHistoryError, setFormulaHistoryError] = useState('');
   const [formulaHistoryReloadKey, setFormulaHistoryReloadKey] = useState(0);
   const [applyingFormulaVersion, setApplyingFormulaVersion] = useState<number | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
@@ -279,6 +284,7 @@ function LoanProductsWorkspace({
   function startCreate() {
     setError('');
     setNotice('');
+    setDeleteConfirmOpen(false);
     setForm({ ...emptyProductForm, branchId: activeBranches.length === 1 ? activeBranches[0].id : '' });
     setEditorMode('create');
     setSelectedId('');
@@ -288,6 +294,7 @@ function LoanProductsWorkspace({
     if (!selectedProduct) return;
     setError('');
     setNotice('');
+    setDeleteConfirmOpen(false);
     setForm(productFormFrom(selectedProduct));
     setEditorMode('edit');
   }
@@ -429,6 +436,27 @@ function LoanProductsWorkspace({
     }
   }
 
+  async function deleteProduct() {
+    if (!selectedProduct || saving) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await apiRequest<{ id: string }>(`/loan-products/${selectedProduct.id}`, {
+        method: 'DELETE',
+      }, accessToken);
+      setProducts((current) => current.filter((product) => product.id !== selectedProduct.id));
+      setSelectedId('');
+      setEditorMode(null);
+      setDeleteConfirmOpen(false);
+      setNotice(`Đã xóa sản phẩm “${selectedProduct.name}”.`);
+    } catch (deleteError) {
+      setError(messageFor(deleteError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const selectClass = `${inputClass} w-full rounded-lg border border-input px-3 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50`;
   const editable = canManage && selectedProduct?.status !== 'ACTIVE';
 
@@ -457,7 +485,7 @@ function LoanProductsWorkspace({
             <ul className="divide-y divide-slate-100">
               {products.map((product) => (
                 <li key={product.id}>
-                  <button type="button" aria-current={selectedId === product.id ? 'true' : undefined} onClick={() => { setSelectedId(product.id); setEditorMode(null); if (isMobileLayout) setMobileDetailOpen(true); }} className={`flex w-full min-w-0 items-start justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
+                  <button type="button" aria-current={selectedId === product.id ? 'true' : undefined} onClick={() => { setSelectedId(product.id); setEditorMode(null); setDeleteConfirmOpen(false); if (isMobileLayout) setMobileDetailOpen(true); }} className={`flex w-full min-w-0 items-start justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
                     <span className="min-w-0">
                       <span className="block truncate font-medium text-slate-950">{product.name}</span>
                       <span className="mt-1 block text-xs text-slate-500">{product.code} · {product.loanType}</span>
@@ -537,6 +565,15 @@ function LoanProductsWorkspace({
                   {editable && <Button variant="outline" onClick={startEdit}>Chỉnh sửa</Button>}
                   {canPublish && selectedProduct.status !== 'ACTIVE' && selectedProduct.currentFormulaVersion > 0 && <Button variant="default" onClick={() => void changeStatus('ACTIVE')} aria-busy={saving}><Check aria-hidden="true" className="size-4" />Công bố</Button>}
                   {canPublish && selectedProduct.status === 'ACTIVE' && <Button variant="outline" onClick={() => void changeStatus('INACTIVE')}>Ngừng bán</Button>}
+                  {isAdmin && (
+                    deleteConfirmOpen
+                      ? <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2">
+                        <span className="text-xs font-medium text-red-800">Xóa sản phẩm này?</span>
+                        <Button variant="destructive" size="sm" disabled={saving} onClick={() => void deleteProduct()}><Trash2 aria-hidden="true" className="size-4" />Xác nhận xóa</Button>
+                        <Button variant="outline" size="sm" disabled={saving} onClick={() => setDeleteConfirmOpen(false)}>Hủy</Button>
+                      </div>
+                      : <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => setDeleteConfirmOpen(true)}><Trash2 aria-hidden="true" className="size-4" />Xóa</Button>
+                  )}
                 </div>
               </header>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 sm:p-5">

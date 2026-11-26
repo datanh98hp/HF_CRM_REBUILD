@@ -11,6 +11,8 @@ import {
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, History, X } from 'lucide-react';
+import { AccordionItem } from '@/components/ui/accordion';
+import { useRouter } from 'next/navigation';
 
 type Request = <T>(path: string, options?: RequestInit, accessToken?: string) => Promise<T>;
 
@@ -29,6 +31,7 @@ type Customer = {
   verificationStatus: string;
   status: string;
   branchId: string;
+  branchName?: string;
   primaryAdviserId: string | null;
   primaryAssignedAt?: string | null;
   createdAt: string;
@@ -124,6 +127,7 @@ type Props = {
   accessToken: string;
   request: Request;
   canManageCustomers: boolean;
+  canChangeCustomerBranch: boolean;
   canAssignCustomers: boolean;
   canReviewDuplicates: boolean;
   canReadUsers: boolean;
@@ -428,6 +432,7 @@ export function CustomerWorkspace({
   accessToken,
   request,
   canManageCustomers,
+  canChangeCustomerBranch,
   canAssignCustomers,
   canReviewDuplicates,
   canReadUsers,
@@ -438,6 +443,7 @@ export function CustomerWorkspace({
   canReadLoanProducts,
   contractCompletionOtp,
 }: Props) {
+  const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [requests, setRequests] = useState<LoanRequest[]>([]);
@@ -453,6 +459,7 @@ export function CustomerWorkspace({
   const [loanProducts, setLoanProducts] = useState<LoanProductOption[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
   const [assignmentFrom, setAssignmentFrom] = useState('');
   const [assignmentTo, setAssignmentTo] = useState('');
   const [customerPage, setCustomerPage] = useState(1);
@@ -580,6 +587,7 @@ export function CustomerWorkspace({
     const query = new URLSearchParams({ take: String(customerPageSize + 1) });
     if (search.trim()) query.set('search', search.trim());
     if (statusFilter !== 'ALL') query.set('status', statusFilter);
+    if (branchFilter !== 'ALL') query.set('branchId', branchFilter);
     const assignedFrom = dateRangeBound(assignmentFrom, false);
     const assignedTo = dateRangeBound(assignmentTo, true);
     if (assignedFrom) query.set('assignedFrom', assignedFrom);
@@ -658,7 +666,7 @@ export function CustomerWorkspace({
     setLoadingDetail(true);
     setError('');
     setNotice('');
-    setShowStatusForm(false);
+    setShowStatusForm(canManageCustomers);
     setShowAssignmentForm(false);
     setShowEdit(false);
     setDuplicateAction(null);
@@ -672,7 +680,9 @@ export function CustomerWorkspace({
         request<LoanRequest[]>(`/loan-requests?customerId=${customer.id}`, {}, accessToken),
         request<{ items: Contract[] }>(`/loan-contracts?customerId=${customer.id}`, {}, accessToken),
         request<Assignment[]>(`/customers/${customer.id}/assignments`, {}, accessToken),
-        request<DuplicateCandidate[]>(`/customers/${customer.id}/duplicates`, {}, accessToken),
+        canReviewDuplicates
+          ? request<DuplicateCandidate[]>(`/customers/${customer.id}/duplicates`, {}, accessToken)
+          : Promise.resolve([]),
       ]);
       if (version !== selectionVersion.current) return;
       setSelected(detail);
@@ -747,7 +757,7 @@ export function CustomerWorkspace({
       window.clearTimeout(timer);
       if (customerListRequestVersion.current === version) customerListRequestVersion.current += 1;
     };
-  }, [accessToken, assignmentFrom, assignmentTo, customerPageSize, request, search, statusFilter]);
+  }, [accessToken, assignmentFrom, assignmentTo, branchFilter, customerPageSize, request, search, statusFilter]);
 
   useEffect(() => {
     if (!mobileDetailOpen) return;
@@ -860,6 +870,7 @@ export function CustomerWorkspace({
           placeOfOrigin: optional('placeOfOrigin'),
           sex: optional('sex'),
           placeOfIssue: optional('placeOfIssue'),
+          ...(canChangeCustomerBranch ? { branchId: value('branchId') } : {}),
         }),
       }, accessToken);
       setSelected(updated);
@@ -1191,7 +1202,7 @@ export function CustomerWorkspace({
       {notice && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div>}
 
       <section
-        className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canManageCustomers && canReadBranches ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}
+        className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canReadBranches ? (canManageCustomers ? 'xl:grid-cols-7' : 'xl:grid-cols-6') : 'xl:grid-cols-5'}`}
         aria-label="Tìm kiếm và lọc khách hàng"
       >
         <div className="relative grid min-w-0 content-start gap-1 sm:col-span-2 xl:col-span-2">
@@ -1218,6 +1229,27 @@ export function CustomerWorkspace({
             </SelectContent>
           </Select>
         </div>
+        {canReadBranches && (
+          <div className="grid min-w-0 gap-1">
+            <span id="customer-branch-filter-label" className="text-sm font-medium text-slate-800">Chi nhánh</span>
+            <Select value={branchFilter} onValueChange={(value) => {
+              if (typeof value === 'string') {
+                setBranchFilter(value);
+                setCustomerPage(1);
+              }
+            }}>
+              <SelectTrigger aria-labelledby="customer-branch-filter-label" className="w-full bg-white data-[size=default]:h-11 md:data-[size=default]:h-10">
+                <SelectValue placeholder="Tất cả chi nhánh" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="ALL">Tất cả chi nhánh</SelectItem>
+                {branches.filter((branch) => branch.status === 'ACTIVE').map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id} label={branch.name}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="grid min-w-0 gap-1">
           <span className="text-sm font-medium text-slate-800">Ngày phân công từ</span>
           <DateFilterInput label="Ngày phân công từ" value={assignmentFrom} max={assignmentTo || undefined} onChange={(value) => { setAssignmentFrom(value); setCustomerPage(1); }} />
@@ -1351,7 +1383,7 @@ export function CustomerWorkspace({
                         {canAssignCustomers && <th className="w-12 px-4 py-3">
                           <input type="checkbox" aria-label="Chọn tất cả khách hàng trên trang này" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => bulkSelectedCustomers.has(customer.id))} onChange={(event) => toggleCurrentPageSelection(event.target.checked)} className="size-4 accent-teal-700" />
                         </th>}
-                        <th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Ngày phân công</th>
+                        <th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Chi nhánh</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Ngày phân công</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1381,6 +1413,7 @@ export function CustomerWorkspace({
                             <p className="mt-0.5 text-xs text-slate-500">{customer.email ?? 'Chưa có email'}</p>
                           </td>
                           <td className="px-4 py-3 tabular-nums text-slate-700">{customer.phone}</td>
+                          <td className="px-4 py-3 text-slate-700">{customer.branchName ?? branches.find((branch) => branch.id === customer.branchId)?.name ?? '—'}</td>
                           <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{label(customer.status)}</span></td>
                           <td className="px-4 py-3 text-slate-600">{date(customer.primaryAssignedAt ?? null)}</td>
                         </tr>
@@ -1414,7 +1447,7 @@ export function CustomerWorkspace({
               </>
               : <div className="p-8 text-center text-sm text-slate-600">
                 Không tìm thấy khách hàng phù hợp.
-                {(search || statusFilter !== 'ALL' || assignmentFrom || assignmentTo) && <button className="ml-1 font-semibold text-teal-700 underline" onClick={() => { setSearch(''); setStatusFilter('ALL'); setAssignmentFrom(''); setAssignmentTo(''); setCustomerPage(1); }}>Xóa bộ lọc</button>}
+                {(search || statusFilter !== 'ALL' || branchFilter !== 'ALL' || assignmentFrom || assignmentTo) && <button className="ml-1 font-semibold text-teal-700 underline" onClick={() => { setSearch(''); setStatusFilter('ALL'); setBranchFilter('ALL'); setAssignmentFrom(''); setAssignmentTo(''); setCustomerPage(1); }}>Xóa bộ lọc</button>}
               </div>}
         </section>
 
@@ -1479,6 +1512,11 @@ export function CustomerWorkspace({
                       <label className="grid gap-1 text-sm font-medium text-slate-800">Nơi cấp
                         <input name="placeOfIssue" defaultValue={selected.placeOfIssue ?? ''} maxLength={160} className={inputClass} />
                       </label>
+                      {canChangeCustomerBranch && <label className="grid gap-1 text-sm font-medium text-slate-800">Chi nhánh *
+                        <select name="branchId" defaultValue={selected.branchId} required className={inputClass}>
+                          {activeBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} · {branch.name}</option>)}
+                        </select>
+                      </label>}
                       <div className="flex items-end gap-2 sm:col-span-2">
                         <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60">
                           {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
@@ -1486,21 +1524,28 @@ export function CustomerWorkspace({
                         <button type="button" disabled={saving} onClick={() => setShowEdit(false)} className={secondaryButtonClass}>Hủy</button>
                       </div>
                     </form>
-                    : <dl className="my-4 grid grid-cols-2 gap-3 text-sm">
-                      <div><dt className="text-slate-500">Nguồn</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.provenance}</dd></div>
-                      <div><dt className="text-slate-500">Xác minh</dt><dd className="mt-1 font-medium text-slate-900">{selected.verificationStatus === 'VERIFIED' ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
-                      <div><dt className="text-slate-500">Ngày sinh</dt><dd className="mt-1 font-medium text-slate-900">{formatDateOfBirth(selected.dateOfBirth)}</dd></div>
-                      <div><dt className="text-slate-500">CCCD</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.cccd ?? '—'}</dd></div>
-                      <div><dt className="text-slate-500">Giới tính</dt><dd className="mt-1 font-medium text-slate-900">{selected.sex ?? '—'}</dd></div>
-                      <div><dt className="text-slate-500">Quê quán</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfOrigin ?? '—'}</dd></div>
-                      <div><dt className="text-slate-500">Nơi cấp</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfIssue ?? '—'}</dd></div>
-                      <div className="col-span-2"><dt className="text-slate-500">Địa chỉ</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.address ?? '—'}</dd></div>
-                      <div><dt className="text-slate-500">Tạo lúc</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.createdAt)}</dd></div>
-                    </dl>}
+                    : <div className="my-4">
+                      <AccordionItem title="Thông tin chi tiết hồ sơ" headingLevel={4}>
+                        <dl className="grid grid-cols-2 gap-3 text-sm">
+                          <div><dt className="text-slate-500">Nguồn</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.provenance}</dd></div>
+                          <div><dt className="text-slate-500">Xác minh</dt><dd className="mt-1 font-medium text-slate-900">{selected.verificationStatus === 'VERIFIED' ? 'Đã xác minh' : 'Chưa xác minh'}</dd></div>
+                          <div><dt className="text-slate-500">Ngày sinh</dt><dd className="mt-1 font-medium text-slate-900">{formatDateOfBirth(selected.dateOfBirth)}</dd></div>
+                          <div><dt className="text-slate-500">CCCD</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.cccd ?? '—'}</dd></div>
+                          <div><dt className="text-slate-500">Giới tính</dt><dd className="mt-1 font-medium text-slate-900">{selected.sex ?? '—'}</dd></div>
+                          <div><dt className="text-slate-500">Quê quán</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfOrigin ?? '—'}</dd></div>
+                          <div><dt className="text-slate-500">Nơi cấp</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.placeOfIssue ?? '—'}</dd></div>
+                          <div className="col-span-2"><dt className="text-slate-500">Địa chỉ</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.address ?? '—'}</dd></div>
+                          <div><dt className="text-slate-500">Tạo lúc</dt><dd className="mt-1 font-medium text-slate-900">{date(selected.createdAt)}</dd></div>
+                        </dl>
+                      </AccordionItem>
+                    </div>}
 
                   <section className="border-t border-slate-200 py-4" aria-labelledby="customer-status-heading">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 id="customer-status-heading" className="font-semibold text-slate-950">Trạng thái khách hàng</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 id="customer-status-heading" className="font-semibold text-slate-950">Trạng thái khách hàng</h3>
+                        <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">Hiện tại: {label(selected.status)}</span>
+                      </div>
                       {canManageCustomers && (
                         <button type="button" className="text-sm font-semibold text-teal-700 hover:underline" onClick={() => setShowStatusForm((value) => !value)}>
                           {showStatusForm ? 'Đóng' : 'Cập nhật'}
@@ -1626,11 +1671,8 @@ export function CustomerWorkspace({
                     </details>}
                   </section>
 
-                  <section className="border-t border-slate-200 py-4" aria-labelledby="duplicates-heading">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 id="duplicates-heading" className="font-semibold text-slate-950">Hồ sơ có thể trùng</h3>
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">{duplicates.length}</span>
-                    </div>
+                  {canReviewDuplicates && (
+                    <AccordionItem title={`Hồ sơ có thể trùng (${duplicates.length})`} headingLevel={4}>
                     {duplicates.length
                       ? <ul className="mt-3 space-y-3">
                         {duplicates.map((candidate) => <li key={candidate.id} className="rounded-lg border border-slate-200 p-3">
@@ -1664,10 +1706,11 @@ export function CustomerWorkspace({
                       </ul>
                       : <p className="mt-2 text-sm text-slate-600">Không có ứng viên trùng hiện tại.</p>}
                     <p className="mt-3 text-xs text-slate-500">Quyết định rà soát được lưu audit; hồ sơ không tự động gộp.</p>
-                  </section>
+                    </AccordionItem>
+                  )}
 
-                  <section className="border-t border-slate-200 py-4" aria-labelledby="loan-requests-heading">
-                    <h3 id="loan-requests-heading" className="font-semibold text-slate-950">Yêu cầu vay</h3>
+                  <div className="border-t border-slate-200 pt-4">
+                    <AccordionItem title={`Yêu cầu vay (${requests.length})`} headingLevel={4}>
                     {requests.length
                       ? <ul className="mt-2 space-y-2">
                         {requests.map((item) => <li className="rounded-lg bg-slate-50 p-3 text-sm" key={item.id}>
@@ -1721,7 +1764,8 @@ export function CustomerWorkspace({
                       <textarea id="loan-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={4000} placeholder="Ghi chú (không bắt buộc)" className={`${inputClass} min-h-20`} />
                       <button disabled={saving} className={secondaryButtonClass}>Ghi nhận yêu cầu</button>
                     </form>}
-                  </section>
+                    </AccordionItem>
+                  </div>
 
                   <section className="border-t border-slate-200 pt-4" aria-labelledby="contracts-heading">
                     <div className="flex items-center justify-between gap-3">
@@ -1832,6 +1876,15 @@ export function CustomerWorkspace({
                                 : <button type="button" disabled={saving} onClick={() => setRejectingContractId(item.id)} className="rounded-lg border border-red-700 px-3 py-2 text-sm font-semibold text-red-800 hover:bg-red-50">Từ chối</button>}
                             </div>
                           )}
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              className={secondaryButtonClass}
+                              onClick={() => router.push(`/loan-contracts?contractId=${item.id}`)}
+                            >
+                              Xem chi tiết hợp đồng
+                            </button>
+                          </div>
                         </li>)}
                       </ul>
                       : <p className="mt-2 text-sm text-slate-600">Chưa có hợp đồng trong hồ sơ này.</p>}

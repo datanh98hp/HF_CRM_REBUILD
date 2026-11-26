@@ -146,6 +146,12 @@ export class CustomersController {
     return this.customers.updateLoanProduct(actor, productId, dto, request);
   }
 
+  @RequirePermission('loan-products.manage')
+  @Delete('loan-products/:productId')
+  deleteLoanProduct(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Req() request: ActorRequest) {
+    return this.customers.deleteLoanProduct(actor, productId, request);
+  }
+
   @RequirePermission('loan-products.publish')
   @Post('loan-products/:productId/status')
   setLoanProductStatus(@CurrentActor() actor: ActorContext, @Param('productId', ParseUUIDPipe) productId: string, @Body() dto: SetLoanProductStatusDto, @Req() request: ActorRequest) {

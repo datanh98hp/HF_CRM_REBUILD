@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { AccessScope, CustomerStatus, LoanContractStatus } from '../generated/prisma/client.js';
+import { AccessScope, CustomerStatus, LoanContractStatus, Prisma } from '../generated/prisma/client.js';
 import { CustomersService } from './customers.service.js';
 
 describe('CustomersService contract approval', () => {
@@ -29,6 +29,9 @@ describe('CustomersService contract approval', () => {
   beforeEach(() => {
     customer = { id: contract.customerId, branchId: contract.branchId, status: CustomerStatus.QUALIFIED, assignments: [] };
     tx = {
+      loanProduct: {
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
       loanContractStatusHistory: { create: jest.fn(async () => undefined) },
       loanContract: {
         update: jest.fn(async ({ data }: any) => ({ ...contract, ...data, status: LoanContractStatus.APPROVED })),
@@ -42,11 +45,19 @@ describe('CustomersService contract approval', () => {
     prisma = {
       customer: {
         findUnique: jest.fn(async () => customer),
-      },
-      customerStatusHistory: {
         findMany: jest.fn(async () => []),
       },
+      userRoleGrant: {
+        findFirst: jest.fn(async () => ({ id: 'admin-grant-id' })),
+      },
       loanProduct: {
+        findUnique: jest.fn(async () => null),
+        findMany: jest.fn(async () => []),
+      },
+      branch: {
+        findMany: jest.fn(async () => []),
+      },
+      customerStatusHistory: {
         findMany: jest.fn(async () => []),
       },
       loanContract: {
@@ -71,6 +82,33 @@ describe('CustomersService contract approval', () => {
       read: jest.fn(),
     };
     service = new CustomersService(prisma, access, audit, documentStorage);
+  });
+
+  it('filters customers by branch and includes the branch name', async () => {
+    prisma.customer.findMany.mockResolvedValue([{
+      ...customer,
+      fullName: 'Nguyen Van A',
+      phone: '0987000001',
+      email: null,
+      dateOfBirth: null,
+      provenance: 'Manual',
+      verificationStatus: 'UNVERIFIED',
+      createdAt: new Date('2026-11-26T00:00:00.000Z'),
+      updatedAt: new Date('2026-11-26T00:00:00.000Z'),
+      assignments: [],
+    }]);
+    prisma.branch.findMany.mockResolvedValue([{ id: contract.branchId, name: 'Hai Phong Branch' }]);
+
+    await expect(service.list(actor, { branchId: contract.branchId, take: 20 })).resolves.toEqual([
+      expect.objectContaining({
+        id: customer.id,
+        branchId: contract.branchId,
+        branchName: 'Hai Phong Branch',
+      }),
+    ]);
+    expect(prisma.customer.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ branchId: contract.branchId }),
+    }));
   });
 
   it('returns the latest customer status changes with their notes and actors', async () => {
@@ -128,6 +166,41 @@ describe('CustomersService contract approval', () => {
 
     await expect(service.customerStatusHistory(actor, customer.id)).rejects.toThrow('forbidden');
     expect(prisma.customerStatusHistory.findMany).not.toHaveBeenCalled();
+  });
+
+  it('allows an admin to soft-delete a loan product', async () => {
+    prisma.loanProduct.findUnique.mockResolvedValue({
+      id: 'product-id',
+      branchId: null,
+      branch: null,
+      code: 'LP-1',
+      name: 'Business loan',
+      loanType: 'Gói hỗ trợ ngắn hạn',
+      source: 'Internal',
+      description: null,
+      sourceUrl: null,
+      thumbnailUrl: null,
+      minTermMonths: 1,
+      maxTermMonths: 12,
+      minAmount: null,
+      maxAmount: null,
+      annualInterestRate: new Prisma.Decimal('8.4500'),
+      status: 'DRAFT',
+      currentFormulaVersion: 0,
+      deletedAt: null,
+      createdById: actor.id,
+      createdAt: new Date('2026-11-26T00:00:00.000Z'),
+      updatedAt: new Date('2026-11-26T00:00:00.000Z'),
+    });
+
+    await expect(service.deleteLoanProduct(actor, 'product-id')).resolves.toMatchObject({
+      id: 'product-id',
+      status: 'INACTIVE',
+    });
+    expect(tx.loanProduct.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'product-id', deletedAt: null },
+      data: expect.objectContaining({ status: 'INACTIVE', deletedAt: expect.any(Date) }),
+    }));
   });
 
   it('converts the customer and records status history when a contract is approved', async () => {

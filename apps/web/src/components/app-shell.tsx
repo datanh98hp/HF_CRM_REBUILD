@@ -8,7 +8,6 @@ import {
   ChevronRight,
   FileCheck2,
   FileSpreadsheet,
-  LayoutDashboard,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -112,8 +111,7 @@ export function AppShell({
     setMobileOpen(false);
   }
 
-  const groups: { label: string; items: NavItem[] }[] = [
-    { label: 'Tổng quan', items: [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, disabled: true }] },
+  const allGroups: { label: string; items: NavItem[] }[] = [
     {
       label: 'Khách hàng & tư vấn',
       items: [
@@ -155,6 +153,7 @@ export function AppShell({
     },
     { label: 'Tài khoản', items: [{ key: 'profile', label: 'Hồ sơ của tôi', icon: UserRound, section: null }] },
   ];
+  const groups = allGroups.filter((group) => group.items.length > 0);
 
   const currentLabel = activeSection === 'customers'
     ? 'Khách hàng'

@@ -175,9 +175,10 @@ function currentVnMonth() {
 
 function dueLabel(dueAt: string | null) {
   if (!dueAt) return 'Chưa đặt hạn';
-  const days = Math.round((dateKey(new Date(dueAt)) - dateKey(new Date())) / 86_400_000);
-  if (days < 0) return `Quá hạn ${Math.abs(days)} ngày`;
-  if (days === 0) return 'Hôm nay';
+  const dueDay = dateKey(new Date(dueAt));
+  const today = dateKey(new Date());
+  if (today > dueDay) return `Quá hạn ${Math.floor((today - dueDay) / 86_400_000)} ngày`;
+  if (today === dueDay) return 'Hôm nay';
   return formatDate(dueAt);
 }
 
@@ -215,7 +216,8 @@ function errorMessage(cause: unknown, fallback: string) {
 
 function withinPlanPeriod(date: string, plan: Plan) {
   const instant = Date.parse(`${date}T00:00:00.000Z`);
-  return instant >= Date.parse(plan.periodStart) && instant < Date.parse(plan.periodEnd);
+  const periodEndExclusive = Date.parse(plan.periodEnd) + 86_400_000;
+  return instant >= Date.parse(plan.periodStart) && instant < periodEndExclusive;
 }
 
 function KpiCard({ item, spanClass }: { item: Kpi; spanClass?: string }) {

@@ -193,6 +193,23 @@ describe('TasksService', () => {
     })).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('allows a task deadline on the plan end date', async () => {
+    await service.create(actor, planId, {
+      metricId,
+      branchId,
+      title: 'Call customers',
+      assigneeIds: [actor.id],
+      target: 10,
+      dueAt: '2026-04-01T23:59:59.999Z',
+    });
+
+    expect(tx.task.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        dueAt: new Date('2026-04-01T23:59:59.999Z'),
+      }),
+    }));
+  });
+
   it('rejects recipients who are not active members of the selected branch', async () => {
     prisma.user.findMany.mockResolvedValue([]);
 
@@ -245,9 +262,19 @@ describe('TasksService', () => {
       reportedValue: 3,
       reportedUnit: 'calls',
       narrative: 'Completed calls',
-      occurredAt: '2026-04-01T00:00:00.000Z',
+      occurredAt: '2026-04-02T00:00:00.000Z',
     })).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.taskResult.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a result submitted through the final day of the plan', async () => {
+    await expect(service.submitResult(actor, taskId, {
+      reportedValue: 3,
+      reportedUnit: 'calls',
+      narrative: 'Completed calls',
+      occurredAt: '2026-04-01T23:59:59.999Z',
+    })).resolves.toMatchObject({ occurredAt: new Date('2026-04-01T23:59:59.999Z') });
+    expect(tx.taskResult.create).toHaveBeenCalled();
   });
 
   it('links only available, unexpired evidence files from the task branch', async () => {
@@ -533,6 +560,40 @@ describe('TasksService', () => {
         }),
       }),
     }));
+  });
+
+  it('includes results from the plan end date in plan-period KPI only', async () => {
+    prisma.plan.findFirst.mockResolvedValue({
+      ...plan(),
+      metrics: [{
+        id: metricId,
+        name: 'Calls',
+        unit: 'calls',
+        target: new Prisma.Decimal(20),
+      }],
+    });
+    prisma.taskAssignment.findMany.mockResolvedValue([
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(5),
+          occurredAt: new Date('2026-04-01T23:59:59.999Z'),
+        }],
+      },
+      {
+        target: new Prisma.Decimal(10),
+        task: { metricId },
+        results: [{
+          reportedValue: new Prisma.Decimal(10),
+          occurredAt: new Date('2026-04-02T00:00:00.000Z'),
+        }],
+      },
+    ]);
+
+    await expect(service.kpi(actor, planId, { periodType: KpiPeriodType.PLAN })).resolves.toMatchObject([
+      { metricId, verifiedTotal: 5, remaining: 15, achievementRate: 25 },
+    ]);
   });
 
   it('filters monthly KPI by Asia/Ho_Chi_Minh occurrence-date boundaries', async () => {

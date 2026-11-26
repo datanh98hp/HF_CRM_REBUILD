@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { downloadFile, request } from '@/lib/crm-api';
+import { useSearchParams } from 'next/navigation';
 
 type Contract = {
   id: string;
@@ -175,6 +176,8 @@ function ContractWorkspace({
   canReview: boolean;
   canManageDocuments: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const requestedContractId = searchParams.get('contractId');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
@@ -233,9 +236,18 @@ function ContractWorkspace({
         if (version !== requestVersion.current) return;
         setContracts(result.items);
         setNextCursor(result.nextCursor);
-        setSelectedId((current) => result.items.some((contract) => contract.id === current)
-          ? current
-          : result.items[0]?.id ?? '');
+        setSelectedId((current) => {
+          const requested = requestedContractId
+            ? result.items.find((contract) => contract.id === requestedContractId)?.id
+            : undefined;
+          if (requested) {
+            if (isMobileLayout) setMobileDetailOpen(true);
+            return requested;
+          }
+          return result.items.some((contract) => contract.id === current)
+            ? current
+            : result.items[0]?.id ?? '';
+        });
       })
       .catch((cause: unknown) => {
         if (version === requestVersion.current) setError(cause instanceof Error ? cause.message : 'Không thể tải danh sách hợp đồng.');
@@ -244,7 +256,7 @@ function ContractWorkspace({
         if (version === requestVersion.current) setLoading(false);
       });
     return () => { requestVersion.current += 1; };
-  }, [accessToken, apiRequest, cursor, pageSize, reloadVersion, searchFilter, statusFilter]);
+  }, [accessToken, apiRequest, cursor, isMobileLayout, pageSize, reloadVersion, requestedContractId, searchFilter, statusFilter]);
 
   useEffect(() => {
     if (!selectedId) {

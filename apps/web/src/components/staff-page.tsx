@@ -106,7 +106,9 @@ export function StaffPage() {
       await loadUsers(session.accessToken);
       setNotice('Đã tạo tài khoản. Nhân viên sẽ được yêu cầu đổi mật khẩu khi đăng nhập lần đầu.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Không thể tạo tài khoản.');
+      setError(cause instanceof Error && cause.message === 'USERNAME_ALREADY_EXISTS'
+        ? 'Người dùng đã tồn tại'
+        : cause instanceof Error ? cause.message : 'Không thể tạo tài khoản.');
     } finally {
       setBusy(false);
     }

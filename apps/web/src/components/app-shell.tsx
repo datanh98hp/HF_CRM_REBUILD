@@ -5,6 +5,7 @@ import {
   Building2,
   ChartNoAxesColumn,
   CheckSquare,
+  ChevronDown,
   ChevronRight,
   FileCheck2,
   FileSpreadsheet,
@@ -83,6 +84,7 @@ export function AppShell({
 }: ShellProps) {
   const [expanded, setExpanded] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
@@ -111,7 +113,7 @@ export function AppShell({
     setMobileOpen(false);
   }
 
-  const allGroups: { label: string; items: NavItem[] }[] = [
+  const allGroups: { label: string; icon?: LucideIcon; items: NavItem[] }[] = [
     {
       label: 'Khách hàng & tư vấn',
       items: [
@@ -136,6 +138,7 @@ export function AppShell({
     },
     {
       label: 'Báo cáo',
+      icon: ChartNoAxesColumn,
       items: canReadReports ? [
         { key: 'report-customers', label: 'Khách hàng', icon: UsersRound, section: 'report-customers' },
         { key: 'report-plans', label: 'Kế hoạch', icon: ChartNoAxesColumn, section: 'report-plans' },
@@ -154,6 +157,11 @@ export function AppShell({
     { label: 'Tài khoản', items: [{ key: 'profile', label: 'Hồ sơ của tôi', icon: UserRound, section: null }] },
   ];
   const groups = allGroups.filter((group) => group.items.length > 0);
+
+  useEffect(() => {
+    const activeGroup = groups.find((group) => group.items.some((item) => item.section === activeSection))?.label;
+    if (activeGroup) setOpenGroups((current) => current.includes(activeGroup) ? current : [...current, activeGroup]);
+  }, [activeSection]);
 
   const currentLabel = activeSection === 'customers'
     ? 'Khách hàng'
@@ -223,8 +231,11 @@ export function AppShell({
         <nav className="crm-nav">
           {groups.map((group) => group.items.length > 0 && (
             <div className="crm-nav-group" key={group.label}>
-              <p className="crm-nav-heading">{group.label}</p>
-              {group.items.map((item) => {
+              <Button className="crm-nav-heading" variant="ghost" type="button" aria-expanded={openGroups.includes(group.label)} onClick={() => setOpenGroups((current) => current.includes(group.label) ? current.filter((label) => label !== group.label) : [...current, group.label])}>
+                {(() => { const GroupIcon = group.icon ?? group.items[0].icon; return <GroupIcon className="crm-nav-group-icon" aria-hidden="true" />; })()}
+                <span>{group.label}</span><ChevronDown className="crm-nav-group-chevron" aria-hidden="true" />
+              </Button>
+              {(openGroups.includes(group.label) || !expanded) && group.items.map((item) => {
                 const isActive = item.section === null
                   ? activeSection === null
                   : item.section !== undefined

@@ -733,11 +733,43 @@
     @apply mb-[15px];
   }
   .crm-nav-heading {
-    @apply overflow-hidden m-[10px_0_7px] py-0 px-[10px] text-[#c0c9ca] text-[12px] font-bold tracking-[.4px] uppercase
-      whitespace-nowrap opacity-[0] h-[0];
+    @apply flex w-full h-[0] items-center justify-start gap-[8px] overflow-hidden m-0 py-0 px-[10px] rounded-[6px]
+      bg-transparent text-[#c0c9ca] text-[11px] font-bold tracking-[.4px]  whitespace-nowrap opacity-[0] pointer-events-none;
   }
   .is-expanded .crm-nav-heading {
-    @apply h-auto opacity-[1];
+    @apply h-[34px] m-[8px_0_4px] text-left opacity-[1] pointer-events-auto;
+  }
+  .crm-nav-heading>span {
+    @apply flex-1 text-left;
+  }
+  .crm-nav-heading>svg {
+    @apply w-[14px] h-[14px] transition-transform;
+  }
+  .crm-nav-heading>.crm-nav-group-icon {
+    @apply w-[16px] h-[16px] flex-[0_0_16px] text-[#c0c9ca];
+  }
+  .crm-nav-heading>.crm-nav-group-chevron {
+    @apply ml-auto;
+  }
+  .crm-nav-heading:hover,
+  .crm-nav-heading[aria-expanded="true"] {
+    @apply !bg-transparent;
+  }
+  .crm-nav-heading:hover:not([aria-expanded="true"]) {
+    @apply !text-[#c0c9ca];
+  }
+  .crm-nav-heading[aria-expanded="true"] {
+    @apply !text-emerald-400;
+  }
+  .crm-nav-heading[aria-expanded="true"]>.crm-nav-group-icon,
+  .crm-nav-heading[aria-expanded="true"]>.crm-nav-group-chevron {
+    @apply text-emerald-800 bg-transparent;
+  }
+  .crm-nav-heading:focus-visible {
+    @apply !bg-transparent !text-[#c0c9ca] outline outline-2 outline-crm-accent outline-offset-[-2px];
+  }
+  .crm-nav-group>.crm-nav-item {
+    @apply ml-[20px] w-[calc(100%-20px)] border-l border-[#ffffff20] rounded-l-none;
   }
   .crm-nav-item {
     @apply relative flex w-full min-h-[42px] items-center [gap:12px] m-[3px_0] py-0 px-[12px] border-0 rounded-[7px]
@@ -747,7 +779,7 @@
     @apply [flex:0_0_18px];
   }
   .crm-nav-item:hover {
-    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+    @apply !bg-transparent !text-sidebar-foreground;
   }
   .crm-nav-item.is-active {
     @apply bg-sidebar-accent text-sidebar-accent-foreground font-semibold;

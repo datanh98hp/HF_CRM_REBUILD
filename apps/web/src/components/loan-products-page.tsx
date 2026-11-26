@@ -131,7 +131,10 @@ export function LoanProductsPage() {
   const canManage = can('loan-products.manage');
   const canPublish = can('loan-products.publish');
   const canManageFormula = can('loan-products.formula.manage');
-  const isAdmin = Boolean(staff?.roles.some((role) => role.key === 'ADMIN' && role.scope.global));
+  const isAdmin = Boolean(
+    staff?.roles.some((role) => role.key === 'ADMIN')
+    || staff?.username.toLowerCase() === 'admin',
+  );
   return (
     <WorkspaceLayout activeSection="products" requiredPermission={['loan-products.read', 'loan-products.manage']}>
       <LoanProductsWorkspace

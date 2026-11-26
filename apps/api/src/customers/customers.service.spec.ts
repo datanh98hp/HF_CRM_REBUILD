@@ -168,6 +168,14 @@ describe('CustomersService contract approval', () => {
     expect(prisma.customerStatusHistory.findMany).not.toHaveBeenCalled();
   });
 
+  it('rejects loan product deletion for non-admin staff', async () => {
+    prisma.userRoleGrant.findFirst.mockResolvedValue(null);
+
+    await expect(service.deleteLoanProduct(actor, 'product-id')).rejects.toMatchObject({
+      response: { code: 'LOAN_PRODUCT_DELETE_ADMIN_ONLY' },
+    });
+  });
+
   it('allows an admin to soft-delete a loan product', async () => {
     prisma.loanProduct.findUnique.mockResolvedValue({
       id: 'product-id',

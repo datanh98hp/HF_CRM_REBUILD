@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Check, ChevronLeft, ChevronRight, Download, File as FileIcon, FileImage, FileText, History, RefreshCw, Search, Trash2, Upload, X } from 'lucide-react';
+import { Ban, Check, ChevronLeft, ChevronRight, CircleCheck, CircleEllipsis, CircleX, Download, Eye, File as FileIcon, FileImage, FileText, History, RefreshCw, Search, Trash2, Upload, UserRound, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPopup, DialogPortal, DialogTitle } from '@/components/ui/dialog';
@@ -121,9 +121,21 @@ function formatLoanTermBounds(minTermMonths: number | null, maxTermMonths: numbe
 
 function badgeClass(status: string) {
   if (status === 'PENDING_REVIEW') return 'border-amber-200 bg-amber-50 text-amber-900';
+  if (status === 'AWAITING_CUSTOMER_CONFIRMATION') return 'border-amber-200 bg-amber-50 text-amber-900';
   if (status === 'REJECTED' || status === 'CANCELLED') return 'border-red-200 bg-red-50 text-red-800';
   if (status === 'COMPLETED') return 'border-emerald-200 bg-emerald-50 text-emerald-900';
+  if (status === 'APPROVED') return 'border-slate-200 bg-slate-100 text-slate-700';
   return 'border-slate-200 bg-slate-100 text-slate-800';
+}
+
+function statusIcon(status: string) {
+  const className = 'size-3.5';
+  if (status === 'PENDING_REVIEW') return <CircleEllipsis aria-hidden="true" className={className} />;
+  if (status === 'APPROVED' || status === 'COMPLETED') return <CircleCheck aria-hidden="true" className={className} />;
+  if (status === 'AWAITING_CUSTOMER_CONFIRMATION') return <UserRound aria-hidden="true" className={className} />;
+  if (status === 'REJECTED') return <CircleX aria-hidden="true" className={className} />;
+  if (status === 'CANCELLED') return <Ban aria-hidden="true" className={className} />;
+  return <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />;
 }
 
 function formatFileSize(bytes: number) {
@@ -150,8 +162,11 @@ function historySummary(item: ContractHistoryItem) {
 }
 
 export function LoanContractsPage() {
-  const { session, can } = useCrmSession();
+  const { session, staff, can } = useCrmSession();
   if (!session) return <main className="loading-screen"><span className="spinner" aria-hidden="true" /><p>Đang tải hợp đồng…</p></main>;
+  const canManageDocuments = Boolean(staff?.permissions.some((permission) =>
+    permission.key === 'loan-contracts.manage' && (permission.scopes.includes('ALL') || permission.scopes.includes('BRANCH')),
+  ));
 
   return (
     <WorkspaceLayout activeSection="contracts" requiredPermission="loan-contracts.read">
@@ -159,7 +174,8 @@ export function LoanContractsPage() {
         accessToken={session.accessToken}
         request={request}
         canReview={can('loan-contracts.review')}
-        canManageDocuments={can('loan-contracts.manage')}
+        canManageDocuments={canManageDocuments}
+        canUploadDocuments={can('loan-contracts.manage')}
       />
     </WorkspaceLayout>
   );
@@ -170,11 +186,13 @@ function ContractWorkspace({
   request: apiRequest,
   canReview,
   canManageDocuments,
+  canUploadDocuments,
 }: {
   accessToken: string;
   request: ContractRequest;
   canReview: boolean;
   canManageDocuments: boolean;
+  canUploadDocuments: boolean;
 }) {
   const searchParams = useSearchParams();
   const requestedContractId = searchParams.get('contractId');
@@ -422,6 +440,33 @@ function ContractWorkspace({
     }
   }
 
+  async function openDocumentInNewTab(document: ContractDocument) {
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      setDocumentsError('Trình duyệt đã chặn tab mới. Hãy cho phép mở tab để xem tài liệu.');
+      return;
+    }
+
+    previewWindow.opener = null;
+    setDocumentBusy(document.id);
+    setDocumentsError('');
+    try {
+      const blob = await downloadFile(document.downloadPath, accessToken);
+      const objectUrl = URL.createObjectURL(blob);
+      previewWindow.location.replace(objectUrl);
+      const releaseWhenClosed = () => {
+        if (previewWindow.closed) URL.revokeObjectURL(objectUrl);
+        else window.setTimeout(releaseWhenClosed, 1000);
+      };
+      window.setTimeout(releaseWhenClosed, 1000);
+    } catch (cause) {
+      previewWindow.close();
+      setDocumentsError(cause instanceof Error ? cause.message : 'Không thể mở tài liệu trong tab mới.');
+    } finally {
+      setDocumentBusy('');
+    }
+  }
+
   return (
     <main className="w-full min-w-0">
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -493,7 +538,7 @@ function ContractWorkspace({
                           <p className="text-slate-800">{contract.packageName}</p>
                           <p className="mt-0.5 text-xs tabular-nums text-slate-600">{formatMoney(contract.loanAmount)}</p>
                         </td>
-                        <td className="px-4 py-3"><Badge variant="outline" className={badgeClass(contract.status)}>{statusLabels[contract.status] ?? contract.status}</Badge></td>
+                        <td className="px-4 py-3"><Badge variant="outline" className={badgeClass(contract.status)}>{statusIcon(contract.status)}{statusLabels[contract.status] ?? contract.status}</Badge></td>
                         <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">{formatDate(contract.createdAt)}</td>
                       </tr>
                     ))}
@@ -565,7 +610,7 @@ function ContractWorkspace({
                 <div><dt className="text-xs text-slate-500">Kỳ hạn</dt><dd className="mt-1 font-medium text-slate-900">{selected.termMonths ? `${selected.termMonths} tháng` : '—'}</dd></div>
                 <div><dt className="text-xs text-slate-500">Ngày tạo</dt><dd className="mt-1 font-medium text-slate-900">{formatDate(selected.createdAt)}</dd></div>
                 <div><dt className="text-xs text-slate-500">Chi nhánh</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.branchName ?? '—'}</dd></div>
-                <div><dt className="text-xs text-slate-500">Trạng thái</dt><dd className="mt-1"><Badge variant="outline" className={badgeClass(selected.status)}>{statusLabels[selected.status] ?? selected.status}</Badge></dd></div>
+                <div><dt className="text-xs text-slate-500">Trạng thái</dt><dd className="mt-1"><Badge variant="outline" className={badgeClass(selected.status)}>{statusIcon(selected.status)}{statusLabels[selected.status] ?? selected.status}</Badge></dd></div>
               </dl>
               <section className="border-t border-slate-200 py-4" aria-labelledby="contract-product-heading">
                 <h3 id="contract-product-heading" className="font-semibold text-slate-900">Chi tiết gói vay</h3>
@@ -614,7 +659,7 @@ function ContractWorkspace({
                     <h3 id="contract-documents-heading" className="font-semibold text-slate-900">Tài liệu liên quan</h3>
                     <p className="mt-1 text-xs text-slate-500">DOCX, PDF, PNG, JPG · Tối đa 25 MB mỗi tệp</p>
                   </div>
-                  {canManageDocuments && <label className={`${buttonVariants({ variant: 'outline' })} cursor-pointer`}>
+                  {canUploadDocuments && <label className={`${buttonVariants({ variant: 'outline' })} cursor-pointer`}>
                     <Upload aria-hidden="true" />
                     Thêm tài liệu
                     <input
@@ -647,6 +692,15 @@ function ContractWorkspace({
                             {document.uploadedBy && <p className="text-xs text-slate-500">{document.uploadedBy.displayName} · {document.uploadedBy.username}</p>}
                           </div>
                           <div className="flex shrink-0 items-center">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Mở ${document.fileName} trong tab mới`}
+                              title={`Mở ${document.fileName} trong tab mới`}
+                              disabled={Boolean(documentBusy)}
+                              onClick={() => void openDocumentInNewTab(document)}
+                            ><Eye aria-hidden="true" /></Button>
                             <Button
                               type="button"
                               variant="ghost"

@@ -443,7 +443,7 @@ export class CustomersService {
     const products = await this.prisma.loanProduct.findMany({
       where: {
         deletedAt: null,
-        ...(query.branchId ? { branchId: query.branchId } : {}),
+        ...(query.branchId ? { OR: [{ branchId: query.branchId }, { branchId: null }] } : {}),
         ...(query.status ? { status: query.status } : {}),
       },
       include: { branch: { select: { id: true, code: true, name: true } } },
@@ -536,8 +536,13 @@ export class CustomersService {
     this.assertStaff(actor);
     const product = await this.loanProductOrThrow(productId);
     await this.assertLoanProductAccess(actor, 'loan-products.manage', product, true);
-    if (product.status === LoanProductStatus.ACTIVE) {
+    const canManageGlobally = await this.access.hasPermission(actor.id, 'loan-products.manage', AccessScope.ALL);
+    if (product.status === LoanProductStatus.ACTIVE && !canManageGlobally) {
       throw new ConflictException({ code: 'ACTIVE_LOAN_PRODUCT_IMMUTABLE' });
+    }
+    if (dto.branchId !== undefined) {
+      if (!canManageGlobally) throw new ForbiddenException({ code: 'LOAN_PRODUCT_BRANCH_CHANGE_ADMIN_ONLY' });
+      if (dto.branchId) await this.assertBranchExists(dto.branchId);
     }
     if (!Object.values(dto).some((value) => value !== undefined)) {
       throw new BadRequestException({ code: 'LOAN_PRODUCT_UPDATE_EMPTY' });
@@ -562,6 +567,7 @@ export class CustomersService {
       const row = await tx.loanProduct.update({
         where: { id: product.id },
         data: {
+          ...(dto.branchId !== undefined ? { branchId: dto.branchId } : {}),
           ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
           ...(dto.loanType !== undefined ? { loanType: dto.loanType.trim() } : {}),
           ...(dto.source !== undefined ? { source: dto.source.trim() } : {}),
@@ -593,15 +599,8 @@ export class CustomersService {
 
   async deleteLoanProduct(actor: ActorContext, productId: string, request?: ActorRequest) {
     this.assertStaff(actor);
-    const adminGrant = await this.prisma.userRoleGrant.findFirst({
-      where: {
-        userId: actor.id,
-        branchId: null,
-        role: { key: 'ADMIN' },
-      },
-      select: { id: true },
-    });
-    if (!adminGrant) throw new ForbiddenException({ code: 'LOAN_PRODUCT_DELETE_ADMIN_ONLY' });
+    const canManageGlobally = await this.access.hasPermission(actor.id, 'loan-products.manage', AccessScope.ALL);
+    if (!canManageGlobally) throw new ForbiddenException({ code: 'LOAN_PRODUCT_DELETE_ADMIN_ONLY' });
 
     const product = await this.loanProductOrThrow(productId);
     await this.assertLoanProductAccess(actor, 'loan-products.manage', product, true);
@@ -954,7 +953,7 @@ export class CustomersService {
   async uploadContractDocument(actor: ActorContext, contractId: string, file: ContractUploadFile | undefined, request?: ActorRequest) {
     this.assertStaff(actor);
     const contract = await this.contractForAction(actor, contractId);
-    await this.assertBranchManagePermission(actor, 'loan-contracts.manage', contract.branchId);
+    await this.assertCustomerAccess(actor, 'loan-contracts.manage', contract.customer);
     const fileData = this.validateContractDocument(file);
     this.documentStorage.assertUploadsAvailable();
     const storageKey = `${randomUUID()}${fileData.extension}`;
@@ -1616,9 +1615,12 @@ export class CustomersService {
   }
 
   private async contractForAction(actor: ActorContext, id: string) {
-    const contract = await this.prisma.loanContract.findUnique({ where: { id } });
+    const contract = await this.prisma.loanContract.findUnique({
+      where: { id },
+      include: { customer: { include: { assignments: { where: { endedAt: null } } } } },
+    });
     if (!contract) throw new NotFoundException({ code: 'LOAN_CONTRACT_NOT_FOUND' });
-    await this.assertBranchManagePermission(actor, 'loan-contracts.read', contract.branchId);
+    await this.assertCustomerAccess(actor, 'loan-contracts.read', contract.customer);
     return contract;
   }
 
@@ -1681,6 +1683,9 @@ export class CustomersService {
   }
 
   private async canReadLoanProduct(actor: ActorContext, product: { branchId: string | null; createdById: string | null }) {
+    if (!product.branchId) {
+      return this.access.hasPermission(actor.id, 'loan-products.read');
+    }
     return this.access.hasResourceAccess(actor.id, 'loan-products.read', undefined, {
       ownerId: product.createdById,
       branchId: product.branchId,
@@ -1694,7 +1699,11 @@ export class CustomersService {
     write = false,
   ) {
     if (!product.branchId) {
-      await this.access.assertPermission(actor.id, permission, AccessScope.ALL);
+      if (write) {
+        await this.access.assertPermission(actor.id, permission, AccessScope.ALL);
+      } else {
+        await this.access.assertPermission(actor.id, permission);
+      }
       return;
     }
     if (write) {

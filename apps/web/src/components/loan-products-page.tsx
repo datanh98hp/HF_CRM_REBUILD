@@ -65,8 +65,8 @@ type ProductForm = {
 
 const statusLabels: Record<LoanProduct['status'], string> = {
   DRAFT: 'Bản nháp',
-  ACTIVE: 'Đang công bố',
-  INACTIVE: 'Ngừng bán',
+  ACTIVE: 'Đang hoạt động',
+  INACTIVE: 'Chưa hoạt động',
 };
 const statusVariants: Record<LoanProduct['status'], 'secondary' | 'default' | 'outline'> = {
   DRAFT: 'outline',
@@ -132,8 +132,10 @@ export function LoanProductsPage() {
   const canPublish = can('loan-products.publish');
   const canManageFormula = can('loan-products.formula.manage');
   const isAdmin = Boolean(
-    staff?.roles.some((role) => role.key === 'ADMIN')
-    || staff?.username.toLowerCase() === 'admin',
+    staff?.permissions.some((permission) =>
+      permission.key === 'loan-products.manage'
+      && permission.scopes.includes('ALL')
+    )
   );
   return (
     <WorkspaceLayout activeSection="products" requiredPermission={['loan-products.read', 'loan-products.manage']}>
@@ -319,10 +321,17 @@ function LoanProductsWorkspace({
       ...(editorMode === 'create' && form.code.trim() ? { code: form.code.trim() } : {}),
       name: form.name.trim(),
       ...(shouldSaveLoanType ? { loanType: form.loanType } : {}),
+      ...(editorMode === 'edit' && isAdmin ? { branchId: form.branchId || null } : {}),
       source: form.source.trim(),
-      description: form.description.trim() || undefined,
-      sourceUrl: form.sourceUrl.trim() || undefined,
-      thumbnailUrl: form.thumbnailUrl.trim() || undefined,
+      description: editorMode === 'edit'
+        ? form.description.trim() || null
+        : form.description.trim() || undefined,
+      sourceUrl: editorMode === 'edit'
+        ? form.sourceUrl.trim() || null
+        : form.sourceUrl.trim() || undefined,
+      thumbnailUrl: editorMode === 'edit'
+        ? form.thumbnailUrl.trim() || null
+        : form.thumbnailUrl.trim() || undefined,
       minTermMonths: Number(form.minTermMonths), maxTermMonths: Number(form.maxTermMonths),
       minAmount: form.minAmount.trim() || null,
       maxAmount: form.maxAmount.trim() || null,
@@ -461,7 +470,7 @@ function LoanProductsWorkspace({
   }
 
   const selectClass = `${inputClass} w-full rounded-lg border border-input px-3 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50`;
-  const editable = canManage && selectedProduct?.status !== 'ACTIVE';
+  const editable = canManage && (selectedProduct?.status !== 'ACTIVE' || isAdmin);
 
   return (
     <main className="min-w-0 p-4 sm:p-6">
@@ -548,7 +557,7 @@ function LoanProductsWorkspace({
                   </Select>
                 </ProductField>
                 <ProductField label="Nguồn *"><Input className={inputClass} value={form.source} onChange={(event) => updateForm('source', event.target.value)} minLength={2} maxLength={200} required /></ProductField>
-                <ProductField label="Chi nhánh"><Select value={form.branchId} onValueChange={(value) => { if (typeof value === 'string') updateForm('branchId', value); }}><SelectTrigger className={selectClass}><SelectValue placeholder="Toàn hệ thống">{branches.find((branch) => branch.id === form.branchId)?.name}</SelectValue></SelectTrigger><SelectContent align="start"><SelectItem value="">Toàn hệ thống</SelectItem>{activeBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.code} · {branch.name}</SelectItem>)}</SelectContent></Select></ProductField>
+                <ProductField label="Chi nhánh"><Select value={form.branchId} disabled={editorMode === 'edit' && !isAdmin} onValueChange={(value) => { if (typeof value === 'string') updateForm('branchId', value); }}><SelectTrigger className={selectClass}><SelectValue placeholder="Toàn hệ thống">{branches.find((branch) => branch.id === form.branchId)?.name}</SelectValue></SelectTrigger><SelectContent align="start"><SelectItem value="">Toàn hệ thống</SelectItem>{activeBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.code} · {branch.name}</SelectItem>)}</SelectContent></Select></ProductField>
                 <ProductField label="Lãi suất năm (%) *"><Input className={inputClass} type="number" min="0" step="0.0001" value={form.annualInterestRate} onChange={(event) => updateForm('annualInterestRate', event.target.value)} required /></ProductField>
                 <ProductField label="Kỳ hạn tối thiểu (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.minTermMonths} onChange={(event) => updateForm('minTermMonths', event.target.value)} required /></ProductField>
                 <ProductField label="Kỳ hạn tối đa (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.maxTermMonths} onChange={(event) => updateForm('maxTermMonths', event.target.value)} required /></ProductField>
@@ -587,10 +596,9 @@ function LoanProductsWorkspace({
                 {selectedProduct.sourceUrl && <div className="min-w-0"><dt className="text-xs text-slate-500">Link nguồn</dt><dd className="mt-1 break-all"><a className="text-teal-800 underline" href={selectedProduct.sourceUrl} target="_blank" rel="noreferrer">{selectedProduct.sourceUrl}</a></dd></div>}
                 {selectedProduct.description && <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedProduct.description}</dd></div>}
               </dl>
-              <section className="p-4 sm:p-5" aria-labelledby="formula-heading">
+              {canManageFormula && <section className="p-4 sm:p-5" aria-labelledby="formula-heading">
                 <div className="mb-4 flex items-start justify-between gap-3"><div><h3 id="formula-heading" className="font-semibold text-slate-950">Công thức tính * - (Đang áp dụng lãi suất cố định / năm)</h3><p className="mt-1 text-sm text-slate-600">{selectedProduct.currentFormulaVersion ? `Phiên bản hiện hành ${selectedProduct.currentFormulaVersion}` : 'Chưa có phiên bản công thức'}</p></div><FlaskConical aria-hidden="true" className="size-4 text-slate-500" /></div>
-                {canManageFormula ? (
-                  <form onSubmit={saveFormula} className="grid grid-cols-1 gap-3">
+                <form onSubmit={saveFormula} className="grid grid-cols-1 gap-3">
                     <ProductField label="Công thức lãi *"><Input className={`${inputClass} font-mono`} value={interestFormula} onChange={(event) => setInterestFormula(event.target.value)} placeholder="principal * annualRatePercent / 100" required /></ProductField>
                     <ProductField label="Công thức khoản trả tháng *"><Input className={`${inputClass} font-mono`} value={monthlyPaymentFormula} onChange={(event) => setMonthlyPaymentFormula(event.target.value)} placeholder="Nhập biểu thức đã được phê duyệt" required /></ProductField>
                     <label className="grid gap-1.5 text-sm font-medium text-slate-800">Biến bổ sung (JSON)<textarea className="min-h-28 rounded-lg border border-input bg-white px-3 py-2 font-mono text-base focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm" value={variablesJson} onChange={(event) => setVariablesJson(event.target.value)} aria-invalid={Boolean(formulaError)} /></label>
@@ -641,9 +649,8 @@ function LoanProductsWorkspace({
                     </AccordionItem>
                     {formulaError && <p role="alert" className="text-xs text-red-700">{formulaError}</p>}
                     <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-600">Phiên bản mới không sửa snapshot hợp đồng cũ. Không có công thức tài chính mặc định; chỉ lưu công thức đã được nghiệp vụ phê duyệt.</p><Button variant="outline" type="submit" disabled={saving} aria-busy={saving}><Save aria-hidden="true" className="size-4" />{saving ? 'Đang lưu…' : 'Lưu phiên bản mới'}</Button></div>
-                  </form>
-                ) : <p className="text-sm text-slate-600">Bạn chưa có quyền quản lý phiên bản công thức.</p>}
-              </section>
+                </form>
+              </section>}
               {canManageFormula && <>
                 {formulaHistoryError && <div className="p-4 sm:p-5">
                   <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -699,7 +706,7 @@ function LoanProductsWorkspace({
                   </AccordionItem>
                 </div>
               </>}
-              {selectedProduct.status === 'DRAFT' && selectedProduct.currentFormulaVersion === 0 && <p role="note" className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 sm:mx-5"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />Cần lưu công thức đã được duyệt trước khi công bố sản phẩm.</p>}
+              {canManageFormula && selectedProduct.status === 'DRAFT' && selectedProduct.currentFormulaVersion === 0 && <p role="note" className="mx-4 mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 sm:mx-5"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />Cần lưu công thức đã được duyệt trước khi công bố sản phẩm.</p>}
             </div>
           ) : loading ? <p className="py-8 text-center text-sm text-slate-600">Đang tải chi tiết sản phẩm…</p> : <p className="px-4 py-6 text-sm text-slate-600">Chọn một sản phẩm để xem điều kiện và công thức.</p>}
             </div>

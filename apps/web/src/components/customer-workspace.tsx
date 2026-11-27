@@ -159,6 +159,18 @@ const statusLabels: Record<string, string> = {
   CONFIRMED_DUPLICATE: 'Đã xác nhận trùng',
   NOT_DUPLICATE: 'Không trùng',
 };
+const customerStatusBadgeClasses: Record<string, string> = {
+  NEW: 'border-sky-200 bg-sky-50 text-sky-800',
+  CONTACTED: 'border-cyan-200 bg-cyan-50 text-cyan-800',
+  QUALIFIED: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  IN_PROGRESS: 'border-amber-200 bg-amber-50 text-amber-900',
+  CONVERTED: 'border-violet-200 bg-violet-50 text-violet-800',
+  CLOSED: 'border-slate-300 bg-slate-100 text-slate-700',
+};
+
+function customerStatusBadgeClass(status: string) {
+  return customerStatusBadgeClasses[status] ?? 'border-slate-300 bg-slate-100 text-slate-700';
+}
 const matchReasonLabels: Record<string, string> = {
   PHONE: 'Trùng số điện thoại',
   EMAIL: 'Trùng email',
@@ -1181,7 +1193,7 @@ export function CustomerWorkspace({
   }
 
   const inputClass = 'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
-  const secondaryButtonClass = buttonVariants({ variant: 'outline', size: 'default' });
+  const secondaryButtonClass = buttonVariants({ variant: 'secondary', size: 'default' });
 
   return (
     <main className="w-full min-w-0">
@@ -1414,7 +1426,11 @@ export function CustomerWorkspace({
                           </td>
                           <td className="px-4 py-3 tabular-nums text-slate-700">{customer.phone}</td>
                           <td className="px-4 py-3 text-slate-700">{customer.branchName ?? branches.find((branch) => branch.id === customer.branchId)?.name ?? '—'}</td>
-                          <td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{label(customer.status)}</span></td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${customerStatusBadgeClass(customer.status)}`}>
+                              {label(customer.status)}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-slate-600">{date(customer.primaryAssignedAt ?? null)}</td>
                         </tr>
                       ))}
@@ -1469,7 +1485,9 @@ export function CustomerWorkspace({
                   <p className="mt-1 break-words text-sm text-slate-600">{selected.phone} · {selected.email ?? 'Chưa có email'}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{label(selected.status)}</span>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${customerStatusBadgeClass(selected.status)}`}>
+                    {label(selected.status)}
+                  </span>
                   {canManageCustomers && !loadingDetail && selected.cccd !== undefined && !showEdit && <button type="button" onClick={() => setShowEdit(true)} className={secondaryButtonClass}>Sửa hồ sơ</button>}
                   <button ref={mobileDetailCloseRef} type="button" onClick={() => setMobileDetailOpen(false)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 xl:hidden">‹ Danh sách</button>
                 </div>
@@ -1544,7 +1562,9 @@ export function CustomerWorkspace({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 id="customer-status-heading" className="font-semibold text-slate-950">Trạng thái khách hàng</h3>
-                        <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">Hiện tại: {label(selected.status)}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${customerStatusBadgeClass(selected.status)}`}>
+                          Hiện tại: {label(selected.status)}
+                        </span>
                       </div>
                       {canManageCustomers && (
                         <button type="button" className="text-sm font-semibold text-teal-700 hover:underline" onClick={() => setShowStatusForm((value) => !value)}>
@@ -1558,6 +1578,12 @@ export function CustomerWorkspace({
                           {customerStatuses.map((status) => <option value={status} key={status}>{label(status)}</option>)}
                         </select>
                       </label>
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        Màu trạng thái
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${customerStatusBadgeClass(statusDraft)}`}>
+                          {label(statusDraft)}
+                        </span>
+                      </div>
                       <label className="grid gap-1 text-sm font-medium text-slate-800">Lý do (tối thiểu 2 ký tự)
                         <textarea value={statusReason} onChange={(event) => setStatusReason(event.target.value)} required minLength={2} maxLength={1000} rows={2} className={inputClass} />
                       </label>
@@ -1588,9 +1614,15 @@ export function CustomerWorkspace({
                               </span>
                               <div className="min-w-0 flex-1 pt-1.5">
                                 <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-                                  <p className="font-medium text-slate-900">
-                                    {label(entry.fromStatus)} → {label(entry.toStatus)}
-                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${customerStatusBadgeClass(entry.fromStatus)}`}>
+                                      {label(entry.fromStatus)}
+                                    </span>
+                                    <span className="text-slate-400" aria-hidden="true">→</span>
+                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${customerStatusBadgeClass(entry.toStatus)}`}>
+                                      {label(entry.toStatus)}
+                                    </span>
+                                  </div>
                                   <time className="shrink-0 text-xs tabular-nums text-slate-500 sm:whitespace-nowrap" dateTime={entry.changedAt}>
                                     {dateTime(entry.changedAt)}
                                   </time>
@@ -1882,7 +1914,7 @@ export function CustomerWorkspace({
                               className={secondaryButtonClass}
                               onClick={() => router.push(`/loan-contracts?contractId=${item.id}`)}
                             >
-                              Xem chi tiết hợp đồng
+                              Xem hồ sơ, tài liệu & lịch sử
                             </button>
                           </div>
                         </li>)}

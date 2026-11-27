@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ForbiddenException } from '@nestjs/common';
 import { AccessScope, CustomerStatus, LoanContractStatus, Prisma } from '../generated/prisma/client.js';
 import { CustomersService } from './customers.service.js';
 
@@ -27,12 +28,45 @@ describe('CustomersService contract approval', () => {
   let service: CustomersService;
 
   beforeEach(() => {
-    customer = { id: contract.customerId, branchId: contract.branchId, status: CustomerStatus.QUALIFIED, assignments: [] };
+    customer = { id: contract.customerId, branchId: contract.branchId, createdById: 'owner-id', status: CustomerStatus.QUALIFIED, assignments: [] };
     tx = {
       loanProduct: {
         updateMany: jest.fn(async () => ({ count: 1 })),
+        update: jest.fn(async ({ data }: any) => ({
+          id: 'product-id',
+          branchId: data.branchId ?? 'new-branch-id',
+          branch: { id: 'new-branch-id', code: 'NEW', name: 'New Branch' },
+          code: 'LP-1',
+          name: data.name ?? 'Business loan',
+          loanType: data.loanType ?? 'Gói hỗ trợ ngắn hạn',
+          source: data.source ?? 'Internal',
+          description: data.description ?? null,
+          sourceUrl: data.sourceUrl ?? null,
+          thumbnailUrl: data.thumbnailUrl ?? null,
+          minTermMonths: data.minTermMonths ?? 1,
+          maxTermMonths: data.maxTermMonths ?? 12,
+          minAmount: null,
+          maxAmount: null,
+          annualInterestRate: new Prisma.Decimal(data.annualInterestRate ?? '8.4500'),
+          status: 'ACTIVE',
+          currentFormulaVersion: 1,
+          createdById: actor.id,
+          createdAt: new Date('2026-11-26T00:00:00.000Z'),
+          updatedAt: new Date('2026-11-26T00:00:00.000Z'),
+        })),
       },
       loanContractStatusHistory: { create: jest.fn(async () => undefined) },
+      loanContractDocument: {
+        create: jest.fn(async ({ data }: any) => ({
+          id: 'document-id',
+          fileName: data.fileName,
+          mimeType: data.mimeType,
+          sizeBytes: data.sizeBytes,
+          createdAt: new Date('2026-11-26T00:00:00.000Z'),
+          uploadedBy: { displayName: 'Consultant', username: 'adviser' },
+        })),
+      },
+      loanContractChangeHistory: { create: jest.fn(async () => undefined) },
       loanContract: {
         update: jest.fn(async ({ data }: any) => ({ ...contract, ...data, status: LoanContractStatus.APPROVED })),
       },
@@ -56,14 +90,17 @@ describe('CustomersService contract approval', () => {
       },
       branch: {
         findMany: jest.fn(async () => []),
+        findFirst: jest.fn(async () => ({ id: 'new-branch-id' })),
       },
       customerStatusHistory: {
         findMany: jest.fn(async () => []),
       },
       loanContract: {
-        findUnique: jest.fn(async () => contract),
+        findUnique: jest.fn(async () => ({ ...contract, customer })),
         findMany: jest.fn(async () => []),
       },
+      loanContractStatusHistory: { findMany: jest.fn(async () => []) },
+      loanContractChangeHistory: { findMany: jest.fn(async () => []) },
       $transaction: jest.fn(async (callback: (transaction: any) => Promise<unknown>) => callback(tx)),
     };
     access = {
@@ -168,15 +205,93 @@ describe('CustomersService contract approval', () => {
     expect(prisma.customerStatusHistory.findMany).not.toHaveBeenCalled();
   });
 
+  it('includes system-wide loan products when filtering by branch', async () => {
+    access.hasPermission.mockResolvedValue(true);
+    prisma.loanProduct.findMany.mockResolvedValue([{
+      id: 'global-product-id',
+      branchId: null,
+      branch: null,
+      code: 'LP-GLOBAL',
+      name: 'Global loan',
+      loanType: 'Gói hỗ trợ ngắn hạn',
+      source: 'Internal',
+      description: null,
+      sourceUrl: null,
+      thumbnailUrl: null,
+      minTermMonths: 1,
+      maxTermMonths: 12,
+      minAmount: null,
+      maxAmount: null,
+      annualInterestRate: new Prisma.Decimal('8.4500'),
+      status: 'ACTIVE',
+      currentFormulaVersion: 1,
+      createdById: actor.id,
+      createdAt: new Date('2026-11-26T00:00:00.000Z'),
+      updatedAt: new Date('2026-11-26T00:00:00.000Z'),
+    }]);
+
+    await expect(service.listLoanProducts(actor, { branchId: contract.branchId })).resolves.toEqual([
+      expect.objectContaining({
+        id: 'global-product-id',
+        branchId: null,
+        branch: null,
+      }),
+    ]);
+    expect(prisma.loanProduct.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        OR: [{ branchId: contract.branchId }, { branchId: null }],
+      }),
+    }));
+  });
+
   it('rejects loan product deletion for non-admin staff', async () => {
-    prisma.userRoleGrant.findFirst.mockResolvedValue(null);
+    access.hasPermission.mockResolvedValue(false);
 
     await expect(service.deleteLoanProduct(actor, 'product-id')).rejects.toMatchObject({
       response: { code: 'LOAN_PRODUCT_DELETE_ADMIN_ONLY' },
     });
   });
 
+  it('allows an admin to update an active loan product including branch', async () => {
+    access.hasPermission.mockResolvedValue(true);
+    prisma.loanProduct.findUnique.mockResolvedValue({
+      id: 'product-id',
+      branchId: 'old-branch-id',
+      branch: { id: 'old-branch-id', code: 'OLD', name: 'Old Branch' },
+      code: 'LP-1',
+      name: 'Business loan',
+      loanType: 'Gói hỗ trợ ngắn hạn',
+      source: 'Internal',
+      description: null,
+      sourceUrl: null,
+      thumbnailUrl: null,
+      minTermMonths: 1,
+      maxTermMonths: 12,
+      minAmount: null,
+      maxAmount: null,
+      annualInterestRate: new Prisma.Decimal('8.4500'),
+      status: 'ACTIVE',
+      currentFormulaVersion: 1,
+      deletedAt: null,
+      createdById: actor.id,
+      createdAt: new Date('2026-11-26T00:00:00.000Z'),
+      updatedAt: new Date('2026-11-26T00:00:00.000Z'),
+    });
+
+    await expect(service.updateLoanProduct(actor, 'product-id', {
+      branchId: 'new-branch-id',
+      name: 'Updated business loan',
+      source: 'Updated source',
+    })).resolves.toMatchObject({
+      id: 'product-id',
+      branchId: 'new-branch-id',
+      name: 'Updated business loan',
+      source: 'Updated source',
+    });
+  });
+
   it('allows an admin to soft-delete a loan product', async () => {
+    access.hasPermission.mockResolvedValue(true);
     prisma.loanProduct.findUnique.mockResolvedValue({
       id: 'product-id',
       branchId: null,
@@ -385,5 +500,69 @@ describe('CustomersService contract approval', () => {
       source: 'Test source',
       description: 'Public description',
     }]);
+  });
+
+  it('lets an adviser manage documents and read history for an assigned customer', async () => {
+    const adviser = { id: 'adviser-id', type: 'STAFF' as const };
+    customer.assignments = [{ adviserId: adviser.id }];
+    access.hasManagedBranches.mockResolvedValue(false);
+    access.hasResourceAccess.mockImplementation(async (_userId: string, permission: string, _scope: AccessScope | undefined, resource: any) =>
+      resource.assigneeId === adviser.id && ['loan-contracts.read', 'loan-contracts.manage'].includes(permission));
+    access.assertResourceAccess.mockImplementation(async (userId: string, permission: string, scope: AccessScope | undefined, resource: any) => {
+      if (!await access.hasResourceAccess(userId, permission, scope, resource)) {
+        throw new ForbiddenException({ code: 'RESOURCE_SCOPE_DENIED' });
+      }
+    });
+
+    await expect(service.getContractHistory(adviser, contract.id)).resolves.toEqual({ items: [] });
+
+    const buffer = Buffer.from('%PDF-1.4\nLoan document');
+    await expect(service.uploadContractDocument(adviser, contract.id, {
+      originalname: 'loan-document.pdf',
+      mimetype: 'application/pdf',
+      size: buffer.length,
+      buffer,
+    })).resolves.toEqual(expect.objectContaining({ fileName: 'loan-document.pdf' }));
+    expect(documentStorage.put).toHaveBeenCalledTimes(1);
+    expect(tx.loanContractChangeHistory.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'DOCUMENT_UPLOADED' }),
+    }));
+  });
+
+  it('denies document uploads without contract-management scope, even with customer-management access', async () => {
+    const adviser = { id: 'other-adviser-id', type: 'STAFF' as const };
+    customer.assignments = [{ adviserId: adviser.id }];
+    access.hasManagedBranches.mockResolvedValue(false);
+    access.hasResourceAccess.mockImplementation(async (_userId: string, permission: string) =>
+      ['loan-contracts.read', 'customers.manage'].includes(permission));
+    access.assertResourceAccess.mockImplementation(async (userId: string, permission: string, scope: AccessScope | undefined, resource: any) => {
+      if (!await access.hasResourceAccess(userId, permission, scope, resource)) {
+        throw new ForbiddenException({ code: 'RESOURCE_SCOPE_DENIED' });
+      }
+    });
+    access.assertPermission.mockImplementation(async (userId: string, permission: string, scope: AccessScope | undefined, branchId?: string) => {
+      if (!await access.hasPermission(userId, permission, scope, branchId)) {
+        throw new ForbiddenException({ code: 'PERMISSION_DENIED' });
+      }
+    });
+
+    const buffer = Buffer.from('%PDF-1.4\nLoan document');
+    await expect(service.uploadContractDocument(adviser, contract.id, {
+      originalname: 'loan-document.pdf',
+      mimetype: 'application/pdf',
+      size: buffer.length,
+      buffer,
+    })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(documentStorage.put).not.toHaveBeenCalled();
+  });
+
+  it('denies contract history outside the adviser resource scope', async () => {
+    const adviser = { id: 'other-adviser-id', type: 'STAFF' as const };
+    customer.assignments = [{ adviserId: 'assigned-adviser-id' }];
+    access.hasManagedBranches.mockResolvedValue(false);
+    access.hasResourceAccess.mockResolvedValue(false);
+    access.assertResourceAccess.mockRejectedValue(new ForbiddenException({ code: 'RESOURCE_SCOPE_DENIED' }));
+
+    await expect(service.getContractHistory(adviser, contract.id)).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

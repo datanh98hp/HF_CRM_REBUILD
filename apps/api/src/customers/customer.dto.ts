@@ -242,6 +242,9 @@ export class CreateLoanProductDto {
 }
 
 export class UpdateLoanProductDto {
+  @IsOptional() @IsUUID()
+  branchId?: string | null;
+
   @IsOptional() @IsString() @Length(2, 200)
   name?: string;
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowDownToLine, Check, ChevronRight, CircleAlert, FlaskConical, History, Plus, Save, Tags, Trash2 } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { ArrowDownToLine, Check, ChevronLeft, ChevronRight, CircleAlert, FlaskConical, History, Plus, Save, Tags, Trash2, X } from 'lucide-react';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
@@ -74,6 +74,7 @@ const statusVariants: Record<LoanProduct['status'], 'secondary' | 'default' | 'o
   INACTIVE: 'secondary',
 };
 const inputClass = 'h-11 bg-white text-base md:h-10 md:text-sm';
+const PRODUCT_PAGE_SIZES = [5, 10, 20, 50, 100];
 const loanTypeOptions = [
   'Gói hỗ trợ ngắn hạn',
   'Gói sản phẩm trung, dài hạn',
@@ -89,6 +90,13 @@ const emptyProductForm: ProductForm = {
 function formatCurrency(value: string) {
   const amount = Number(value);
   return Number.isFinite(amount) ? new Intl.NumberFormat('vi-VN').format(amount) : value;
+}
+
+function formatInterestRate(value: string) {
+  const interestRate = Number(value);
+  return Number.isFinite(interestRate)
+    ? `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(interestRate)}%`
+    : `${value}%`;
 }
 
 function formatAmountRange(minAmount: string | null, maxAmount: string | null) {
@@ -190,12 +198,73 @@ function LoanProductsWorkspace({
   const [formulaHistoryReloadKey, setFormulaHistoryReloadKey] = useState(0);
   const [applyingFormulaVersion, setApplyingFormulaVersion] = useState<number | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [loanTypeFilter, setLoanTypeFilter] = useState('ALL');
+  const [sourceFilter, setSourceFilter] = useState('ALL');
+  const [minimumInterestFilter, setMinimumInterestFilter] = useState('');
+  const [maximumInterestFilter, setMaximumInterestFilter] = useState('');
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(20);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [dialogContainer, setDialogContainer] = useState<HTMLDivElement | null>(null);
   const formulaHistoryRequestId = useRef(0);
+  const productSearchInputRef = useRef<HTMLInputElement>(null);
+  const productFilterId = useId();
   const selectedProduct = useMemo(() => products.find((product) => product.id === selectedId) ?? null, [products, selectedId]);
   const activeBranches = branches.filter((branch) => branch.status === 'ACTIVE');
+  const productTypes = useMemo(
+    () => [...new Set([...loanTypeOptions, ...products.map((product) => product.loanType)])].sort((a, b) => a.localeCompare(b, 'vi')),
+    [products],
+  );
+  const productSources = useMemo(
+    () => [...new Set(products.map((product) => product.source.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [products],
+  );
+  const hasInvalidInterestRange = Boolean(
+    minimumInterestFilter
+    && maximumInterestFilter
+    && Number(minimumInterestFilter) > Number(maximumInterestFilter),
+  );
+  const filteredProducts = useMemo(() => {
+    if (hasInvalidInterestRange) return [];
+    const query = productSearch.trim().toLocaleLowerCase('vi');
+    const minimumInterest = minimumInterestFilter === '' ? null : Number(minimumInterestFilter);
+    const maximumInterest = maximumInterestFilter === '' ? null : Number(maximumInterestFilter);
+    return products.filter((product) => {
+      if (query && !product.code.toLocaleLowerCase('vi').includes(query) && !product.name.toLocaleLowerCase('vi').includes(query)) return false;
+      if (loanTypeFilter !== 'ALL' && product.loanType !== loanTypeFilter) return false;
+      if (sourceFilter !== 'ALL' && product.source.trim() !== sourceFilter) return false;
+      const annualInterest = Number(product.annualInterestRate);
+      if (minimumInterest !== null && (!Number.isFinite(annualInterest) || annualInterest < minimumInterest)) return false;
+      if (maximumInterest !== null && (!Number.isFinite(annualInterest) || annualInterest > maximumInterest)) return false;
+      return true;
+    });
+  }, [hasInvalidInterestRange, loanTypeFilter, maximumInterestFilter, minimumInterestFilter, productSearch, products, sourceFilter]);
+  const productPageCount = Math.max(1, Math.ceil(filteredProducts.length / productPageSize));
+  const currentProductPage = Math.min(productPage, productPageCount);
+  const productPageStart = (currentProductPage - 1) * productPageSize;
+  const pageProducts = filteredProducts.slice(productPageStart, productPageStart + productPageSize);
+  const hasActiveProductFilters = Boolean(
+    productSearch.trim()
+    || loanTypeFilter !== 'ALL'
+    || sourceFilter !== 'ALL'
+    || minimumInterestFilter
+    || maximumInterestFilter,
+  );
+  const hasNonSearchProductFilters = Boolean(
+    loanTypeFilter !== 'ALL' || sourceFilter !== 'ALL' || minimumInterestFilter || maximumInterestFilter,
+  );
+
+  useEffect(() => {
+    setProductPage((current) => Math.min(current, productPageCount));
+  }, [productPageCount]);
+
+  useEffect(() => {
+    if (editorMode || !selectedId || filteredProducts.some((product) => product.id === selectedId)) return;
+    setSelectedId('');
+    setDeleteConfirmOpen(false);
+  }, [editorMode, filteredProducts, selectedId]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 1279px)');
@@ -284,6 +353,15 @@ function LoanProductsWorkspace({
 
   function updateForm(field: keyof ProductForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function clearProductFilters() {
+    setProductSearch('');
+    setLoanTypeFilter('ALL');
+    setSourceFilter('ALL');
+    setMinimumInterestFilter('');
+    setMaximumInterestFilter('');
+    setProductPage(1);
   }
 
   function startCreate() {
@@ -485,30 +563,203 @@ function LoanProductsWorkspace({
       {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><p className="font-medium">Không thể hoàn tất thao tác</p><p className="mt-1">{error}</p></div>}
       {notice && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p>}
 
-      <div ref={setDialogContainer} className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
-        <section className="min-w-0 rounded-xl border border-slate-200 bg-white" aria-labelledby="products-list-heading">
+      <div ref={setDialogContainer} className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12">
+        <section className="min-w-0 w-full rounded-xl border border-slate-200 bg-white xl:col-span-8" aria-labelledby="products-list-heading">
           <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
-            <div><h2 id="products-list-heading" className="font-semibold text-slate-950">Danh mục</h2><p className="mt-0.5 text-xs text-slate-500">{loading ? 'Đang tải…' : `${products.length} sản phẩm`}</p></div>
+            <div>
+              <h2 id="products-list-heading" className="font-semibold text-slate-950">Danh sách sản phẩm vay</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {loading ? 'Đang tải…' : hasActiveProductFilters ? `${filteredProducts.length} / ${products.length} sản phẩm` : `${products.length} sản phẩm`}
+              </p>
+            </div>
             <Tags aria-hidden="true" className="size-4 text-slate-500" />
           </header>
+          <div className="grid min-w-0 gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6" aria-label="Tìm kiếm và lọc sản phẩm vay">
+            <div className="relative grid min-w-0 content-start gap-1.5 xl:col-span-2">
+              <label htmlFor={`${productFilterId}-search`} className="w-fit text-sm font-medium text-slate-800">Tên hoặc mã sản phẩm</label>
+              <Input
+                ref={productSearchInputRef}
+                id={`${productFilterId}-search`}
+                type="search"
+                value={productSearch}
+                onChange={(event) => { setProductSearch(event.target.value); setProductPage(1); }}
+                placeholder="Nhập tên hoặc mã"
+                className={`${inputClass} pr-10 [&::-webkit-search-cancel-button]:hidden`}
+              />
+              {productSearch && <button
+                type="button"
+                aria-label="Xoá tìm kiếm"
+                title="Xoá tìm kiếm"
+                onClick={() => { setProductSearch(''); setProductPage(1); productSearchInputRef.current?.focus(); }}
+                className="absolute right-2 bottom-1 grid size-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              ><X aria-hidden="true" className="size-4" /></button>}
+            </div>
+            <div className="grid min-w-0 content-start gap-1.5">
+              <span id={`${productFilterId}-type-label`} className="text-sm font-medium text-slate-800">Loại sản phẩm</span>
+              <Select value={loanTypeFilter} onValueChange={(value) => {
+                if (typeof value === 'string') { setLoanTypeFilter(value); setProductPage(1); }
+              }}>
+                <SelectTrigger aria-labelledby={`${productFilterId}-type-label`} className="w-full bg-white data-[size=default]:h-11 md:data-[size=default]:h-10">
+                  <SelectValue placeholder="Tất cả loại" />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectItem value="ALL">Tất cả loại</SelectItem>
+                  {productTypes.map((type) => <SelectItem value={type} key={type}>{type}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid min-w-0 content-start gap-1.5">
+              <span id={`${productFilterId}-source-label`} className="text-sm font-medium text-slate-800">Nguồn</span>
+              <Select value={sourceFilter} onValueChange={(value) => {
+                if (typeof value === 'string') { setSourceFilter(value); setProductPage(1); }
+              }}>
+                <SelectTrigger aria-labelledby={`${productFilterId}-source-label`} className="w-full bg-white data-[size=default]:h-11 md:data-[size=default]:h-10">
+                  <SelectValue placeholder="Tất cả nguồn" />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectItem value="ALL">Tất cả nguồn</SelectItem>
+                  {productSources.map((source) => <SelectItem value={source} key={source}>{source}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid min-w-0 content-start gap-1.5">
+              <label htmlFor={`${productFilterId}-minimum-interest`} className="w-fit text-sm font-medium text-slate-800">Lãi suất từ (%)</label>
+              <Input
+                id={`${productFilterId}-minimum-interest`}
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                aria-invalid={hasInvalidInterestRange}
+                value={minimumInterestFilter}
+                onChange={(event) => { setMinimumInterestFilter(event.target.value); setProductPage(1); }}
+                className={inputClass}
+              />
+            </div>
+            <div className="grid min-w-0 content-start gap-1.5">
+              <label htmlFor={`${productFilterId}-maximum-interest`} className="w-fit text-sm font-medium text-slate-800">Lãi suất đến (%)</label>
+              <Input
+                id={`${productFilterId}-maximum-interest`}
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                aria-invalid={hasInvalidInterestRange}
+                value={maximumInterestFilter}
+                onChange={(event) => { setMaximumInterestFilter(event.target.value); setProductPage(1); }}
+                className={inputClass}
+              />
+            </div>
+          </div>
+          {(hasInvalidInterestRange || hasNonSearchProductFilters) && <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-3 sm:px-5">
+            {hasInvalidInterestRange
+              ? <p role="alert" className="text-xs text-red-700">Lãi suất từ phải nhỏ hơn hoặc bằng lãi suất đến.</p>
+              : <span />}
+            {hasNonSearchProductFilters && <Button type="button" variant="outline" size="sm" onClick={clearProductFilters}>Xoá lọc</Button>}
+          </div>}
           {loading ? <p className="py-6 text-center text-sm text-slate-600">Đang tải sản phẩm…</p> : products.length === 0 ? (
             <p className="px-4 py-6 text-sm text-slate-600">Chưa có sản phẩm trong phạm vi này.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {products.map((product) => (
+          ) : filteredProducts.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-slate-600">
+              Không tìm thấy sản phẩm vay phù hợp.
+              {hasActiveProductFilters && <button
+                type="button"
+                className="ml-1 font-semibold text-teal-700 underline"
+                onClick={clearProductFilters}
+              >{hasNonSearchProductFilters ? 'Xoá bộ lọc' : 'Xoá tìm kiếm'}</button>}
+            </div>
+          ) : <>
+            <div className="hidden xl:block">
+              <table className="w-full table-fixed text-left">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
+                  <tr>
+                    <th scope="col" className="w-[36%] px-4 py-3">Tên sản phẩm / Mã</th>
+                    <th scope="col" className="w-[14%] px-4 py-3 text-right">Lãi suất năm</th>
+                    <th scope="col" className="w-[20%] px-4 py-3">Nguồn</th>
+                    <th scope="col" className="w-[30%] px-4 py-3">Loại</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {pageProducts.map((product) => (
+                    <tr key={product.id} className={`transition-colors hover:bg-teal-50 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          aria-current={selectedId === product.id ? 'true' : undefined}
+                          onClick={() => { setSelectedId(product.id); setEditorMode(null); setDeleteConfirmOpen(false); }}
+                          className="flex w-full min-w-0 items-center justify-between gap-2 text-left"
+                        >
+                          <span className="min-w-0">
+                            <span className="block break-words font-medium text-slate-950">{product.name}</span>
+                            <span className="mt-0.5 block break-all text-xs text-slate-500">{product.code}</span>
+                          </span>
+                          <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-slate-400" />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">{formatInterestRate(product.annualInterestRate)}</td>
+                      <td className="break-words px-4 py-3">{product.source || '—'}</td>
+                      <td className="break-words px-4 py-3">{product.loanType || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="divide-y divide-slate-100 xl:hidden">
+              {pageProducts.map((product) => (
                 <li key={product.id}>
-                  <button type="button" aria-current={selectedId === product.id ? 'true' : undefined} onClick={() => { setSelectedId(product.id); setEditorMode(null); setDeleteConfirmOpen(false); if (isMobileLayout) setMobileDetailOpen(true); }} className={`flex w-full min-w-0 items-start justify-between gap-3 px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}>
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-slate-950">{product.name}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{product.code} · {product.loanType}</span>
-                      <span className="mt-1 block text-xs text-slate-600 tabular-nums">{product.minTermMonths}–{product.maxTermMonths} tháng · {formatAmountRange(product.minAmount, product.maxAmount)}</span>
+                  <button
+                    type="button"
+                    aria-current={selectedId === product.id ? 'true' : undefined}
+                    onClick={() => { setSelectedId(product.id); setEditorMode(null); setDeleteConfirmOpen(false); if (isMobileLayout) setMobileDetailOpen(true); }}
+                    className={`w-full px-4 py-3 text-left hover:bg-teal-50 sm:px-5 ${selectedId === product.id ? 'bg-teal-50' : ''}`}
+                  >
+                    <span className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block break-words font-medium text-slate-950">{product.name}</span>
+                        <span className="mt-0.5 block break-all text-xs text-slate-500">{product.code}</span>
+                      </span>
+                      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-slate-400" />
                     </span>
-                    <span className="flex shrink-0 items-center gap-2"><Badge variant={statusVariants[product.status]}>{statusLabels[product.status]}</Badge><ChevronRight aria-hidden="true" className="size-4 text-slate-400" /></span>
+                    <span className="mt-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <span className="min-w-0"><span className="block text-xs text-slate-500">Lãi suất năm</span><span className="tabular-nums">{formatInterestRate(product.annualInterestRate)}</span></span>
+                      <span className="min-w-0"><span className="block text-xs text-slate-500">Nguồn</span><span className="block break-words">{product.source || '—'}</span></span>
+                      <span className="col-span-2 min-w-0"><span className="block text-xs text-slate-500">Loại</span><span className="block break-words">{product.loanType || '—'}</span></span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
-          )}
+            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+              <p className="min-w-0 basis-full text-xs tabular-nums text-slate-600 sm:basis-auto">
+                <span className="hidden sm:inline">Hiển thị {productPageStart + 1}–{Math.min(productPageStart + productPageSize, filteredProducts.length)} trong </span>
+                {filteredProducts.length} sản phẩm · Trang {currentProductPage}
+              </p>
+              <div className="flex shrink-0 items-center gap-3">
+                <label id={`${productFilterId}-page-size-label`} className="text-xs text-slate-600">Mỗi trang</label>
+                <Select value={String(productPageSize)} onValueChange={(value) => {
+                  if (typeof value === 'string') { setProductPageSize(Number(value)); setProductPage(1); }
+                }}>
+                  <SelectTrigger aria-labelledby={`${productFilterId}-page-size-label`} className="w-[4.5rem] bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    {PRODUCT_PAGE_SIZES.map((pageSize) => <SelectItem value={String(pageSize)} key={pageSize}>{pageSize}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <nav aria-label="Phân trang sản phẩm vay" className="flex shrink-0 items-center gap-1">
+                  <button type="button" aria-label="Trang trước" disabled={currentProductPage === 1} onClick={() => setProductPage((current) => Math.max(1, current - 1))} className="inline-flex size-9 items-center justify-center rounded-lg border border-transparent text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                    <ChevronLeft aria-hidden="true" className="size-4" />
+                  </button>
+                  <span aria-current="page" className="min-w-12 text-center text-xs tabular-nums text-slate-700">
+                    <span className="hidden sm:inline">Trang </span>{currentProductPage}
+                  </span>
+                  <button type="button" aria-label="Trang sau" disabled={currentProductPage === productPageCount} onClick={() => setProductPage((current) => Math.min(productPageCount, current + 1))} className="inline-flex size-9 items-center justify-center rounded-lg border border-transparent text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                    <ChevronRight aria-hidden="true" className="size-4" />
+                  </button>
+                </nav>
+              </div>
+            </footer>
+          </>}
         </section>
 
         <Dialog
@@ -526,7 +777,7 @@ function LoanProductsWorkspace({
               aria-modal={isMobileLayout || undefined}
               aria-labelledby={isMobileLayout ? 'mobile-product-detail-title' : 'product-details-heading'}
               initialFocus={isMobileLayout ? true : false}
-              className={`min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-start-2 xl:row-start-1 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
+              className={`min-w-0 w-full rounded-xl border border-slate-200 bg-white p-4 sm:p-5 xl:col-span-4 max-xl:fixed max-xl:inset-x-0 max-xl:bottom-0 max-xl:top-auto max-xl:z-50 max-xl:flex max-xl:h-[92dvh] max-xl:max-h-[92dvh] max-xl:w-full max-xl:max-w-none max-xl:translate-x-0 max-xl:translate-y-0 max-xl:flex-col max-xl:gap-0 max-xl:overflow-hidden max-xl:rounded-t-2xl max-xl:rounded-b-none max-xl:border-b-0 max-xl:p-0 max-xl:shadow-xl ${mobileDetailOpen ? '' : 'max-xl:hidden'}`}
             >
             <div className="hidden h-14 shrink-0 items-center justify-between border-b border-slate-200 px-4 max-xl:flex">
               <DialogTitle id="mobile-product-detail-title" className="text-sm font-semibold">Chi tiết sản phẩm vay</DialogTitle>
@@ -591,7 +842,7 @@ function LoanProductsWorkspace({
               <dl className="grid grid-cols-1 gap-x-6 gap-y-4 p-4 sm:grid-cols-2 sm:p-5">
                 <div><dt className="text-xs text-slate-500">Khoảng vay</dt><dd className="mt-1 font-medium tabular-nums">{formatAmountRange(selectedProduct.minAmount, selectedProduct.maxAmount)}</dd></div>
                 <div><dt className="text-xs text-slate-500">Kỳ hạn</dt><dd className="mt-1 font-medium tabular-nums">{selectedProduct.minTermMonths}–{selectedProduct.maxTermMonths} tháng</dd></div>
-                <div><dt className="text-xs text-slate-500">Lãi suất năm</dt><dd className="mt-1 font-medium tabular-nums">{selectedProduct.annualInterestRate}%</dd></div>
+                <div><dt className="text-xs text-slate-500">Lãi suất năm</dt><dd className="mt-1 font-medium tabular-nums">{formatInterestRate(selectedProduct.annualInterestRate)}</dd></div>
                 <div><dt className="text-xs text-slate-500">Nguồn</dt><dd className="mt-1 break-words font-medium">{selectedProduct.source}</dd></div>
                 {selectedProduct.sourceUrl && <div className="min-w-0"><dt className="text-xs text-slate-500">Link nguồn</dt><dd className="mt-1 break-all"><a className="text-teal-800 underline" href={selectedProduct.sourceUrl} target="_blank" rel="noreferrer">{selectedProduct.sourceUrl}</a></dd></div>}
                 {selectedProduct.description && <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedProduct.description}</dd></div>}

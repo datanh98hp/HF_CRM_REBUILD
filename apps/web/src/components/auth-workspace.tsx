@@ -6,6 +6,7 @@ import { ArrowRight, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Toast } from '@/components/ui/toast';
 
 function ProductBrand({ linked = false }: { linked?: boolean }) {
   const brand = <><span className="brand-mark">F</span> Finance<span>CRM</span></>;
@@ -54,8 +55,8 @@ export function LoginWorkspace({
             <p className="eyebrow">CHÀO MỪNG TRỞ LẠI</p>
             <h2 id="login-title">Đăng nhập</h2>
             <p className="form-intro">Nhập thông tin tài khoản nhân viên của bạn.</p>
-            {error && <div className="alert alert-error" role="alert">{error}</div>}
-            {notice && <div className="alert alert-success" role="status">{notice}</div>}
+            {error && <Toast message={error} variant="error" />}
+            {notice && <Toast message={notice} />}
             <form onSubmit={onSubmit} className="form-stack">
               <label htmlFor="username">Tên đăng nhập</label>
               <Input id="username" name="username" autoComplete="username" value={username} onChange={(event) => onUsernameChange(event.target.value)} className="h-11" required autoFocus />
@@ -118,8 +119,8 @@ export function PasswordChangeWorkspace({
           <p className="eyebrow">THIẾT LẬP BẢO MẬT</p>
           <h1>Đổi mật khẩu để tiếp tục</h1>
           <p className="form-intro">{passwordChangeRequired ? 'Tài khoản đang dùng mật khẩu tạm. Hãy chọn mật khẩu mới để bảo vệ phiên làm việc.' : 'Nhập mật khẩu hiện tại và chọn mật khẩu mới cho tài khoản của bạn.'}</p>
-          {error && <div className="alert alert-error" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {error && <Toast message={error} variant="error" />}
+          {notice && <Toast message={notice} />}
           <form onSubmit={onSubmit} className="form-stack">
             <label htmlFor="current-password">Mật khẩu hiện tại</label>
             <Input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => onCurrentPasswordChange(event.target.value)} className="h-11" required />

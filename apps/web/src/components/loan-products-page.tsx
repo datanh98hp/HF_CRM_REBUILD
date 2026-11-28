@@ -5,6 +5,7 @@ import { ArrowDownToLine, Check, ChevronLeft, ChevronRight, CircleAlert, FlaskCo
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
+import { Toast } from '@/components/ui/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -573,8 +574,8 @@ function LoanProductsWorkspace({
         {canManage && <Button variant="default" onClick={startCreate}><Plus aria-hidden="true" className="size-4" />Tạo sản phẩm</Button>}
       </header>
 
-      {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><p className="font-medium">Không thể hoàn tất thao tác</p><p className="mt-1">{error}</p></div>}
-      {notice && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p>}
+      {error && <Toast message={`Không thể hoàn tất thao tác: ${error}`} variant="error" onDismiss={() => setError('')} />}
+      {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
 
       <div ref={setDialogContainer} className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12">
         <section className="min-w-0 w-full rounded-xl border border-slate-200 bg-white xl:col-span-8" aria-labelledby="products-list-heading">

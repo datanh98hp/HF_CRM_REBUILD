@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Toast } from '@/components/ui/toast';
 import {
   Dialog,
   DialogContent,
@@ -174,8 +175,8 @@ export function RolesPage() {
             {canReadBranches && <Button variant="ghost" type="button" onClick={() => router.push('/branches')}>Chi nhánh</Button>}
             <Button variant="ghost" type="button" className="is-current" aria-current="page">Vai trò & quyền</Button>
           </nav>
-          {error && <div className="alert alert-error" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {error && <Toast message={error} variant="error" onDismiss={() => setError('')} />}
+          {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
           <Card className="role-editor-card">
             <CardHeader>
               <div className="role-editor-heading">
@@ -206,8 +207,6 @@ export function RolesPage() {
                         <DialogTitle>Tạo vai trò tùy chỉnh</DialogTitle>
                         <DialogDescription>Tạo vai trò mới để thiết lập quyền truy cập riêng.</DialogDescription>
                       </DialogHeader>
-                      {error && <div className="alert alert-error" role="alert">{error}</div>}
-                      {notice && <div className="alert alert-success" role="status">{notice}</div>}
                       <form className="user-create-form dialog-create-form" onSubmit={createRole}>
                         <div>
                           <label htmlFor="role-key">Mã vai trò</label>

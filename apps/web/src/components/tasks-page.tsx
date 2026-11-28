@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Toast } from '@/components/ui/toast';
 import { Textarea } from '@/components/ui/textarea';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
@@ -917,11 +918,7 @@ export function TasksPage() {
           </p>
         ) : selectedPlan ? (
           <>
-            {notice && (
-              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">
-                {notice}
-              </p>
-            )}
+            {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
             {selectedPlan.status !== 'ACTIVE' && canManageTasks && (
               <p className="text-sm text-amber-800" role="status">
                 Chỉ kế hoạch đang thực hiện mới nhận được công việc mới.

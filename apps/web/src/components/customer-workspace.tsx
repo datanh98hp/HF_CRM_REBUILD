@@ -12,6 +12,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { History, X } from 'lucide-react';
 import { AccordionItem } from '@/components/ui/accordion';
+import { Toast } from '@/components/ui/toast';
 import {
   Dialog,
   DialogContent,
@@ -1039,8 +1040,8 @@ export function CustomerWorkspace({
           <strong>OTP hoàn tất hợp đồng đang chờ cấu hình.</strong>{' '}
           {contractCompletionOtp?.messageVi ?? 'Chưa thể xác nhận hoàn tất từ giao diện staff.'}
         </div>}
-      {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>}
-      {notice && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div>}
+      {error && <Toast message={error} variant="error" onDismiss={() => setError('')} />}
+      {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
 
       <section
         className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canReadBranches ? (canManageCustomers ? 'xl:grid-cols-5' : 'xl:grid-cols-4') : (canManageCustomers ? 'xl:grid-cols-4' : 'xl:grid-cols-3')}`}
@@ -1391,6 +1392,28 @@ export function CustomerWorkspace({
                         </dl>
                       </AccordionItem>
                     </div>}
+
+                  <section className="border-t border-slate-200 py-4" aria-labelledby="customer-workflow-heading">
+                    {/* <h3 id="customer-workflow-heading" className="mb-3 font-semibold text-slate-950">Quy trình xử lý khách hàng</h3> */}
+                    <ol className="flex flex-wrap items-center gap-2" aria-label={`Quy trình khách hàng; trạng thái hiện tại: ${label(selected.status)}`}>
+                      {customerStatuses.slice(0, 5).map((status, index) => (
+                        <li key={status} className="flex items-center gap-2">
+                          <div aria-current={selected.status === status ? 'step' : undefined} className={`rounded-lg border px-3 py-2 text-xs font-medium ${selected.status === status ? 'border-teal-600 bg-teal-700 text-white ring-2 ring-teal-200' : 'border-slate-200 bg-white text-slate-700'}`}>
+                            {label(status)}
+                            {selected.status === status && <span className="ml-1.5 font-semibold"></span>}
+                          </div>
+                          {index < 4 && <span aria-hidden="true" className="text-slate-400">→</span>}
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="mt-2 flex items-center gap-2 pl-2">
+                      <span aria-hidden="true" className="text-slate-400">↘</span>
+                      <div aria-current={selected.status === 'CLOSED' ? 'step' : undefined} className={`rounded-lg border px-3 py-2 text-xs font-medium ${selected.status === 'CLOSED' ? 'border-teal-600 bg-teal-700 text-white ring-2 ring-teal-200' : 'border-slate-200 bg-white text-slate-700'}`}>
+                        {label('CLOSED')}
+                        {selected.status === 'CLOSED' && <span className="ml-1.5 font-semibold">· Hiện tại</span>}
+                      </div>
+                    </div>
+                  </section>
 
                   <section className="border-t border-slate-200 py-4" aria-labelledby="customer-status-heading">
                     <div className="flex flex-wrap items-center justify-between gap-2">

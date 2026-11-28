@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Toast } from '@/components/ui/toast';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import type { BranchOption } from '@/lib/crm-access';
@@ -169,8 +170,8 @@ export function BranchesPage() {
             <Button variant="ghost" type="button" className="is-current" aria-current="page">Chi nhánh</Button>
             {canReadRoles && <Button variant="ghost" type="button" onClick={() => router.push('/roles')}>Vai trò & quyền</Button>}
           </nav>
-          {error && <div className="alert alert-error" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {error && <Toast message={error} variant="error" onDismiss={() => setError('')} />}
+          {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
               <Card className="users-table-card">
                 <CardHeader className="flex flex-row items-center justify-between gap-3">
                   <CardTitle>Cây chi nhánh <span className="muted-value">{loading ? 'Đang tải…' : `${branches.length} chi nhánh trong phạm vi`}</span></CardTitle>
@@ -194,8 +195,6 @@ export function BranchesPage() {
                           <DialogTitle>Tạo chi nhánh</DialogTitle>
                           <DialogDescription>Thêm chi nhánh mới vào cấu trúc tổ chức.</DialogDescription>
                         </DialogHeader>
-                        {error && <div className="alert alert-error" role="alert">{error}</div>}
-                        {notice && <div className="alert alert-success" role="status">{notice}</div>}
                         <form className="user-create-form dialog-create-form" onSubmit={createBranch}>
                           <div>
                             <label htmlFor="branch-code">Mã chi nhánh</label>

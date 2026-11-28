@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Toast } from '@/components/ui/toast';
 import { Textarea } from '@/components/ui/textarea';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
@@ -239,8 +240,8 @@ export function StaffPage() {
             {canReadBranches && <Button type="button" variant="ghost" onClick={() => router.push('/branches')}>Chi nhánh</Button>}
             {canReadRoles && <Button type="button" variant="ghost" onClick={() => router.push('/roles')}>Vai trò & quyền</Button>}
           </nav>
-          {error && <div className="alert alert-error" role="alert">{error}</div>}
-          {notice && <div className="alert alert-success" role="status">{notice}</div>}
+          {error && <Toast message={error} variant="error" onDismiss={() => setError('')} />}
+          {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
               <Card className="users-table-card">
                 <CardHeader className="flex flex-row items-center justify-between gap-3">
                   <CardTitle ref={userListTitleRef} tabIndex={-1}>Danh sách nhân viên <span className="muted-value">{loading ? 'Đang tải…' : `${users.length} tài khoản`}</span></CardTitle>
@@ -264,8 +265,6 @@ export function StaffPage() {
                           <DialogTitle>Tạo tài khoản nhân viên</DialogTitle>
                           <DialogDescription>Tạo tài khoản và cấp vai trò ban đầu cho nhân viên.</DialogDescription>
                         </DialogHeader>
-                        {error && <div className="alert alert-error" role="alert">{error}</div>}
-                        {notice && <div className="alert alert-success" role="status">{notice}</div>}
                         <form className="user-create-form dialog-create-form" onSubmit={createUser}>
                           <div>
                             <label htmlFor="new-display-name">Họ tên hiển thị</label>

@@ -8,6 +8,8 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { AccordionItem } from '@/components/ui/accordion';
+import { Toast } from '@/components/ui/toast';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { downloadFile, request } from '@/lib/crm-api';
@@ -479,8 +481,8 @@ function ContractWorkspace({
         </Button>
       </header>
 
-      {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>}
-      {notice && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div>}
+      {error && <Toast message={error} variant="error" onDismiss={() => setError('')} />}
+      {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
 
       <section className="mb-4 grid min-w-0 grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] sm:p-4 xl:w-[65%]" aria-label="Bộ lọc hợp đồng">
         <form onSubmit={submitSearch} className="grid min-w-0 gap-1.5">
@@ -613,8 +615,8 @@ function ContractWorkspace({
                 <div><dt className="text-xs text-slate-500">Trạng thái</dt><dd className="mt-1"><Badge variant="outline" className={badgeClass(selected.status)}>{statusIcon(selected.status)}{statusLabels[selected.status] ?? selected.status}</Badge></dd></div>
               </dl>
               <section className="border-t border-slate-200 py-4" aria-labelledby="contract-product-heading">
-                <h3 id="contract-product-heading" className="font-semibold text-slate-900">Chi tiết gói vay</h3>
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
+                <AccordionItem title="Chi tiết gói vay" headingLevel={3}>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-3">
                   <div><dt className="text-xs text-slate-500">Mã gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.code ?? selected.packageCode ?? '—'}</dd></div>
                   <div><dt className="text-xs text-slate-500">Tên gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.name ?? selected.packageName}</dd></div>
                   <div><dt className="text-xs text-slate-500">Loại gói</dt><dd className="mt-1 break-words font-medium text-slate-900">{selected.loanProduct?.loanType ?? selected.loanType ?? '—'}</dd></div>
@@ -625,6 +627,7 @@ function ContractWorkspace({
                   {selected.loanProduct?.description && <div className="col-span-2"><dt className="text-xs text-slate-500">Mô tả gói</dt><dd className="mt-1 whitespace-pre-wrap break-words text-slate-700">{selected.loanProduct.description}</dd></div>}
                 </dl>
                 {!selected.loanProduct && <p className="mt-3 text-xs text-slate-500">Hồ sơ hợp đồng này chưa lưu bản chụp chi tiết gói vay.</p>}
+                </AccordionItem>
               </section>
               {selected.status === 'PENDING_REVIEW' && canReview && selected.canReview
                 ? rejecting
@@ -740,13 +743,11 @@ function ContractWorkspace({
                       })}
                     </ul>}
               </section>
-              <section className="mt-5 border-t border-slate-200 pt-4" aria-labelledby="contract-history-heading">
+              <section className="mt-5 border-t border-slate-200 pt-4">
+                <AccordionItem title="Lịch sử thay đổi" headingLevel={3}>
                 <div className="flex items-start gap-2">
                   <History aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-slate-500" />
-                  <div>
-                    <h3 id="contract-history-heading" className="font-semibold text-slate-900">Lịch sử thay đổi</h3>
-                    <p className="mt-1 text-xs text-slate-500">Ghi lại trạng thái và các lần thêm, cập nhật hoặc xóa tài liệu.</p>
-                  </div>
+                  <p className="text-xs text-slate-500">Ghi lại trạng thái và các lần thêm, cập nhật hoặc xóa tài liệu.</p>
                 </div>
                 {historyError && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{historyError}</p>}
                 {historyLoading && history.length === 0
@@ -759,6 +760,7 @@ function ContractWorkspace({
                         <p className="mt-1 text-xs text-slate-500">{item.changedBy?.displayName ?? 'Tài khoản đã xóa'}{item.changedBy?.username ? ` · ${item.changedBy.username}` : ''} · {formatDate(item.createdAt)}</p>
                       </li>)}
                     </ol>}
+                </AccordionItem>
               </section>
             </>}
             </div>

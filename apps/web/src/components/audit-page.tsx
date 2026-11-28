@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Toast } from '@/components/ui/toast';
 import { downloadFile, request } from '@/lib/crm-api';
 
 type AuditEvent = { id: string; actorId: string | null; action: string; targetType: string; targetId: string | null; reason: string | null; beforeState: unknown; afterState: unknown; createdAt: string };
@@ -144,7 +145,7 @@ export function AuditPage() {
       </>}
       <div className="flex items-end gap-2"><Button disabled={busy} onClick={applyFilters}><Search className="mr-2 size-4" />Lọc</Button><Button variant="outline" disabled={busy} onClick={() => tab === 'audit' ? void loadAudit(page, appliedFilters) : void loadCare(page, appliedFilters)}><RefreshCw className="mr-2 size-4" />Tải lại</Button>{tab === 'care' && <Button variant="outline" disabled={busy} onClick={() => void exportCare()}><Download className="mr-2 size-4" />Xuất Excel</Button>}</div>
     </section>
-    {error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {error && <Toast message={error} variant="error" />}
     {tab === 'audit' ? <>
       <p className="text-sm text-slate-600">{audit?.total ?? 0} bản ghi</p>
       <div className="overflow-x-auto rounded-xl border bg-white"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50"><tr>{['Thời gian', 'Người dùng', 'Hành động', 'Đối tượng', 'Ghi chú / Data'].map((label) => <th className="px-4 py-3 font-medium" key={label}>{label}</th>)}</tr></thead><tbody>

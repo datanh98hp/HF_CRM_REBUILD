@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { useCrmSession } from '@/components/crm-session';
 import { request } from '@/lib/crm-api';
+import { Toast } from '@/components/ui/toast';
 
 type CatalogItem = {
   id: string;
@@ -196,15 +197,12 @@ export function PlanMetricCatalogPage() {
           )}
         </div>
 
-        {notice && <p className="text-sm text-emerald-800" role="status">{notice}</p>}
+        {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
         {error && !loading && (
-          <div className="flex flex-wrap items-center gap-2" role="alert">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => setRequestVersion((value) => value + 1)}>
+          <Toast message={error} variant="error" onDismiss={() => setError('')} action={<Button type="button" variant="outline" size="sm" onClick={() => setRequestVersion((value) => value + 1)}>
               <RotateCw data-icon="inline-start" />
               Thử lại
-            </Button>
-          </div>
+            </Button>} />
         )}
 
         <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(260px,0.82fr)_minmax(0,1.18fr)]">

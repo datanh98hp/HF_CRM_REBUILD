@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Toast } from "@/components/ui/toast";
 import { WorkspaceLayout } from "@/components/workspace-layout";
 import { useCrmSession } from "@/components/crm-session";
 import type { BranchOption } from "@/lib/crm-access";
@@ -1267,11 +1268,7 @@ export function PlansPage() {
           </Dialog>
         )}
 
-        {notice && (
-          <p className="text-sm text-emerald-800" role="status">
-            {notice}
-          </p>
-        )}
+        {notice && <Toast message={notice} onDismiss={() => setNotice('')} />}
         {loadingPlans && (
           <span className="sr-only" role="status">
             Đang tải danh sách kế hoạch.

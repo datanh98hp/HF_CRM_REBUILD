@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WorkspaceLayout } from '@/components/workspace-layout';
+import { Toast } from '@/components/ui/toast';
 import { useCrmSession } from '@/components/crm-session';
 import { request } from '@/lib/crm-api';
 
@@ -608,12 +609,7 @@ export function ReportsPage({ reportType }: { reportType: ReportType }) {
           </div>
         </section>
 
-        {error && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100" role="alert">
-            <span>{error}</span>
-            <Button onClick={() => setReloadKey((key) => key + 1)} size="sm" type="button" variant="outline">Thử lại</Button>
-          </div>
-        )}
+        {error && <Toast message={error} variant="error" onDismiss={() => setError('')} action={<Button onClick={() => setReloadKey((key) => key + 1)} size="sm" type="button" variant="outline">Thử lại</Button>} />}
 
         {loading && !data ? (
           <div aria-busy="true" className="space-y-4">

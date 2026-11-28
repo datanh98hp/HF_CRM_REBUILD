@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCrmSession } from '@/components/crm-session';
+import { Toast } from '@/components/ui/toast';
 import { WorkspaceLayout } from '@/components/workspace-layout';
 import { branchScopes, displayRoleName, hasGlobalDataScope } from '@/lib/crm-access';
 
@@ -24,7 +25,7 @@ export function ProfilePage() {
           <p className="eyebrow">TÀI KHOẢN NHÂN VIÊN</p>
           <h1>Thông tin tài khoản</h1>
           <p className="form-intro">Hồ sơ và phạm vi quyền đang áp dụng cho phiên làm việc này.</p>
-          {error && <div className="alert alert-error" role="alert">{error}</div>}
+          {error && <Toast message={error} variant="error" />}
           <div className="profile-card">
             <div className="profile-heading">
               <div className="avatar" aria-hidden="true">{(staff.displayName || staff.username || 'N').slice(0, 1).toUpperCase()}</div>

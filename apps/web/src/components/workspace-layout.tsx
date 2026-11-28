@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { useCrmSession } from '@/components/crm-session';
 
-type Section = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
+type Section = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'audit' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
 const sectionPaths: Record<Exclude<Section, null>, string> = {
   customers: '/customers',
   'customer-import': '/customers/import',
@@ -14,6 +14,7 @@ const sectionPaths: Record<Exclude<Section, null>, string> = {
   users: '/staff',
   branches: '/branches',
   roles: '/roles',
+  audit: '/audit',
   plans: '/plans',
   catalog: '/plans/catalog',
   tasks: '/tasks',
@@ -62,6 +63,7 @@ export function WorkspaceLayout({
       canReadUsers={can('users.read') || can('users.manage')}
       canReadBranches={can('branches.read') || can('branches.manage')}
       canReadRoles={can('roles.read') || can('roles.manage')}
+      canReadAudit={can('audit.read')}
       canReadCustomers={can('customers.read')}
       canImportCustomers={can('customers.import')}
       canAccessPlans={can('plans.read') || can('plans.manage') || can('plans.approve')}

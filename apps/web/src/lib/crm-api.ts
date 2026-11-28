@@ -163,5 +163,10 @@ export async function downloadFile(path: string, accessToken?: string): Promise<
     const message = Array.isArray(payload?.message) ? payload.message.join('. ') : payload?.message;
     throw new Error(codeMessage || message || 'Không thể tải tài liệu hợp đồng.');
   }
-  return response.blob();
+  const blob = await response.blob();
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (contentType.includes('application/json') || contentType.startsWith('text/')) {
+    throw new Error('Máy chủ không trả về tệp nhị phân hợp lệ. Vui lòng thử lại hoặc liên hệ quản trị hệ thống.');
+  }
+  return blob;
 }

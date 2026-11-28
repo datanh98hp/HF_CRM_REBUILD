@@ -10,8 +10,16 @@ import {
 } from '@/components/ui/select';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, History, X } from 'lucide-react';
+import { History, X } from 'lucide-react';
 import { AccordionItem } from '@/components/ui/accordion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useRouter } from 'next/navigation';
 
 type Request = <T>(path: string, options?: RequestInit, accessToken?: string) => Promise<T>;
@@ -31,6 +39,7 @@ type Customer = {
   verificationStatus: string;
   status: string;
   branchId: string;
+  contractCount: number;
   branchName?: string;
   primaryAdviserId: string | null;
   primaryAssignedAt?: string | null;
@@ -266,180 +275,6 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function dateKey(value: Date) {
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${value.getFullYear()}-${month}-${day}`;
-}
-
-function parseDateKey(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(year, month - 1, day);
-  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
-    ? parsed
-    : null;
-}
-
-function dateRangeBound(value: string, endOfDay: boolean) {
-  const parsed = parseDateKey(value);
-  if (!parsed) return null;
-  if (endOfDay) parsed.setHours(23, 59, 59, 999);
-  return parsed.toISOString();
-}
-
-function DateFilterInput({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  min?: string;
-  max?: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(() => parseDateKey(value) ?? new Date());
-  const [view, setView] = useState<'days' | 'months' | 'years'>('days');
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const selectedDate = parseDateKey(value);
-  const today = dateKey(new Date());
-  const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-  const firstDayOffset = (monthStart.getDay() + 6) % 7;
-  const days = Array.from({ length: 42 }, (_, index) =>
-    new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), index - firstDayOffset + 1));
-  const yearRangeStart = Math.floor(calendarMonth.getFullYear() / 12) * 12;
-  const calendarHeading = view === 'days'
-    ? new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(calendarMonth)
-    : view === 'months'
-      ? String(calendarMonth.getFullYear())
-      : `${yearRangeStart}–${yearRangeStart + 11}`;
-
-  useEffect(() => {
-    if (!value) return;
-    const parsed = parseDateKey(value);
-    if (parsed) setCalendarMonth(parsed);
-  }, [value]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
-
-  function moveMonth(amount: number) {
-    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
-  }
-
-  function selectDate(date: Date) {
-    onChange(dateKey(date));
-    setOpen(false);
-    setView('days');
-    triggerRef.current?.focus();
-  }
-
-  return (
-    <div ref={rootRef} className="relative min-w-0">
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={`${label}: ${selectedDate ? selectedDate.toLocaleDateString('vi-VN') : 'Chọn ngày'}`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        className="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 text-left text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 md:h-10"
-      >
-        <span className={selectedDate ? '' : 'text-slate-500'}>
-          {selectedDate ? selectedDate.toLocaleDateString('vi-VN') : 'Chọn ngày'}
-        </span>
-        <CalendarDays aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
-      </button>
-      {open && <div role="dialog" aria-label={label} className="absolute left-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-3 text-slate-900 shadow-lg">
-        <div className="mb-2 flex h-9 items-center justify-between gap-1">
-          <button type="button" aria-label={view === 'years' ? '12 năm trước' : view === 'months' ? 'Năm trước' : 'Tháng trước'} onClick={() => {
-            if (view === 'years') setCalendarMonth((current) => new Date(current.getFullYear() - 12, current.getMonth(), 1));
-            else if (view === 'months') setCalendarMonth((current) => new Date(current.getFullYear() - 1, current.getMonth(), 1));
-            else moveMonth(-1);
-          }} className="grid size-8 shrink-0 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
-            <ChevronLeft aria-hidden="true" className="size-4" />
-          </button>
-          <button type="button" onClick={() => setView((current) => current === 'days' ? 'months' : current === 'months' ? 'years' : 'months')} className="flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold text-slate-800 hover:bg-slate-100">
-            <span className="truncate">{calendarHeading}</span>
-            <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
-          </button>
-          <button type="button" aria-label={view === 'years' ? '12 năm sau' : view === 'months' ? 'Năm sau' : 'Tháng sau'} onClick={() => {
-            if (view === 'years') setCalendarMonth((current) => new Date(current.getFullYear() + 12, current.getMonth(), 1));
-            else if (view === 'months') setCalendarMonth((current) => new Date(current.getFullYear() + 1, current.getMonth(), 1));
-            else moveMonth(1);
-          }} className="grid size-8 shrink-0 place-items-center rounded-md text-slate-600 hover:bg-slate-100">
-            <ChevronRight aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-        {view === 'days'
-          ? <>
-            <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-slate-500">
-              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day} className="py-1">{day}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-y-1">
-              {days.map((day) => {
-                const key = dateKey(day);
-                const outsideMonth = day.getMonth() !== calendarMonth.getMonth();
-                const disabled = Boolean((min && key < min) || (max && key > max));
-                const selected = key === value;
-                return <button
-                  type="button"
-                  key={key}
-                  aria-label={day.toLocaleDateString('vi-VN')}
-                  aria-pressed={selected}
-                  disabled={disabled}
-                  onClick={() => selectDate(day)}
-                  className={`flex h-9 flex-col items-center justify-center rounded-md text-sm tabular-nums hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35 ${outsideMonth ? 'text-slate-400' : 'text-slate-800'} ${key === today ? 'font-semibold' : ''} ${selected ? 'bg-teal-700 text-white hover:bg-teal-800' : ''}`}
-                >
-                  <span>{day.getDate()}</span>
-                  {key === today && <span className={`h-1 w-1 rounded-full ${selected ? 'bg-white' : 'bg-teal-700'}`} />}
-                </button>;
-              })}
-            </div>
-          </>
-          : view === 'months'
-            ? <div className="grid grid-cols-3 gap-1">
-              {Array.from({ length: 12 }, (_, index) => {
-                const month = new Date(calendarMonth.getFullYear(), index, 1);
-                return <button key={index} type="button" onClick={() => { setCalendarMonth(month); setView('days'); }} className="h-10 rounded-md text-sm text-slate-700 hover:bg-slate-100">
-                  {new Intl.DateTimeFormat('vi-VN', { month: 'short' }).format(month)}
-                </button>;
-              })}
-            </div>
-            : <div className="grid grid-cols-3 gap-1">
-              {Array.from({ length: 12 }, (_, index) => yearRangeStart + index).map((year) => <button key={year} type="button" onClick={() => { setCalendarMonth((current) => new Date(year, current.getMonth(), 1)); setView('months'); }} className="h-10 rounded-md text-sm text-slate-700 hover:bg-slate-100">
-                {year}
-              </button>)}
-            </div>}
-        {value && <div className="mt-2 border-t border-slate-200 pt-2">
-            <button type="button" onClick={() => { onChange(''); setOpen(false); }} className="flex h-9 w-full items-center rounded-md px-2 text-left text-sm text-slate-700 hover:bg-slate-100">Xóa ngày</button>
-        </div>}
-      </div>}
-    </div>
-  );
-}
-
 export function CustomerWorkspace({
   accessToken,
   request,
@@ -472,8 +307,6 @@ export function CustomerWorkspace({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
-  const [assignmentFrom, setAssignmentFrom] = useState('');
-  const [assignmentTo, setAssignmentTo] = useState('');
   const [customerPage, setCustomerPage] = useState(1);
   const [customerPageSize, setCustomerPageSize] = useState(20);
   const [hasNextCustomerPage, setHasNextCustomerPage] = useState(false);
@@ -600,10 +433,6 @@ export function CustomerWorkspace({
     if (search.trim()) query.set('search', search.trim());
     if (statusFilter !== 'ALL') query.set('status', statusFilter);
     if (branchFilter !== 'ALL') query.set('branchId', branchFilter);
-    const assignedFrom = dateRangeBound(assignmentFrom, false);
-    const assignedTo = dateRangeBound(assignmentTo, true);
-    if (assignedFrom) query.set('assignedFrom', assignedFrom);
-    if (assignedTo) query.set('assignedTo', assignedTo);
     if (cursor) query.set('cursor', cursor);
     try {
       const results = await request<Customer[]>(`/customers?${query}`, {}, accessToken);
@@ -769,7 +598,7 @@ export function CustomerWorkspace({
       window.clearTimeout(timer);
       if (customerListRequestVersion.current === version) customerListRequestVersion.current += 1;
     };
-  }, [accessToken, assignmentFrom, assignmentTo, branchFilter, customerPageSize, request, search, statusFilter]);
+  }, [accessToken, branchFilter, customerPageSize, request, search, statusFilter]);
 
   useEffect(() => {
     if (!mobileDetailOpen) return;
@@ -1214,7 +1043,7 @@ export function CustomerWorkspace({
       {notice && <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div>}
 
       <section
-        className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canReadBranches ? (canManageCustomers ? 'xl:grid-cols-7' : 'xl:grid-cols-6') : 'xl:grid-cols-5'}`}
+        className={`mb-4 grid min-w-0 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 ${canReadBranches ? (canManageCustomers ? 'xl:grid-cols-5' : 'xl:grid-cols-4') : (canManageCustomers ? 'xl:grid-cols-4' : 'xl:grid-cols-3')}`}
         aria-label="Tìm kiếm và lọc khách hàng"
       >
         <div className="relative grid min-w-0 content-start gap-1 sm:col-span-2 xl:col-span-2">
@@ -1226,7 +1055,9 @@ export function CustomerWorkspace({
         </div>
         <div className="grid min-w-0 gap-1">
           <span id="customer-status-filter-label" className="text-sm font-medium text-slate-800">Trạng thái</span>
-          <Select value={statusFilter} onValueChange={(value) => {
+          <Select value={statusFilter} itemToStringLabel={(value) => value === 'ALL'
+            ? 'Tất cả trạng thái'
+            : label(typeof value === 'string' ? value : '')} onValueChange={(value) => {
             if (typeof value === 'string') {
               setStatusFilter(value);
               setCustomerPage(1);
@@ -1236,15 +1067,17 @@ export function CustomerWorkspace({
               <SelectValue placeholder="Tất cả trạng thái" />
             </SelectTrigger>
             <SelectContent align="start">
-              <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-              {customerStatuses.map((status) => <SelectItem value={status} key={status}>{label(status)}</SelectItem>)}
+              <SelectItem value="ALL" label="Tất cả trạng thái">Tất cả trạng thái</SelectItem>
+              {customerStatuses.map((status) => <SelectItem value={status} key={status} label={label(status)}>{label(status)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         {canReadBranches && (
           <div className="grid min-w-0 gap-1">
             <span id="customer-branch-filter-label" className="text-sm font-medium text-slate-800">Chi nhánh</span>
-            <Select value={branchFilter} onValueChange={(value) => {
+            <Select value={branchFilter} itemToStringLabel={(value) => value === 'ALL'
+              ? 'Tất cả chi nhánh'
+              : activeBranches.find((branch) => branch.id === value)?.name ?? (typeof value === 'string' ? value : '')} onValueChange={(value) => {
               if (typeof value === 'string') {
                 setBranchFilter(value);
                 setCustomerPage(1);
@@ -1262,77 +1095,78 @@ export function CustomerWorkspace({
             </Select>
           </div>
         )}
-        <div className="grid min-w-0 gap-1">
-          <span className="text-sm font-medium text-slate-800">Ngày phân công từ</span>
-          <DateFilterInput label="Ngày phân công từ" value={assignmentFrom} max={assignmentTo || undefined} onChange={(value) => { setAssignmentFrom(value); setCustomerPage(1); }} />
-        </div>
-        <div className="grid min-w-0 gap-1">
-          <span className="text-sm font-medium text-slate-800">Đến ngày</span>
-          <DateFilterInput label="Đến ngày phân công" value={assignmentTo} min={assignmentFrom || undefined} onChange={(value) => { setAssignmentTo(value); setCustomerPage(1); }} />
-        </div>
         {canManageCustomers && canReadBranches && <button
           type="button"
           onClick={() => {
-            setShowCreate((value) => !value);
+            setShowCreate(true);
             if (!branchId && activeBranches.length === 1) setBranchId(activeBranches[0].id);
           }}
           className="inline-flex h-10 items-center justify-center gap-2 self-end whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <span aria-hidden="true">＋</span>{showCreate ? 'Đóng biểu mẫu' : 'Thêm khách hàng'}
+          <span aria-hidden="true">＋</span>Thêm khách hàng
         </button>}
       </section>
 
-      {showCreate && (
-        <form onSubmit={createCustomer} className="mb-6 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Họ tên *
-            <input value={fullName} onChange={(event) => setFullName(event.target.value)} minLength={2} required className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Số điện thoại *
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" required className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Ngày sinh
-            <input value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">CCCD
-            <input value={cccd} onChange={(event) => setCccd(event.target.value)} maxLength={32} className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Địa chỉ
-            <input value={address} onChange={(event) => setAddress(event.target.value)} maxLength={500} className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Quê quán
-            <input value={placeOfOrigin} onChange={(event) => setPlaceOfOrigin(event.target.value)} maxLength={160} className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Giới tính
-            <select value={sex} onChange={(event) => setSex(event.target.value)} className={inputClass}>
-              <option value="">Chọn giới tính (không bắt buộc)</option>
-              <option value="Nam">Nam</option>
-              <option value="Nữ">Nữ</option>
-              <option value="Khác">Khác</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Nơi cấp
-            <input value={placeOfIssue} onChange={(event) => setPlaceOfIssue(event.target.value)} maxLength={160} className={inputClass} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Chi nhánh *
-            <select value={branchId} onChange={(event) => setBranchId(event.target.value)} required className={inputClass}>
-              <option value="">Chọn chi nhánh trong phạm vi được cấp</option>
-              {activeBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} · {branch.name}</option>)}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-slate-800">Nguồn dữ liệu *
-            <input value={provenance} onChange={(event) => setProvenance(event.target.value)} minLength={2} required className={inputClass} />
-          </label>
-          <div className="flex items-end sm:col-span-2 lg:col-span-3">
-            <button disabled={saving || activeBranches.length === 0} className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-3xl" closeLabel="Đóng">
+          <DialogHeader className="pr-10">
+            <DialogTitle>Thêm khách hàng</DialogTitle>
+            <DialogDescription>Nhập thông tin khách hàng và chọn chi nhánh trong phạm vi được cấp.</DialogDescription>
+          </DialogHeader>
+          <form id="create-customer-form" onSubmit={createCustomer} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Họ tên *
+              <input value={fullName} onChange={(event) => setFullName(event.target.value)} minLength={2} required className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Số điện thoại *
+              <input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" required className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Email
+              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Ngày sinh
+              <input value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} type="date" className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">CCCD
+              <input value={cccd} onChange={(event) => setCccd(event.target.value)} maxLength={32} className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Địa chỉ
+              <input value={address} onChange={(event) => setAddress(event.target.value)} maxLength={500} className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Quê quán
+              <input value={placeOfOrigin} onChange={(event) => setPlaceOfOrigin(event.target.value)} maxLength={160} className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Giới tính
+              <select value={sex} onChange={(event) => setSex(event.target.value)} className={inputClass}>
+                <option value="">Chọn giới tính (không bắt buộc)</option>
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+                <option value="Khác">Khác</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Nơi cấp
+              <input value={placeOfIssue} onChange={(event) => setPlaceOfIssue(event.target.value)} maxLength={160} className={inputClass} />
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Chi nhánh *
+              <select value={branchId} onChange={(event) => setBranchId(event.target.value)} required className={inputClass}>
+                <option value="">Chọn chi nhánh trong phạm vi được cấp</option>
+                {activeBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} · {branch.name}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium text-slate-800">Nguồn dữ liệu *
+              <input value={provenance} onChange={(event) => setProvenance(event.target.value)} minLength={2} required className={inputClass} />
+            </label>
+          </form>
+          {activeBranches.length === 0 && <p className="text-sm text-amber-800">Không có chi nhánh hoạt động trong phạm vi được cấp.</p>}
+          <DialogFooter>
+            <button type="button" onClick={() => setShowCreate(false)} className={secondaryButtonClass}>
+              Hủy
+            </button>
+            <button type="submit" form="create-customer-form" disabled={saving || activeBranches.length === 0} className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-60">
               {saving ? 'Đang lưu…' : 'Lưu khách hàng'}
             </button>
-            {activeBranches.length === 0 && <p className="ml-3 text-sm text-amber-800">Không có chi nhánh hoạt động trong phạm vi được cấp.</p>}
-          </div>
-        </form>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {mobileDetailOpen && <button
         type="button"
@@ -1395,7 +1229,7 @@ export function CustomerWorkspace({
                         {canAssignCustomers && <th className="w-12 px-4 py-3">
                           <input type="checkbox" aria-label="Chọn tất cả khách hàng trên trang này" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => bulkSelectedCustomers.has(customer.id))} onChange={(event) => toggleCurrentPageSelection(event.target.checked)} className="size-4 accent-teal-700" />
                         </th>}
-                        <th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Chi nhánh</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Ngày phân công</th>
+                        <th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Liên hệ</th><th className="px-4 py-3">Chi nhánh</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Số hợp đồng</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1431,7 +1265,7 @@ export function CustomerWorkspace({
                               {label(customer.status)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-slate-600">{date(customer.primaryAssignedAt ?? null)}</td>
+                          <td className="px-4 py-3 tabular-nums text-slate-700">{customer.contractCount}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1463,7 +1297,7 @@ export function CustomerWorkspace({
               </>
               : <div className="p-8 text-center text-sm text-slate-600">
                 Không tìm thấy khách hàng phù hợp.
-                {(search || statusFilter !== 'ALL' || branchFilter !== 'ALL' || assignmentFrom || assignmentTo) && <button className="ml-1 font-semibold text-teal-700 underline" onClick={() => { setSearch(''); setStatusFilter('ALL'); setBranchFilter('ALL'); setAssignmentFrom(''); setAssignmentTo(''); setCustomerPage(1); }}>Xóa bộ lọc</button>}
+                {(search || statusFilter !== 'ALL' || branchFilter !== 'ALL') && <button className="ml-1 font-semibold text-teal-700 underline" onClick={() => { setSearch(''); setStatusFilter('ALL'); setBranchFilter('ALL'); setCustomerPage(1); }}>Xóa bộ lọc</button>}
               </div>}
         </section>
 

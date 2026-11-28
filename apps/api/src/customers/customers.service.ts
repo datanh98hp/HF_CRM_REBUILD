@@ -58,6 +58,12 @@ import {
 type CustomerRecord = Prisma.CustomerGetPayload<{
   include: { assignments: { where: { endedAt: null }; select: { adviserId: true; assignedAt: true } } };
 }>;
+type CustomerListRecord = Prisma.CustomerGetPayload<{
+  include: {
+    assignments: { where: { endedAt: null }; select: { adviserId: true; assignedAt: true } };
+    _count: { select: { contracts: true } };
+  };
+}>;
 
 function requestId(request?: ActorRequest): string | null {
   const value = request?.headers['x-request-id'];
@@ -91,18 +97,9 @@ export class CustomersService {
 
   async list(actor: ActorContext, query: CustomerListQueryDto) {
     this.assertStaff(actor);
-    const assignedAt: Prisma.DateTimeFilter = {};
-    if (query.assignedFrom) assignedAt.gte = new Date(query.assignedFrom);
-    if (query.assignedTo) assignedAt.lte = new Date(query.assignedTo);
-    if (query.assignedFrom && query.assignedTo && new Date(query.assignedFrom).getTime() > new Date(query.assignedTo).getTime()) {
-      throw new BadRequestException({ code: 'INVALID_ASSIGNMENT_DATE_RANGE' });
-    }
     const where: Prisma.CustomerWhereInput = {
       ...(query.branchId ? { branchId: query.branchId } : {}),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.assignedFrom || query.assignedTo
-        ? { assignments: { some: { endedAt: null, assignedAt } } }
-        : {}),
       ...(query.search ? {
         OR: [
           { fullName: { contains: query.search.trim(), mode: 'insensitive' } },
@@ -111,7 +108,7 @@ export class CustomersService {
         ],
       } : {}),
     };
-    const result: CustomerRecord[] = [];
+    const result: CustomerListRecord[] = [];
     const pageSize = 100;
     const take = query.take ?? 50;
     let cursor = query.cursor;
@@ -121,7 +118,10 @@ export class CustomersService {
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         take: pageSize,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        include: { assignments: { where: { endedAt: null }, select: { adviserId: true, assignedAt: true } } },
+        include: {
+          assignments: { where: { endedAt: null }, select: { adviserId: true, assignedAt: true } },
+          _count: { select: { contracts: true } },
+        },
       });
       if (!candidates.length) break;
       for (const customer of candidates) {
@@ -138,12 +138,10 @@ export class CustomersService {
         })
       : [];
     const branchNameById = new Map(branchNames.map((branch) => [branch.id, branch.name]));
-    return result.map((customer) => this.serializeCustomer(
-      customer,
-      false,
-      false,
-      branchNameById.get(customer.branchId),
-    ));
+    return result.map((customer) => ({
+      ...this.serializeCustomer(customer, false, false, branchNameById.get(customer.branchId)),
+      contractCount: customer._count.contracts,
+    }));
   }
 
   async create(actor: ActorContext, dto: CreateCustomerDto, request?: ActorRequest) {

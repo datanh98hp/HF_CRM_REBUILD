@@ -413,12 +413,6 @@ export class CustomerListQueryDto {
   @IsOptional() @IsEnum(CustomerStatus)
   status?: CustomerStatus;
 
-  @IsOptional() @IsDateString()
-  assignedFrom?: string;
-
-  @IsOptional() @IsDateString()
-  assignedTo?: string;
-
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(101)
   take?: number = 50;
 }

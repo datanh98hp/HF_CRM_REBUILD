@@ -119,6 +119,13 @@ type KpiPeriodType = 'PLAN' | 'MONTH' | 'QUARTER' | 'YEAR';
 
 const ALL_BRANCHES = '__all__';
 
+const kpiPeriodLabels: Record<KpiPeriodType, string> = {
+  PLAN: 'Toàn kỳ kế hoạch',
+  MONTH: 'Theo tháng',
+  QUARTER: 'Theo quý',
+  YEAR: 'Theo năm',
+};
+
 const verificationLabels: Record<string, string> = {
   NOT_SUBMITTED: 'Chưa nộp',
   PENDING_VERIFICATION: 'Chờ xác minh',
@@ -974,6 +981,11 @@ export function TasksPage() {
                         <Label htmlFor="kpi-period-type">Kỳ tổng hợp</Label>
                         <Select
                           value={kpiPeriodType}
+                          itemToStringLabel={(value) => kpiPeriodLabels[
+                            typeof value === 'string' && value in kpiPeriodLabels
+                              ? value as KpiPeriodType
+                              : 'MONTH'
+                          ]}
                           onValueChange={(value) => {
                             if (value === 'PLAN' || value === 'MONTH' || value === 'QUARTER' || value === 'YEAR') {
                               setKpiPeriodType(value);
@@ -984,10 +996,10 @@ export function TasksPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="PLAN">Toàn kỳ kế hoạch</SelectItem>
-                            <SelectItem value="MONTH">Theo tháng</SelectItem>
-                            <SelectItem value="QUARTER">Theo quý</SelectItem>
-                            <SelectItem value="YEAR">Theo năm</SelectItem>
+                            <SelectItem value="PLAN" label={kpiPeriodLabels.PLAN}>{kpiPeriodLabels.PLAN}</SelectItem>
+                            <SelectItem value="MONTH" label={kpiPeriodLabels.MONTH}>{kpiPeriodLabels.MONTH}</SelectItem>
+                            <SelectItem value="QUARTER" label={kpiPeriodLabels.QUARTER}>{kpiPeriodLabels.QUARTER}</SelectItem>
+                            <SelectItem value="YEAR" label={kpiPeriodLabels.YEAR}>{kpiPeriodLabels.YEAR}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

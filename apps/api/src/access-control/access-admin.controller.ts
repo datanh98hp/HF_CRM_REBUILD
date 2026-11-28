@@ -10,8 +10,10 @@ import {
   Put,
   Query,
   Req,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Readable } from 'node:stream';
 import { AccessScope } from '../generated/prisma/client.js';
 import { CurrentActor } from '../common/actor-context.js';
 import type { ActorContext, ActorRequest } from '../common/actor-context.js';
@@ -179,7 +181,23 @@ export class AccessAdminController {
 
   @RequirePermission('audit.read')
   @Get('audit-events')
-  listAuditEvents(@CurrentActor() actor: ActorContext, @Query('take') take = '100') {
-    return this.access.listAuditEvents(actor, Number(take) || 100);
+  listAuditEvents(@CurrentActor() actor: ActorContext, @Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('from') from?: string, @Query('to') to?: string, @Query('action') action?: string, @Query('actorId') actorId?: string, @Query('data') data?: string) {
+    return this.access.listAuditEvents(actor, { page: Number(page) || 1, pageSize: Number(pageSize) || 20, from, to, action, actorId, data });
+  }
+
+  @RequirePermission('audit.read')
+  @Get('customer-care-history')
+  listCustomerCareHistory(@CurrentActor() actor: ActorContext, @Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('from') from?: string, @Query('to') to?: string, @Query('adviserId') adviserId?: string, @Query('result') result?: string, @Query('search') search?: string) {
+    return this.access.listCustomerCareHistory(actor, { page: Number(page) || 1, pageSize: Number(pageSize) || 20, from, to, adviserId, result, search });
+  }
+
+  @RequirePermission('audit.read')
+  @Get('customer-care-history/export')
+  async exportCustomerCareHistory(@CurrentActor() actor: ActorContext, @Query('from') from: string | undefined, @Query('to') to: string | undefined, @Query('adviserId') adviserId: string | undefined, @Query('result') result: string | undefined, @Query('search') search: string | undefined) {
+    const buffer = await this.access.exportCustomerCareHistory(actor, { from, to, adviserId, result, search });
+    return new StreamableFile(Readable.from([buffer]), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="customer-care-history.xlsx"',
+    });
   }
 }

@@ -11,6 +11,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { PasswordHasherService } from '../auth/password-hasher.service.js';
 import { AccessControlService } from './access-control.service.js';
 import permissionCatalog from '../../prisma/permission-catalog.json' with { type: 'json' };
+import ExcelJS from 'exceljs';
 import {
   CreateBranchDto,
   CreateRoleDto,
@@ -656,11 +657,29 @@ export class AccessAdminService {
     });
   }
 
-  async listAuditEvents(actor: ActorContext, take = 100) {
+  async listAuditEvents(actor: ActorContext, query: { page?: number; pageSize?: number; from?: string; to?: string; action?: string; actorId?: string; data?: string } = {}) {
     const branchIds = await this.accessibleBranchIds(actor.id, 'audit.read');
-    return this.prisma.auditEvent.findMany({
-      where: branchIds === null ? undefined : { branchId: { in: branchIds } },
-      select: {
+    const page = Math.max(1, Math.trunc(query.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Math.trunc(query.pageSize ?? 20)));
+    const from = query.from ? new Date(query.from) : undefined;
+    const to = query.to ? new Date(query.to) : undefined;
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) throw new ConflictException({ code: 'INVALID_AUDIT_DATE_FILTER' });
+    const where: Prisma.AuditEventWhereInput = {
+      ...(branchIds === null ? {} : { branchId: { in: branchIds } }),
+      ...(query.action ? { action: { contains: query.action.trim(), mode: 'insensitive' } } : {}),
+      ...(query.actorId ? { actorId: query.actorId } : {}),
+      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      ...(query.data ? { OR: [
+        { beforeState: { string_contains: query.data } },
+        { afterState: { string_contains: query.data } },
+        { reason: { contains: query.data, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.auditEvent.count({ where }),
+      this.prisma.auditEvent.findMany({
+        where,
+        select: {
         id: true,
         actorId: true,
         action: true,
@@ -672,10 +691,74 @@ export class AccessAdminService {
         afterState: true,
         requestId: true,
         createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: Math.min(Math.max(Math.trunc(take), 1), 500),
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  async listCustomerCareHistory(actor: ActorContext, query: { page?: number; pageSize?: number; from?: string; to?: string; adviserId?: string; result?: string; search?: string }) {
+    const branchIds = await this.accessibleBranchIds(actor.id, 'audit.read');
+    const page = Math.max(1, Math.trunc(query.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Math.trunc(query.pageSize ?? 20)));
+    const from = query.from ? new Date(query.from) : undefined;
+    const to = query.to ? new Date(query.to) : undefined;
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) throw new ConflictException({ code: 'INVALID_CARE_DATE_FILTER' });
+    const where: Prisma.CustomerStatusHistoryWhereInput = {
+      ...(branchIds === null ? {} : { customer: { branchId: { in: branchIds } } }),
+      ...(query.adviserId ? { changedById: query.adviserId } : {}),
+      ...(query.result ? { toStatus: query.result as import('../generated/prisma/client.js').CustomerStatus } : {}),
+      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      ...(query.search ? { customer: { ...(branchIds === null ? {} : { branchId: { in: branchIds } }), OR: [
+        { fullName: { contains: query.search, mode: 'insensitive' } },
+        { phone: { contains: query.search } },
+        { address: { contains: query.search, mode: 'insensitive' } },
+      ] } } : {}),
+    };
+    const [total, entries] = await this.prisma.$transaction([
+      this.prisma.customerStatusHistory.count({ where }),
+      this.prisma.customerStatusHistory.findMany({
+        where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize,
+        include: {
+          customer: { select: { id: true, fullName: true, phone: true, address: true } },
+          changedBy: { select: { id: true, displayName: true } },
+          changedByCustomer: { select: { fullName: true } },
+        },
+      }),
+    ]);
+    return { items: entries.map((entry) => ({ id: entry.id, customer: entry.customer, adviserId: entry.changedBy?.id ?? null, adviser: entry.changedBy?.displayName ?? entry.changedByCustomer?.fullName ?? null, fromStatus: entry.fromStatus, result: entry.toStatus, notes: entry.reason, occurredAt: entry.createdAt })), page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  async exportCustomerCareHistory(actor: ActorContext, query: { from?: string; to?: string; adviserId?: string; result?: string; search?: string }) {
+    const branchIds = await this.accessibleBranchIds(actor.id, 'audit.read');
+    const from = query.from ? new Date(query.from) : undefined;
+    const to = query.to ? new Date(query.to) : undefined;
+    const where: Prisma.CustomerStatusHistoryWhereInput = {
+      ...(branchIds === null ? {} : { customer: { branchId: { in: branchIds } } }),
+      ...(query.adviserId ? { changedById: query.adviserId } : {}),
+      ...(query.result ? { toStatus: query.result as import('../generated/prisma/client.js').CustomerStatus } : {}),
+      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      ...(query.search ? { customer: { ...(branchIds === null ? {} : { branchId: { in: branchIds } }), OR: [{ fullName: { contains: query.search, mode: 'insensitive' } }, { phone: { contains: query.search } }, { address: { contains: query.search, mode: 'insensitive' } }] } } : {}),
+    };
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) throw new ConflictException({ code: 'INVALID_CARE_DATE_FILTER' });
+    const entries = await this.prisma.customerStatusHistory.findMany({
+      where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1_048_575,
+      include: { customer: { select: { id: true, fullName: true, phone: true, address: true } }, changedBy: { select: { displayName: true } }, changedByCustomer: { select: { fullName: true } } },
     });
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Lịch sử chăm sóc');
+    sheet.columns = [
+      { header: 'Thời gian', key: 'occurredAt', width: 22 }, { header: 'Tên khách hàng', key: 'name', width: 28 },
+      { header: 'Địa chỉ', key: 'address', width: 42 }, { header: 'Số điện thoại', key: 'phone', width: 20 },
+      { header: 'Người chăm sóc', key: 'adviser', width: 28 }, { header: 'Kết quả chăm sóc', key: 'result', width: 24 }, { header: 'Ghi chú', key: 'notes', width: 55 },
+    ];
+    const safeCell = (value: string | null) => value?.startsWith('=') || value?.startsWith('+') || value?.startsWith('-') || value?.startsWith('@') ? `'${value}` : value ?? '';
+    for (const item of entries) sheet.addRow({ occurredAt: item.createdAt, name: safeCell(item.customer.fullName), address: safeCell(item.customer.address), phone: safeCell(item.customer.phone), adviser: safeCell(item.changedBy?.displayName ?? item.changedByCustomer?.fullName ?? null), result: item.toStatus, notes: safeCell(item.reason) });
+    sheet.getRow(1).font = { bold: true };
+    return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
   private uniquePermissionRows(permissions: RolePermissionDto[]) {

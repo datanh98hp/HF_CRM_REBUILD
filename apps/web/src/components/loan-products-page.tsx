@@ -7,7 +7,18 @@ import { useCrmSession } from '@/components/crm-session';
 import { AccordionItem } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogClose, DialogOverlay, DialogPopup, DialogPortal, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPopup,
+  DialogPortal,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { request } from '@/lib/crm-api';
@@ -369,6 +380,7 @@ function LoanProductsWorkspace({
     setNotice('');
     setDeleteConfirmOpen(false);
     setForm({ ...emptyProductForm, branchId: activeBranches.length === 1 ? activeBranches[0].id : '' });
+    setMobileDetailOpen(false);
     setEditorMode('create');
     setSelectedId('');
   }
@@ -379,6 +391,7 @@ function LoanProductsWorkspace({
     setNotice('');
     setDeleteConfirmOpen(false);
     setForm(productFormFrom(selectedProduct));
+    setMobileDetailOpen(false);
     setEditorMode('edit');
   }
 
@@ -518,7 +531,7 @@ function LoanProductsWorkspace({
         method: 'POST', body: JSON.stringify({ status }),
       }, accessToken);
       setProducts((current) => current.map((product) => product.id === updated.id ? updated : product));
-      setNotice(status === 'ACTIVE' ? 'Sản phẩm đã được công bố.' : 'Sản phẩm đã ngừng bán.');
+      setNotice(status === 'ACTIVE' ? 'Sản phẩm đang hoạt động.' : 'Sản phẩm đã ngừng hoạt động.');
     } catch (statusError) {
       setError(messageFor(statusError));
     } finally {
@@ -557,7 +570,7 @@ function LoanProductsWorkspace({
           <h1 className="text-xl font-semibold text-slate-950">Sản phẩm vay</h1>
           <p className="mt-1 text-sm text-slate-600">Điều kiện, kỳ hạn và phiên bản công thức của từng gói.</p>
         </div>
-        {canManage && <Button variant="default" onClick={() => { startCreate(); if (isMobileLayout) setMobileDetailOpen(true); }}><Plus aria-hidden="true" className="size-4" />Tạo sản phẩm</Button>}
+        {canManage && <Button variant="default" onClick={startCreate}><Plus aria-hidden="true" className="size-4" />Tạo sản phẩm</Button>}
       </header>
 
       {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"><p className="font-medium">Không thể hoàn tất thao tác</p><p className="mt-1">{error}</p></div>}
@@ -762,6 +775,43 @@ function LoanProductsWorkspace({
           </>}
         </section>
 
+      <Dialog open={Boolean(editorMode)} onOpenChange={(open) => { if (!open && !saving) setEditorMode(null); }}>
+        <DialogContent className="sm:max-w-3xl" closeLabel="Đóng">
+          <DialogHeader className="pr-10">
+            <DialogTitle>{editorMode === 'create' ? 'Thêm sản phẩm vay' : 'Chỉnh sửa sản phẩm vay'}</DialogTitle>
+            <DialogDescription>Sản phẩm được lưu ở trạng thái bản nháp.</DialogDescription>
+          </DialogHeader>
+          <form id="loan-product-editor-form" onSubmit={saveProduct} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ProductField label="Tên sản phẩm *"><Input className={inputClass} value={form.name} onChange={(event) => updateForm('name', event.target.value)} minLength={2} maxLength={200} required /></ProductField>
+            <ProductField label="Viết tắt"><Input className={inputClass} value={form.code} onChange={(event) => updateForm('code', event.target.value)} pattern="[A-Za-z0-9._-]+" minLength={2} maxLength={80} placeholder="Để trống để hệ thống tự tạo" disabled={editorMode === 'edit'} /></ProductField>
+            <ProductField label="Loại gói *">
+              <Select value={form.loanType || undefined} onValueChange={(value) => { if (typeof value === 'string') updateForm('loanType', value); }}>
+                <SelectTrigger className={selectClass}><SelectValue placeholder="Chọn loại gói" /></SelectTrigger>
+                <SelectContent align="start">
+                  {loanTypeOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                  {editorMode === 'edit' && form.loanType && !loanTypeOptions.some((option) => option === form.loanType)
+                    && <SelectItem value={form.loanType}>Giá trị hiện tại: {form.loanType}</SelectItem>}
+                </SelectContent>
+              </Select>
+            </ProductField>
+            <ProductField label="Nguồn *"><Input className={inputClass} value={form.source} onChange={(event) => updateForm('source', event.target.value)} minLength={2} maxLength={200} required /></ProductField>
+            <ProductField label="Chi nhánh"><Select value={form.branchId} disabled={editorMode === 'edit' && !isAdmin} onValueChange={(value) => { if (typeof value === 'string') updateForm('branchId', value); }}><SelectTrigger className={selectClass}><SelectValue placeholder="Toàn hệ thống">{branches.find((branch) => branch.id === form.branchId)?.name}</SelectValue></SelectTrigger><SelectContent align="start"><SelectItem value="">Toàn hệ thống</SelectItem>{activeBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.code} · {branch.name}</SelectItem>)}</SelectContent></Select></ProductField>
+            <ProductField label="Lãi suất năm (%) *"><Input className={inputClass} type="number" min="0" step="0.0001" value={form.annualInterestRate} onChange={(event) => updateForm('annualInterestRate', event.target.value)} required /></ProductField>
+            <ProductField label="Kỳ hạn tối thiểu (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.minTermMonths} onChange={(event) => updateForm('minTermMonths', event.target.value)} required /></ProductField>
+            <ProductField label="Kỳ hạn tối đa (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.maxTermMonths} onChange={(event) => updateForm('maxTermMonths', event.target.value)} required /></ProductField>
+            <ProductField label="Số tiền tối thiểu (₫)"><Input className={inputClass} inputMode="decimal" value={form.minAmount} onChange={(event) => updateForm('minAmount', event.target.value)} pattern="[0-9]+(\.[0-9]{1,2})?" /><span className="text-xs font-normal text-slate-600">Không bắt buộc; để trống nếu không giới hạn mức tối thiểu.</span></ProductField>
+            <ProductField label="Số tiền tối đa (₫)"><Input className={inputClass} inputMode="decimal" value={form.maxAmount} onChange={(event) => updateForm('maxAmount', event.target.value)} pattern="[0-9]+(\.[0-9]{1,2})?" /><span className="text-xs font-normal text-slate-600">Không bắt buộc; để trống nếu không giới hạn mức tối đa.</span></ProductField>
+            <ProductField label="Link nguồn"><Input className={inputClass} type="url" value={form.sourceUrl} onChange={(event) => updateForm('sourceUrl', event.target.value)} placeholder="https://" /></ProductField>
+            <ProductField label="Thumbnail URL"><Input className={inputClass} type="url" value={form.thumbnailUrl} onChange={(event) => updateForm('thumbnailUrl', event.target.value)} placeholder="https://" /></ProductField>
+            <label className="grid gap-1.5 text-sm font-medium text-slate-800 sm:col-span-2">Mô tả<textarea className="min-h-24 rounded-lg border border-input bg-white px-3 py-2 text-base focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm" value={form.description} onChange={(event) => updateForm('description', event.target.value)} maxLength={4000} /></label>
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => setEditorMode(null)}>Hủy</Button>
+            <Button type="submit" form="loan-product-editor-form" variant="default" disabled={saving} aria-busy={saving}><Save aria-hidden="true" className="size-4" />{saving ? 'Đang lưu…' : 'Lưu bản nháp'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
         <Dialog
           open={isMobileLayout ? mobileDetailOpen : true}
           modal={isMobileLayout}
@@ -788,46 +838,14 @@ function LoanProductsWorkspace({
               </DialogClose>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain max-xl:pb-4">
-          {editorMode ? (
-            <form onSubmit={saveProduct} className="p-4 sm:p-5">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div><h2 id="product-details-heading" className="text-base font-semibold text-slate-950">{editorMode === 'create' ? 'Sản phẩm mới' : 'Chỉnh sửa sản phẩm'}</h2><p className="mt-1 text-sm text-slate-600">Sản phẩm được lưu ở trạng thái bản nháp.</p></div>
-                <Button type="button" variant="outline" onClick={() => setEditorMode(null)}>Huỷ</Button>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ProductField label="Tên sản phẩm *"><Input className={inputClass} value={form.name} onChange={(event) => updateForm('name', event.target.value)} minLength={2} maxLength={200} required /></ProductField>
-                <ProductField label="Viết tắt"><Input className={inputClass} value={form.code} onChange={(event) => updateForm('code', event.target.value)} pattern="[A-Za-z0-9._-]+" minLength={2} maxLength={80} placeholder="Để trống để hệ thống tự tạo" disabled={editorMode === 'edit'} /></ProductField>
-                <ProductField label="Loại gói *">
-                  <Select value={form.loanType || undefined} onValueChange={(value) => { if (typeof value === 'string') updateForm('loanType', value); }}>
-                    <SelectTrigger className={selectClass}><SelectValue placeholder="Chọn loại gói" /></SelectTrigger>
-                    <SelectContent align="start">
-                      {loanTypeOptions.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                      {editorMode === 'edit' && form.loanType && !loanTypeOptions.some((option) => option === form.loanType)
-                        && <SelectItem value={form.loanType}>Giá trị hiện tại: {form.loanType}</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </ProductField>
-                <ProductField label="Nguồn *"><Input className={inputClass} value={form.source} onChange={(event) => updateForm('source', event.target.value)} minLength={2} maxLength={200} required /></ProductField>
-                <ProductField label="Chi nhánh"><Select value={form.branchId} disabled={editorMode === 'edit' && !isAdmin} onValueChange={(value) => { if (typeof value === 'string') updateForm('branchId', value); }}><SelectTrigger className={selectClass}><SelectValue placeholder="Toàn hệ thống">{branches.find((branch) => branch.id === form.branchId)?.name}</SelectValue></SelectTrigger><SelectContent align="start"><SelectItem value="">Toàn hệ thống</SelectItem>{activeBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.code} · {branch.name}</SelectItem>)}</SelectContent></Select></ProductField>
-                <ProductField label="Lãi suất năm (%) *"><Input className={inputClass} type="number" min="0" step="0.0001" value={form.annualInterestRate} onChange={(event) => updateForm('annualInterestRate', event.target.value)} required /></ProductField>
-                <ProductField label="Kỳ hạn tối thiểu (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.minTermMonths} onChange={(event) => updateForm('minTermMonths', event.target.value)} required /></ProductField>
-                <ProductField label="Kỳ hạn tối đa (tháng) *"><Input className={inputClass} type="number" min="1" max="1200" step="1" value={form.maxTermMonths} onChange={(event) => updateForm('maxTermMonths', event.target.value)} required /></ProductField>
-                <ProductField label="Số tiền tối thiểu (₫)"><Input className={inputClass} inputMode="decimal" value={form.minAmount} onChange={(event) => updateForm('minAmount', event.target.value)} pattern="[0-9]+(\.[0-9]{1,2})?" /><span className="text-xs font-normal text-slate-600">Không bắt buộc; để trống nếu không giới hạn mức tối thiểu.</span></ProductField>
-                <ProductField label="Số tiền tối đa (₫)"><Input className={inputClass} inputMode="decimal" value={form.maxAmount} onChange={(event) => updateForm('maxAmount', event.target.value)} pattern="[0-9]+(\.[0-9]{1,2})?" /><span className="text-xs font-normal text-slate-600">Không bắt buộc; để trống nếu không giới hạn mức tối đa.</span></ProductField>
-                <ProductField label="Link nguồn"><Input className={inputClass} type="url" value={form.sourceUrl} onChange={(event) => updateForm('sourceUrl', event.target.value)} placeholder="https://" /></ProductField>
-                <ProductField label="Thumbnail URL"><Input className={inputClass} type="url" value={form.thumbnailUrl} onChange={(event) => updateForm('thumbnailUrl', event.target.value)} placeholder="https://" /></ProductField>
-                <label className="grid gap-1.5 text-sm font-medium text-slate-800 sm:col-span-2">Mô tả<textarea className="min-h-24 rounded-lg border border-input bg-white px-3 py-2 text-base focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm" value={form.description} onChange={(event) => updateForm('description', event.target.value)} maxLength={4000} /></label>
-              </div>
-              <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="outline" type="button" onClick={() => setEditorMode(null)}>Huỷ</Button><Button variant="default" type="submit" aria-busy={saving}><Save aria-hidden="true" className="size-4" />{saving ? 'Đang lưu…' : 'Lưu bản nháp'}</Button></div>
-            </form>
-          ) : selectedProduct ? (
+          {selectedProduct ? (
             <div className="divide-y divide-slate-200">
               <header className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
                 <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 id="product-details-heading" className="text-lg font-semibold text-slate-950">{selectedProduct.name}</h2><Badge variant={statusVariants[selectedProduct.status]}>{statusLabels[selectedProduct.status]}</Badge></div><p className="mt-1 text-sm text-slate-600">{selectedProduct.code} · {selectedProduct.loanType} · {selectedProduct.branch?.name ?? 'Toàn hệ thống'}</p></div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   {editable && <Button variant="outline" onClick={startEdit}>Chỉnh sửa</Button>}
                   {canPublish && selectedProduct.status !== 'ACTIVE' && selectedProduct.currentFormulaVersion > 0 && <Button variant="default" onClick={() => void changeStatus('ACTIVE')} aria-busy={saving}><Check aria-hidden="true" className="size-4" />Công bố</Button>}
-                  {canPublish && selectedProduct.status === 'ACTIVE' && <Button variant="outline" onClick={() => void changeStatus('INACTIVE')}>Ngừng bán</Button>}
+                  {canPublish && selectedProduct.status === 'ACTIVE' && <Button variant="outline" onClick={() => void changeStatus('INACTIVE')}>Dừng hoạt động</Button>}
                   {isAdmin && (
                     deleteConfirmOpen
                       ? <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2">

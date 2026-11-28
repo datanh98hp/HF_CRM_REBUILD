@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileCheck2,
   FileSpreadsheet,
+  ScrollText,
   LogOut,
   Menu,
   PanelLeftClose,
@@ -24,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-type AccessSection = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
+type AccessSection = 'customers' | 'customer-import' | 'products' | 'contracts' | 'users' | 'branches' | 'roles' | 'audit' | 'plans' | 'catalog' | 'tasks' | 'report-customers' | 'report-plans' | 'report-summary' | 'report-loans' | null;
 type CapabilityNotice = { status: string; ready: boolean; messageVi: string };
 type ShellProps = {
   children: ReactNode;
@@ -34,6 +35,7 @@ type ShellProps = {
   canReadUsers: boolean;
   canReadBranches: boolean;
   canReadRoles: boolean;
+  canReadAudit: boolean;
   canReadCustomers: boolean;
   canImportCustomers: boolean;
   canAccessPlans: boolean;
@@ -70,6 +72,7 @@ export function AppShell({
   canReadUsers,
   canReadBranches,
   canReadRoles,
+  canReadAudit,
   canReadCustomers,
   canImportCustomers,
   canAccessPlans,
@@ -152,6 +155,7 @@ export function AppShell({
         ...(canReadUsers ? [{ key: 'users', label: 'Nhân viên', icon: UsersRound, section: 'users' as const }] : []),
         ...(canReadBranches ? [{ key: 'branches', label: 'Chi nhánh', icon: Building2, section: 'branches' as const }] : []),
         ...(canReadRoles ? [{ key: 'roles', label: 'Vai trò & quyền', icon: ShieldCheck, section: 'roles' as const }] : []),
+        ...(canReadAudit ? [{ key: 'audit', label: 'Nhật ký hệ thống', icon: ScrollText, section: 'audit' as const }] : []),
       ],
     },
     { label: 'Tài khoản', items: [{ key: 'profile', label: 'Hồ sơ của tôi', icon: UserRound, section: null }] },
@@ -177,6 +181,8 @@ export function AppShell({
         ? 'Chi nhánh'
         : activeSection === 'roles'
           ? 'Vai trò & quyền'
+          : activeSection === 'audit'
+            ? 'Nhật ký hệ thống'
           : activeSection === 'plans'
             ? 'Kế hoạch'
           : activeSection === 'catalog'

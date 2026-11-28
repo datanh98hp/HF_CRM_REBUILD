@@ -133,6 +133,7 @@ describe('CustomersService contract approval', () => {
       createdAt: new Date('2026-11-26T00:00:00.000Z'),
       updatedAt: new Date('2026-11-26T00:00:00.000Z'),
       assignments: [],
+      _count: { contracts: 2 },
     }]);
     prisma.branch.findMany.mockResolvedValue([{ id: contract.branchId, name: 'Hai Phong Branch' }]);
 
@@ -141,10 +142,12 @@ describe('CustomersService contract approval', () => {
         id: customer.id,
         branchId: contract.branchId,
         branchName: 'Hai Phong Branch',
+        contractCount: 2,
       }),
     ]);
     expect(prisma.customer.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ branchId: contract.branchId }),
+      include: expect.objectContaining({ _count: { select: { contracts: true } } }),
     }));
   });
 
